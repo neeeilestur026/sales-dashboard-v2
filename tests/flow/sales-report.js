@@ -211,6 +211,15 @@ sec('6b · A356: the call form picks the company and the person from the Client 
   const fl = J('srPortalFeed(srIndex(__rawL), ME, "2026-10-20", [], []).filter(function (x) { return x.kind === "pr"; })');
   ok('A358: a PR made for a Client Book client names that client in the portal feed', fl.some(x => x.ref === 'PR-C' && x.client && x.client.no === 'CB-0001' && x.client.company === 'Philcement Corp.'), fl);
   ok('  and the feed links it to the client\'s page', /director-client-book\.html\?client=' \+ encodeURIComponent\(x\.client\.no\)/.test(fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8')));
+  const feedWith = (links, prClient) => {
+    C.__rawM = Object.assign({}, C.__raw, { prs: C.__raw.prs.map(p => p.prNo === 'PR-C' ? Object.assign({}, p, { clientNo: prClient || '' }) : p), book: Object.assign({}, C.__book, { links }) });
+    return J('srPortalFeed(srIndex(__rawM), ME, "2026-10-20", [], []).filter(function (x) { return x.kind === "pr"; })').find(x => x.ref === 'PR-C');
+  };
+  const viaLink = feedWith([{ kind: 'pr', no: 'PR-C', clientNo: 'CB-0002' }], '');
+  ok('A360: an old PR connected by hand on the Client Book names that client', viaLink && viaLink.client && viaLink.client.no === 'CB-0002' && viaLink.client.company === 'Zeta Mining', viaLink);
+  const off = feedWith([{ kind: 'pr', no: 'PR-C', clientNo: '' }], 'CB-0001');
+  ok('  and one taken off names none, even when it was made for a client', off && off.client === null, off);
+  eq('  the timeline lines read plainly', J('[srClientBookText({ kind: "linked", ref: "PR-C" }), srClientBookText({ kind: "unlinked", ref: "Q-9" })]'), ['Connected PR-C', 'Took Q-9 off']);
 }
 
 sec('7 · the week');

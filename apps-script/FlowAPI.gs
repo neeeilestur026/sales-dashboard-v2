@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 182;   // A358 — the Client Book opens to the sales reps (each sees their own) and a PR can name its client. History: see CHANGELOG.
+var FLOW_VERSION = 183;   // A360 — old purchase requests and quotations can be connected to a Client Book client. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -575,7 +575,10 @@ var SCHEMA = {
                   'Next Step', 'Next Step Date', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At',
                   'Archived At', 'Archive Reason',
                   'Tier', 'Sector', 'Site Address'],   // A354 — Major / Minor, the industry, the plant's address
-  ClientBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At']
+  ClientBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At'],
+  // A360 — which client a PR or quotation belongs to, one row per record (the latest decision; blank Client No = none).
+  // Written only by linkClientBookRecords / unlinkClientBookRecord.
+  ClientBookLinks: ['Kind', 'Record No', 'Client No', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -815,6 +818,7 @@ var _SECURED = {
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
   getClientBook: 1, saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350 — the Client Book trial; its read is private too
+  linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360 — connecting old PRs and quotations to a client
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
@@ -15801,7 +15805,12 @@ function getClientBook(p) {
     return { logNo: String(r['Log No']), clientNo: String(r['Client No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
              to: String(r['To'] || ''), note: String(r['Note'] || ''), ref: String(r['Ref'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
   }) : [];
-  return { success: true, clients: clients, log: log, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
+  // A360 — the records connected to these clients by hand (and the ones taken off a client: blank, record numbers only)
+  var lk = _ss().getSheetByName('ClientBookLinks');
+  var links = lk && lk.getLastRow() >= 2 ? _rows('ClientBookLinks').filter(function (r) { var c = String(r['Client No'] || '').trim(); return !c || mine[c]; }).map(function (r) {
+    return { kind: String(r['Kind'] || ''), no: String(r['Record No'] || ''), clientNo: String(r['Client No'] || '').trim(), by: String(r['By'] || ''), at: _webIso(r['At']) };
+  }) : [];
+  return { success: true, clients: clients, log: log, links: links, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
 }
 
 /** saveClientBookClient({clientNo?, company, tier, sector, siteAddress, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
@@ -15916,6 +15925,100 @@ function archiveClientBookClient(p) {
   _cbPut(row, obj);
   _cbLog(String(row['Client No']), restore ? 'restored' : 'archived', '', '', restore ? '' : reason, '', by);
   return { success: true, clientNo: String(row['Client No']), client: _cbOut(obj) };
+}
+
+/* ── A360 · connecting old purchase requests and quotations to a client ──────────────────────────────────
+   Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" A PR made
+   with a client picked (A358, its own 'Client Book No') belongs to it; a quotation belongs to its PR's client. Anything
+   else is connected by hand from the client's page: ClientBookLinks keeps one row per record with the latest decision —
+   a Client No, or blank when it was taken off a client (it is then no client's, not even by its company name). A row
+   here beats the PR's own column, and a quotation's own row beats its PR's. A rep connects only their own records
+   (the PR's Salesperson or Requested By, the quotation's owner or creator) to their own clients; the director anything.
+   Never touches the PR or quotation rows. Each change is a ClientBookLog row on every client it touches. */
+var _CB_LINK_MAX = 100;
+/** The PRs, quotations and link rows, each read once. */
+function _cbLinkMaps() {
+  var m = { prs: {}, quotes: {}, links: {} };
+  _rows('PricingRequests').forEach(function (r) {
+    var no = String(r['PR No'] || '').trim();
+    if (no) m.prs[no] = { owners: [r['Salesperson'], r['Requested By']], clientNo: String(r['Client Book No'] || '').trim() };
+  });
+  _rows('Quotations').forEach(function (r) {
+    var no = String(r['Quotation No'] || '').trim();
+    if (no) m.quotes[no] = { owners: [_quoOwner(r), r['Created By']], prNo: String(r['PR No'] || '').trim() };
+  });
+  var lk = _ss().getSheetByName('ClientBookLinks');
+  if (lk && lk.getLastRow() >= 2) _rows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
+  return m;
+}
+/** The client a record belongs to now: its own row, else the PR's column, else (a quotation) its PR's client. */
+function _cbLinkOf(m, kind, no) {
+  var row = m.links[kind + ':' + no];
+  if (row) return String(row['Client No'] || '').trim();
+  if (kind === 'pr') return m.prs[no] ? m.prs[no].clientNo : '';
+  if (kind === 'quotation') { var q = m.quotes[no]; return q && q.prNo ? _cbLinkOf(m, 'pr', q.prNo) : ''; }
+  return '';
+}
+function _cbSetLink(m, kind, no, clientNo, by) {
+  var vals = [kind, no, clientNo, by, _now()], row = m.links[kind + ':' + no];
+  if (row) _sheet('ClientBookLinks').getRange(row.rowIndex, 1, 1, SCHEMA.ClientBookLinks.length).setValues([vals]);
+  else _append('ClientBookLinks', vals);
+}
+function _cbRecName(kind) { return kind === 'pr' ? 'Purchase request' : 'Quotation'; }
+
+/** linkClientBookRecords({clientNo, records: '[{"kind":"pr"|"quotation","no":"…"}, …]'}) — up to 100 at a time.
+ *  Every record is checked first; if any is refused, nothing is written. A record already on this client is skipped. */
+function linkClientBookRecords(p) {
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), client = _cbRow(p.clientNo);
+  if (!client || client['Archived At']) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not a live client in the Client Book.' };
+  if (!_cbOwns(p, client)) return { success: false, message: 'Client ' + p.clientNo + ' is not in your Client Book.' };
+  var cno = String(client['Client No']), list;
+  try { list = JSON.parse(String(p.records || '[]')); } catch (e) { list = null; }
+  if (!Array.isArray(list) || !list.length) return { success: false, message: 'Pick the purchase requests or quotations to connect.' };
+  if (list.length > _CB_LINK_MAX) return { success: false, message: 'Connect at most ' + _CB_LINK_MAX + ' records at a time.' };
+  var m = _cbLinkMaps(), bad = [], todo = [], seen = {}, owners = {};
+  list.forEach(function (x) {
+    var kind = String((x && x.kind) || '').trim(), rn = String((x && x.no) || '').trim(), key = kind + ':' + rn;
+    if (!rn || seen[key]) return;
+    seen[key] = 1;
+    var rec = kind === 'pr' ? m.prs[rn] : kind === 'quotation' ? m.quotes[rn] : null;
+    if (!rec) { bad.push(rn + ' is not a purchase request or quotation in the portal'); return; }
+    if (!_cbAll(p) && !rec.owners.some(function (o) { return _cbSame(o, by); })) { bad.push(rn + ' is not yours'); return; }
+    var cur = _cbLinkOf(m, kind, rn);
+    if (cur === cno) return;
+    if (cur && !_cbAll(p)) {
+      if (owners[cur] === undefined) { var other = _cbRow(cur); owners[cur] = !other || _cbOwns(p, other); }
+      if (!owners[cur]) { bad.push(rn + ' is with another rep\'s client'); return; }
+    }
+    todo.push({ kind: kind, no: rn, from: cur });
+  });
+  if (bad.length) return { success: false, message: 'Nothing was connected: ' + bad.slice(0, 5).join('; ') + (bad.length > 5 ? ' and ' + (bad.length - 5) + ' more' : '') + '.' };
+  todo.forEach(function (t) {
+    _cbSetLink(m, t.kind, t.no, cno, by);
+    _cbLog(cno, 'linked', '', '', _cbRecName(t.kind) + (t.from ? ', moved from ' + t.from : ''), t.no, by);
+    if (t.from) _cbLog(t.from, 'unlinked', '', '', _cbRecName(t.kind) + ', moved to ' + cno, t.no, by);
+  });
+  return { success: true, clientNo: cno, linked: todo.length, already: Object.keys(seen).length - todo.length };
+}
+
+/** unlinkClientBookRecord({kind, no}) — take a record off its client. It then belongs to no client (not even by its
+ *  company name) until it is connected again. A quotation taken off stops following its PR. */
+function unlinkClientBookRecord(p) {
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), kind = String(p.kind || '').trim(), rn = String(p.no || '').trim();
+  if (kind !== 'pr' && kind !== 'quotation') return { success: false, message: 'Say whether it is a purchase request or a quotation.' };
+  var m = _cbLinkMaps();
+  if (!(kind === 'pr' ? m.prs[rn] : m.quotes[rn])) return { success: false, message: (rn || 'That record') + ' is not a ' + _cbRecName(kind).toLowerCase() + ' in the portal.' };
+  var cur = _cbLinkOf(m, kind, rn);
+  if (!cur) return { success: false, message: rn + ' is not connected to a client.' };
+  var c = _cbRow(cur);
+  if (c && !_cbOwns(p, c)) return { success: false, message: rn + ' is with a client that is not in your Client Book.' };
+  _cbSetLink(m, kind, rn, '', by);
+  _cbLog(cur, 'unlinked', '', '', _cbRecName(kind), rn, by);
+  return { success: true, clientNo: cur, no: rn };
 }
 
 /** Management acknowledges a submitted report (optionally with a comment). */
@@ -19239,6 +19342,7 @@ var HANDLERS = {
   submitProofReport: submitProofReport,   // A348
   getClientBook: getClientBook, saveClientBookClient: saveClientBookClient, setClientBookStatus: setClientBookStatus,
   archiveClientBookClient: archiveClientBookClient,   // A350
+  linkClientBookRecords: linkClientBookRecords, unlinkClientBookRecord: unlinkClientBookRecord,   // A360
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -19348,6 +19452,7 @@ var MUTATIONS = {
   saveProofReport: 1,   // A347
   submitProofReport: 1,   // A348
   saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350
+  linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -19376,6 +19481,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A360 OLD PURCHASE REQUESTS AND QUOTATIONS CAN BE CONNECTED TO A CLIENT (183; A327 takes 184 or later). Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" New tab ClientBookLinks (Kind, Record No, Client No, By, At): one row per PR or quotation, the latest decision — a Client No, or blank once taken off a client (then it is no client's, not even by its company name). A row beats the PR's own Client Book No (A358), and a quotation's own row beats its PR's. Two secured actions: linkClientBookRecords({clientNo, records}) connects up to 100 at once, all checked before any write (a rep: their own records — the PR's Salesperson or Requested By, the quotation's owner or creator — to their own live clients; a record with another rep's client is refused; the director anything) and unlinkClientBookRecord({kind, no}) takes one off (the rep must own its client). Each writes ClientBookLog rows ('linked' / 'unlinked', Ref = the record) on every client it touches. getClientBook returns links (a rep: those on their clients, plus the blank ones). PR and quotation rows are never written.
 A358 THE CLIENT BOOK FOR EVERY SALES REP; A PR CAN NAME ITS CLIENT (182; A327 takes 183 or later). Neil, 22 Oct 2026: the client list is for each sales user, and a purchase request should be connected to it — optional for now. clientBookRoles defaults to director, sales. The director sees and changes every client; any other role only the clients it owns (Owner = actorName, any case): getClientBook returns a rep's own clients and their log, a rep's new client is theirs and stays theirs, another rep's client cannot be edited, re-statused, archived or added again (even with allowDuplicate). PricingRequests gains Client Book No (appended; 21 wide; createPricingRequest is its only whole-row writer, the import still writes 18): createPricingRequest takes an optional clientNo — a live client the person may use, refused before anything is written — and getPricingRequests returns clientNo. A quotation made from the PR reaches the client through its PR No; nothing on Quotations changes.
 A355 WEBSITE QUOTE REQUESTS GO TO THE SALESPERSON FOR THE DELIVERY REGION (181; A327 takes 182 or later). Neil, 22 Oct 2026: hiescorp.com's quote form now asks for the delivery region (Luzon, Visayas or Mindanao) and its feed carries it as "region". When a request is collected, _webRecord adds the region to Location ("Surigao del Norte (Mindanao)") and fills Salesperson with the owner for that region: Luzon → WEBSITE_PR_OWNER_LUZON (default "Gerald Lucena"), Visayas or Mindanao → WEBSITE_PR_OWNER_VISMIN (default "Kimberlyn Blones"). _webAutoConvert makes the purchase request for that person (so it is in their My Requests at once; admin still sources it); a request with no region (a contact message, or a page opened before the website update) keeps WEBSITE_PR_OWNER / "Admin" as before. The inbox's "Make pricing request" form starts with that name. No new actions, no new columns.
 A354 THE CLIENT BOOK'S LABELS (180; A327 takes 181 or later). Neil, 22 Oct 2026: "add label on each client if major or minor", then "add industry or sector … also site address, also separate the accreditation as a separate label … then status". ClientBook gains Tier, Sector and Site Address (appended; _cbPut and the status/archive writers copy whole rows by header, so every write stays 26 wide). saveClientBookClient takes tier = Major | Minor and sector = Oil and gas | Cement | Power | Aviation | Automotive | Construction | Mining | Others (or the name typed for Others): a new client must have both; an edit that sends neither keeps what it has; siteAddress is optional; every change is logged under details. The sales status is no longer held back until the client is accredited — the two are separate labels — and "Pending RFQ" reads "RFQ pending". getClientBook returns tier, sector, siteAddress and lists.tiers / lists.sectors.

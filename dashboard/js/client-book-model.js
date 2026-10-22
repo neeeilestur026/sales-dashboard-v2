@@ -49,38 +49,63 @@ function cbDay(v) {
  *  A358: a PR made for a Client Book client carries its Client No, and so does — through its PR No — the quotation made
  *  from it, and the sales order made from that quotation (linkedTo). Linked records are filed under that client
  *  (`linked`) as well as under their company name; cbRecords lets the link win. */
+/** A360 — which Client Book client each PR and quotation belongs to, as FlowAPI 183 decides it: the record's own
+ *  ClientBookLinks row (blank = taken off, so no client's), else (a PR) the client picked when it was made (A358), else
+ *  (a quotation) its PR's. { pr: {no: {to, how}}, quotation: {…} } — how: 'linked' | 'made' | 'pr' | 'none'. */
+function cbLinkMap(links, prs, quotations) {
+  const own = {}, pr = {}, quotation = {};
+  (links || []).forEach(l => { if (l && _cbS(l.no)) own[_cbS(l.kind) + ':' + _cbS(l.no)] = _cbS(l.clientNo); });
+  const mine = (k) => (own[k] ? { to: own[k], how: 'linked' } : { to: '', how: 'none' });
+  (prs || []).forEach(p => {
+    const no = _cbS(p && p.prNo);
+    if (!no) return;
+    if (('pr:' + no) in own) pr[no] = mine('pr:' + no);
+    else if (_cbS(p.clientNo)) pr[no] = { to: _cbS(p.clientNo), how: 'made' };
+  });
+  (quotations || []).forEach(q => {
+    const no = _cbS(q && q.quotationNo), via = pr[_cbS(q && q.prNo)];
+    if (!no) return;
+    if (('quotation:' + no) in own) quotation[no] = mine('quotation:' + no);
+    else if (via) quotation[no] = via.to ? { to: via.to, how: 'pr' } : { to: '', how: 'none' };   // a PR taken off takes its quotation with it
+  });
+  return { pr, quotation };
+}
+
 function cbIndex(raw) {
-  const r = raw || {}, by = {}, linked = {};
+  const r = raw || {}, by = {}, linked = {}, all = { prs: [], quotes: [] };
   const slot = (key) => (by[key] = by[key] || { prs: [], quotes: [], sos: [] });
   const lslot = (no) => (linked[no] = linked[no] || { prs: [], quotes: [], sos: [] });
-  const prLink = {}, qLink = {};
-  (r.prs || []).forEach(p => { if (p && p.prNo && _cbS(p.clientNo)) prLink[_cbS(p.prNo)] = _cbS(p.clientNo); });
-  (r.quotations || []).forEach(q => { if (q && q.quotationNo && prLink[_cbS(q.prNo)]) qLink[_cbS(q.quotationNo)] = prLink[_cbS(q.prNo)]; });
-  const file = (type, key, rec) => { slot(key)[type].push(rec); if (rec.linkedTo) lslot(rec.linkedTo)[type].push(rec); };
+  const lm = cbLinkMap(r.links, r.prs, r.quotations), none = { to: '', how: '' };
+  const file = (type, key, rec) => { slot(key)[type].push(rec); if (rec.linkedTo) lslot(rec.linkedTo)[type].push(rec); if (all[type]) all[type].push(rec); };
   const prCreated = {};
   (r.activity || []).forEach(a => { if (a.module === 'Pricing Request' && a.action === 'Created' && a.refNo && (!prCreated[a.refNo] || a.timestamp < prCreated[a.refNo])) prCreated[a.refNo] = a.timestamp; });
   const hasSO = {};
   (r.salesOrders || []).forEach(s => { if (s.quotationNo) hasSO[_cbS(s.quotationNo)] = true; });
   (r.prs || []).forEach(p => {
     if (!p || !p.prNo || !_cbS(p.customer)) return;
+    const l = lm.pr[_cbS(p.prNo)] || none;
     file('prs', _cbKey(p.customer), { kind: 'pr', ref: _cbS(p.prNo), customer: _cbS(p.customer), status: _cbS(p.status), owner: _cbS(p.salesperson || p.requestedBy),
-      date: _cbDate(prCreated[p.prNo] || p.date), open: !CB_PR_DONE[_cbS(p.status)], quotationNo: _cbS(p.quotationNo), linkedTo: prLink[_cbS(p.prNo)] || '' });
+      owners: [_cbS(p.salesperson), _cbS(p.requestedBy)].filter(Boolean),
+      date: _cbDate(prCreated[p.prNo] || p.date), open: !CB_PR_DONE[_cbS(p.status)], quotationNo: _cbS(p.quotationNo), linkedTo: l.to, how: l.how });
   });
   (r.quotations || []).forEach(q => {
     if (!q || !q.quotationNo || /^DEMO-/i.test(q.quotationNo) || !_cbS(q.customer)) return;
     const bucket = typeof flowQuotationBucket === 'function' ? flowQuotationBucket(q, hasSO) : '';
+    const l = lm.quotation[_cbS(q.quotationNo)] || none, owner = typeof flowQuotationOwner === 'function' ? flowQuotationOwner(q) : _cbS(q.salesperson || q.createdBy);
     file('quotes', _cbKey(q.customer), { kind: 'quotation', ref: _cbS(q.quotationNo), customer: _cbS(q.customer), status: _cbS(q.status), bucket,
-      owner: typeof flowQuotationOwner === 'function' ? flowQuotationOwner(q) : _cbS(q.salesperson || q.createdBy),
+      owner, owners: [owner, _cbS(q.createdBy)].filter(Boolean),
       value: typeof flowQuotationNet === 'function' ? flowQuotationNet(q) : _cbNum(q.total),
-      sent: _cbS(q.sentAtBasis) ? '' : _cbDate(q.sentAt), date: _cbDate(q.sentAt || q.date || q.createdAt), prNo: _cbS(q.prNo), linkedTo: qLink[_cbS(q.quotationNo)] || '' });
+      sent: _cbS(q.sentAtBasis) ? '' : _cbDate(q.sentAt), date: _cbDate(q.sentAt || q.date || q.createdAt), prNo: _cbS(q.prNo), linkedTo: l.to, how: l.how });
   });
   (r.salesOrders || []).forEach(s => {
     if (!s || !s.soNo || /^DEMO-/i.test(s.soNo) || !_cbS(s.customer)) return;
+    const l = lm.quotation[_cbS(s.quotationNo)] || none;   // a sales order follows its quotation
     file('sos', _cbKey(s.customer), { kind: 'so', ref: _cbS(s.soNo), customer: _cbS(s.customer), status: _cbS(s.status), value: _cbNum(s.total),
-      date: _cbDate(s.date), quotationNo: _cbS(s.quotationNo), linkedTo: qLink[_cbS(s.quotationNo)] || '' });
+      date: _cbDate(s.date), quotationNo: _cbS(s.quotationNo), linkedTo: l.to, how: l.to ? 'quotation' : l.how });
   });
   [by, linked].forEach(m => Object.keys(m).forEach(k => ['prs', 'quotes', 'sos'].forEach(t => m[k][t].sort((a, b) => b.date.localeCompare(a.date)))));
-  return { today: _cbS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)), by, linked,
+  ['prs', 'quotes'].forEach(t => all[t].sort((a, b) => b.date.localeCompare(a.date)));
+  return { today: _cbS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)), by, linked, all,
            names: cbNames(r) };
 }
 
@@ -97,13 +122,15 @@ function cbNames(raw) {
 
 /** A client's records: its PRs, quotations and sales orders, newest first, with the follow-up due on the day.
  *  A358: the records linked to this client (through a PR made for it) whatever their company is spelled, then the
- *  records matched by its company name — never one linked to another client. Each says which (`linked`). */
+ *  records matched by its company name — never one linked to another client. Each says which (`linked`).
+ *  A360: also those connected by hand (`how` says which way); a record taken off a client is no client's, so it is
+ *  not matched by name either. */
 function cbRecords(ix, client) {
   const byName = ix.by[_cbKey(client.company)] || { prs: [], quotes: [], sos: [] };
   const L = (ix.linked && ix.linked[_cbS(client.clientNo)]) || { prs: [], quotes: [], sos: [] };
   const take = (type) => {
     const seen = {}, out = [];
-    L[type].concat(byName[type].filter(x => !x.linkedTo)).forEach(x => {
+    L[type].concat(byName[type].filter(x => !x.linkedTo && x.how !== 'none')).forEach(x => {
       if (seen[x.ref]) return;
       seen[x.ref] = 1;
       out.push(Object.assign({}, x, { linked: !!x.linkedTo && x.linkedTo === _cbS(client.clientNo) }));
@@ -122,6 +149,43 @@ function cbRecords(ix, client) {
   const open = quotes.filter(q => q.bucket === 'sent');
   return { prs: g.prs, quotes, sos: g.sos, openPrs: g.prs.filter(p => p.open).length, openQuotes: open.length,
            openValue: open.reduce((s, q) => s + q.value, 0), total: g.prs.length + quotes.length + g.sos.length };
+}
+
+/** A360 — two company names that probably mean the same firm, but are not the same key: one is the other with words
+ *  added ("Holcim" and "Holcim Davao"), or the spelling is nearly the same (at most a quarter of the letters differ, for
+ *  names of 6 letters or more: "Itogon Soyuc" and "Itogon Suyoc"). Sister firms that only share a first word ("Therma
+ *  Luzon", "Therma Visayas") are not offered. Only ever a suggestion. */
+function _cbEdits(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function cbNear(a, b) {
+  const x = _cbKey(a), y = _cbKey(b);
+  if (!x || !y || x === y) return false;
+  if ((' ' + y + ' ').indexOf(' ' + x + ' ') >= 0 || (' ' + x + ' ').indexOf(' ' + y + ' ') >= 0) return true;
+  return Math.min(x.length, y.length) >= 6 && _cbEdits(x, y) <= Math.max(x.length, y.length) / 4;
+}
+
+/** A360 — past PRs and quotations that could be connected to this client: ones not on it already, for a rep only their
+ *  own (as the server checks: a PR's salesperson or requester, a quotation's owner or creator) and none with a client
+ *  they cannot see. With `q`: any whose number or company has every word typed. Without: the similar names (cbNear) not
+ *  taken off a client. Newest first, at most `limit` (12). o = { me, all, q, clientNos, limit }. */
+function cbFindRecords(ix, client, o) {
+  o = o || {};
+  const me = _cbS(o.me).toLowerCase(), cno = _cbS(client && client.clientNo), seen = o.clientNos || {};
+  const words = _cbS(o.q).toLowerCase().split(/\s+/).filter(Boolean), limit = o.limit || 12;
+  const pool = ((ix && ix.all && ix.all.prs) || []).concat((ix && ix.all && ix.all.quotes) || []).filter(x =>
+    x.linkedTo !== cno && (o.all || ((x.owners || []).some(w => w.toLowerCase() === me) && (!x.linkedTo || seen[x.linkedTo]))));
+  const hits = words.length
+    ? pool.filter(x => { const hay = (x.ref + ' ' + x.customer).toLowerCase(); return words.every(w => hay.indexOf(w) >= 0); })
+    : pool.filter(x => !x.linkedTo && x.how !== 'none' && cbNear(client && client.company, x.customer));
+  hits.sort((a, b) => b.date.localeCompare(a.date));
+  return { items: hits.slice(0, limit), more: Math.max(0, hits.length - limit) };
 }
 
 /** What the records say the sales stage is — the latest event wins (a sales order before a quotation before a PR on
@@ -157,7 +221,8 @@ function cbOwnerSuggest(ix, company) {
 function cbLogText(l) {
   const ch = _cbS(l.from) ? _cbS(l.from) + ' → ' + _cbS(l.to) : _cbS(l.to);
   return l.kind === 'created' ? 'Added to the Client Book' : l.kind === 'accreditation' ? 'Accreditation: ' + ch : l.kind === 'status' ? 'Status: ' + ch
-    : l.kind === 'contacts' ? 'Contact people: ' + ch : l.kind === 'archived' ? 'Archived' : l.kind === 'restored' ? 'Restored' : 'Details changed';
+    : l.kind === 'contacts' ? 'Contact people: ' + ch : l.kind === 'archived' ? 'Archived' : l.kind === 'restored' ? 'Restored'
+    : l.kind === 'linked' ? 'Connected' : l.kind === 'unlinked' ? 'Taken off this client' : 'Details changed';   // A360
 }
 
 function cbLogFor(log, clientNo) { return (log || []).filter(l => l.clientNo === clientNo).sort((a, b) => _cbS(b.at).localeCompare(_cbS(a.at))); }

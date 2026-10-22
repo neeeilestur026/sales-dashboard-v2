@@ -6,7 +6,7 @@
  * whole timeline. The numbers and matching are js/client-book-model.js (pure, tested). Saving is the trial's own four
  * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations. */
 
-const CB = { me: null, all: true, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false,
+const CB = { me: null, all: true, ix: null, raw: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false, v183: false,
              f: { q: '', accreditation: '', tier: '', sector: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
 
 function _cbE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
@@ -35,6 +35,7 @@ async function cbLoad() {
   const today = flowToday(), from = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 120); return d.toISOString().slice(0, 10); })();
   const read = (a, p) => fetchFlow(a, p || {}).then(r => (r && r.success !== false ? r.data : null)).catch(() => null);
   CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
+  CB.v183 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(183).catch(() => false) : false;   // A360 — connecting past records from 183
   const [book, quotations, prs, salesOrders, clients, activity, users, reports] = await Promise.all([
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
@@ -43,7 +44,7 @@ async function cbLoad() {
     CB.all && typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
     CB.all ? postFlow('getProofReports', { from, to: today }).then(r => (r && r.success ? r.data || [] : [])).catch(() => []) : Promise.resolve([])
   ]);
-  CB.ix = cbIndex({ today, quotations, prs, salesOrders, clients, activity });
+  CB.raw = { today, quotations, prs, salesOrders, clients, activity };   // cbTakeBook indexes it with the book's links
   CB.reports = reports;
   CB.roster = (users || []).filter(u => String(u.role || '').toLowerCase() === 'sales').map(u => String(u.fullName || u.name || u.username || '').trim()).filter(Boolean).sort();
   cbTakeBook(book);
@@ -57,6 +58,7 @@ function cbTakeBook(book) {
   CB.clients = CB.ok ? book.clients || [] : [];
   CB.log = CB.ok ? book.log || [] : [];
   if (CB.ok && book.lists) CB.lists = book.lists;
+  CB.ix = cbIndex(Object.assign({}, CB.raw || {}, { links: CB.ok ? book.links || [] : [] }));   // A360 — records connected by hand
 }
 async function cbReload() {
   const book = await postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) }));
@@ -355,8 +357,24 @@ function cbDetail(no, back) {
   const hist = (kinds) => log.filter(l => kinds.indexOf(l.kind) >= 0).map(cbLogLi).join('');
   const link = (kind, ref) => kind === 'pr' ? '<a href="flow-pricing-request.html?pr=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>'
     : kind === 'quotation' ? '<a href="flow-quotations.html?review=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>' : '<b>' + _cbE(ref) + '</b>';
-  const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + (x.linked ? ' <span class="cb-badge ok">Linked on the PR</span>' : '') + ' <span class="cb-sub">' + _cbE(x.status || '') +
-    (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.followUpDue ? ' · day-' + x.followUpDue + ' follow-up due today' : '') + '</span></span><span class="amt">' + (x.value ? _cbE(cbMoney(x.value)) : '') + '</span></li>';
+  /* A360 — from FlowAPI 183 a record can be connected here (Link), taken off (Take off), or found and connected below.
+     A rep only connects their own records (the server checks it too); a sales order follows its quotation. */
+  const canLink = live && CB.v183;
+  const mineRec = (x) => CB.all || (x.owners || []).some(o => o.toLowerCase() === String(CB.me || '').toLowerCase());
+  const HOW = { made: 'Linked on the PR', linked: 'Linked', pr: 'Through its PR', quotation: 'Through its quotation' };
+  const key = (x) => _cbE(x.kind + '|' + x.ref);
+  const act = (x) => !canLink || x.kind === 'so' ? '' : x.linked
+    ? (x.how === 'quotation' ? '' : '<button type="button" class="cb-recbtn" data-unlink="' + key(x) + '">Take off</button>')
+    : (mineRec(x) ? '<button type="button" class="cb-recbtn" data-link="' + key(x) + '">Link</button>' : '');
+  const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + (x.linked ? ' <span class="cb-badge ok">' + (HOW[x.how] || 'Linked') + '</span>' : '') + ' <span class="cb-sub">' + _cbE(x.status || '') +
+    (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.followUpDue ? ' · day-' + x.followUpDue + ' follow-up due today' : '') + '</span></span><span class="cb-recend">' + (x.value ? '<span class="amt">' + _cbE(cbMoney(x.value)) + '</span>' : '') + act(x) + '</span></li>';
+  const withName = (n) => { const o = CB.clients.find(k => k.clientNo === n); return o ? o.company : n; };
+  const findRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + ' ' + _cbE(x.customer) + ' <span class="cb-sub">' + _cbE(x.status || '') +
+    (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.linkedTo ? ' · now with ' + _cbE(withName(x.linkedTo)) : '') + '</span></span><span class="cb-recend">' + (x.value ? '<span class="amt">' + _cbE(cbMoney(x.value)) + '</span>' : '') +
+    '<button type="button" class="cb-recbtn" data-link="' + key(x) + '">' + (x.linkedTo ? 'Move here' : 'Link') + '</button></span></li>';
+  const loose = canLink ? r.prs.concat(r.quotes).filter(x => !x.linked && mineRec(x)) : [];
+  const clientNos = {}; CB.clients.forEach(k => { clientNos[k.clientNo] = 1; });
+  const sugg = canLink ? cbFindRecords(CB.ix, c, { me: CB.me, all: CB.all, clientNos }) : { items: [], more: 0 };
   const box = cbShow(
     '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
       ' ' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') +
@@ -386,10 +404,17 @@ function cbDetail(no, back) {
           '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save the status</button></div></form>' : '') +
         (hist(['status']) ? '<ul class="cb-hist">' + hist(['status']) + '</ul>' : '')) + '</section>' +
 
-    '<section class="cb-sec"><h4>From the portal <span class="cb-sub">read only</span></h4>' +
-      (r.total ? '<p class="cb-sub">Records linked on a PR made for this client are marked; the rest are matched by the company name.</p>' +
+    '<section class="cb-sec" id="cbRecs"><h4>From the portal' + (canLink ? '' : ' <span class="cb-sub">read only</span>') + '</h4>' +
+      (r.total ? '<p class="cb-sub">' + (canLink ? 'Linked records stay with this client whatever the company is called on them; the rest are matched by its name. Link one to keep it here.'
+                                                  : 'Records linked on a PR made for this client are marked; the rest are matched by the company name.') + '</p>' +
+        (loose.length > 1 ? '<div class="cb-recsbar"><button type="button" class="btn btn-secondary" data-linkall>Link all ' + loose.length + ' matched by name</button></div>' : '') +
         '<ul class="cb-recs">' + r.sos.map(recRow).join('') + r.quotes.map(recRow).join('') + r.prs.map(recRow).join('') + '</ul>'
-               : '<p class="cb-sub">No purchase requests, quotations or sales orders under this company name yet.</p>') + '</section>' +
+               : '<p class="cb-sub">No purchase requests, quotations or sales orders under this company name yet.</p>') +
+      (canLink ? '<p class="cb-msg" role="status"></p><div class="cb-find"><h5>Connect a past purchase request or quotation</h5>' +
+        (sugg.items.length ? '<p class="cb-sub">Similar company names' + (CB.all ? '' : ' among yours') + ':</p><ul class="cb-recs">' + sugg.items.map(findRow).join('') + '</ul>' +
+          (sugg.more ? '<p class="cb-sub">' + sugg.more + ' more with a similar name — find them by number or name below.</p>' : '') : '') +
+        '<label>Find by number or company<input type="search" class="cb-in" data-find maxlength="80" autocomplete="off" placeholder="PR-202603-014, a quotation number or part of the name"></label>' +
+        '<div data-found></div></div>' : '') + '</section>' +
 
     (!CB.all ? '' : '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
       (lines.length ? '<ul class="cb-hist">' + lines.map(l => '<li><span class="tm">' + _cbE(cbDay(l.day)) + '</span><span>' + _cbE(l.type) + ' — ' + _cbE([l.person, l.note].filter(Boolean).join(', ') || l.company) +
@@ -415,6 +440,35 @@ function cbDetail(no, back) {
       '</form></section>' : ''), back);
   cbWirePeople(box);
   if (box.querySelector('#cbEdit')) cbWireSector(box.querySelector('#cbEdit'), c.siteAddress);
+  const recs = box.querySelector('#cbRecs');
+  if (recs && canLink) {
+    const send = async (btn, action, params, done) => {
+      btn.disabled = true;
+      const res = await cbPost(recs, action, params);
+      if (!(res && res.success)) { btn.disabled = false; return; }
+      const again = cbOverlay().querySelector('#cbRecs');   // the detail was drawn again from the new book
+      if (again) cbMsg(again, done(res));
+    };
+    recs.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-link], [data-unlink], [data-linkall]');
+      if (!b || b.disabled) return;
+      if (b.hasAttribute('data-linkall')) {
+        send(b, 'linkClientBookRecords', { clientNo: no, records: JSON.stringify(loose.map(x => ({ kind: x.kind, no: x.ref }))) }, (res) => 'Connected ' + res.linked + ' records.');
+        return;
+      }
+      const v = (b.getAttribute('data-link') || b.getAttribute('data-unlink')).split('|'), kind = v[0], ref = v.slice(1).join('|');
+      if (b.hasAttribute('data-link')) send(b, 'linkClientBookRecords', { clientNo: no, records: JSON.stringify([{ kind, no: ref }]) }, () => 'Connected ' + ref + '.');
+      else send(b, 'unlinkClientBookRecord', { kind, no: ref }, () => ref + ' was taken off this client. It can be connected again below.');
+    });
+    const find = recs.querySelector('[data-find]'), found = recs.querySelector('[data-found]');
+    find.addEventListener('input', () => {
+      const q = find.value.trim();
+      if (!q) { found.innerHTML = ''; return; }
+      const f = cbFindRecords(CB.ix, c, { me: CB.me, all: CB.all, q, clientNos });
+      found.innerHTML = f.items.length ? '<ul class="cb-recs">' + f.items.map(findRow).join('') + '</ul>' + (f.more ? '<p class="cb-sub">' + f.more + ' more — type more of the number or the name.</p>' : '')
+        : '<p class="cb-sub">Nothing ' + (CB.all ? '' : 'of yours ') + 'matches "' + _cbE(q) + '" that is not already on this client.</p>';
+    });
+  }
   box.querySelectorAll('form[data-kind]').forEach(form => form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const el = form.elements, kind = form.getAttribute('data-kind');

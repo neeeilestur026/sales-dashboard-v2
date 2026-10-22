@@ -644,6 +644,7 @@ SECURED_ACTIONS = [
     "deleteWeeklyItinerary", "dismissQuotationEmail", "dispatchHireUnit", "getCommissionClaimable", "getCommissionRequests",
     "getProofReports", "saveProofReport", "submitProofReport",   # A347 / A348 — the private sales daily report (a trial)
     "archiveClientBookClient", "getClientBook", "saveClientBookClient", "setClientBookStatus",   # A350 — the Client Book trial
+    "linkClientBookRecords", "unlinkClientBookRecord",   # A360 — connecting old PRs and quotations to a client
     "getTravelFloats", "getTravelReceipts", "getTravelReplenishments", "importCollections", "importExpenses",
     "importInventory", "importPricingSubmissions", "importSOCostDetails", "importSalesOrders", "linkQuotationEmail",
     "logClientVisit", "logSalesCall", "markCommissionReleased", "markPaymentRequestPaid", "matchSupplierTypes",
