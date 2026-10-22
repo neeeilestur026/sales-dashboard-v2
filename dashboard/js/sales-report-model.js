@@ -409,7 +409,11 @@ function srPortalFeed(ix, me, day, sent, received) {
   ix.activity.filter(a => _srSame(a.user, me.name) && _srDate(a.date || a.timestamp) === day && (a.module === 'Pricing Request' || a.module === 'Quotation'))
     .forEach(a => {
       const pr = a.module === 'Pricing Request', q = !pr && ix.qByNo[_srS(a.refNo)], p = pr && ix.prs[_srS(a.refNo)];
+      /* A358 — a PR made for a Client Book client (and its quotation, through the PR No) names that client */
+      const cbNo = _srS((p && p.clientNo) || (q && ix.prs[_srS(q.prNo)] && ix.prs[_srS(q.prNo)].clientNo));
+      const cb = cbNo ? ix.book.clients.find(c => _srS(c.clientNo) === cbNo) : null;
       items.push({ kind: pr ? 'pr' : 'quotation', sort: srMinutes(a.timestamp), time: srClock(a.timestamp), ref: _srS(a.refNo),
+        client: cbNo ? { no: cbNo, company: cb ? _srS(cb.company) : cbNo } : null,
         text: (pr ? 'PR ' : 'Quotation ') + _srS(a.action).toLowerCase() + ((p && p.customer) || (q && q.customer) ? ' — ' + _srS((p && p.customer) || q.customer) : '') +
               (q && _srNet(q) ? ', ' + srMoney(_srNet(q)) : '') });
     });

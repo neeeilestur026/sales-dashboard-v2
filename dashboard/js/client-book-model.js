@@ -45,34 +45,42 @@ function cbDay(v) {
 
 /* ── the portal's records, grouped by client ───────────────────────────────────────────────── */
 
-/** raw = { quotations, prs, salesOrders, clients (the real Clients sheet, names only), activity, today } */
+/** raw = { quotations, prs, salesOrders, clients (the real Clients sheet, names only), activity, today }
+ *  A358: a PR made for a Client Book client carries its Client No, and so does — through its PR No — the quotation made
+ *  from it, and the sales order made from that quotation (linkedTo). Linked records are filed under that client
+ *  (`linked`) as well as under their company name; cbRecords lets the link win. */
 function cbIndex(raw) {
-  const r = raw || {}, by = {};
+  const r = raw || {}, by = {}, linked = {};
   const slot = (key) => (by[key] = by[key] || { prs: [], quotes: [], sos: [] });
+  const lslot = (no) => (linked[no] = linked[no] || { prs: [], quotes: [], sos: [] });
+  const prLink = {}, qLink = {};
+  (r.prs || []).forEach(p => { if (p && p.prNo && _cbS(p.clientNo)) prLink[_cbS(p.prNo)] = _cbS(p.clientNo); });
+  (r.quotations || []).forEach(q => { if (q && q.quotationNo && prLink[_cbS(q.prNo)]) qLink[_cbS(q.quotationNo)] = prLink[_cbS(q.prNo)]; });
+  const file = (type, key, rec) => { slot(key)[type].push(rec); if (rec.linkedTo) lslot(rec.linkedTo)[type].push(rec); };
   const prCreated = {};
   (r.activity || []).forEach(a => { if (a.module === 'Pricing Request' && a.action === 'Created' && a.refNo && (!prCreated[a.refNo] || a.timestamp < prCreated[a.refNo])) prCreated[a.refNo] = a.timestamp; });
   const hasSO = {};
   (r.salesOrders || []).forEach(s => { if (s.quotationNo) hasSO[_cbS(s.quotationNo)] = true; });
   (r.prs || []).forEach(p => {
     if (!p || !p.prNo || !_cbS(p.customer)) return;
-    slot(_cbKey(p.customer)).prs.push({ kind: 'pr', ref: _cbS(p.prNo), customer: _cbS(p.customer), status: _cbS(p.status), owner: _cbS(p.salesperson || p.requestedBy),
-      date: _cbDate(prCreated[p.prNo] || p.date), open: !CB_PR_DONE[_cbS(p.status)], quotationNo: _cbS(p.quotationNo) });
+    file('prs', _cbKey(p.customer), { kind: 'pr', ref: _cbS(p.prNo), customer: _cbS(p.customer), status: _cbS(p.status), owner: _cbS(p.salesperson || p.requestedBy),
+      date: _cbDate(prCreated[p.prNo] || p.date), open: !CB_PR_DONE[_cbS(p.status)], quotationNo: _cbS(p.quotationNo), linkedTo: prLink[_cbS(p.prNo)] || '' });
   });
   (r.quotations || []).forEach(q => {
     if (!q || !q.quotationNo || /^DEMO-/i.test(q.quotationNo) || !_cbS(q.customer)) return;
     const bucket = typeof flowQuotationBucket === 'function' ? flowQuotationBucket(q, hasSO) : '';
-    slot(_cbKey(q.customer)).quotes.push({ kind: 'quotation', ref: _cbS(q.quotationNo), customer: _cbS(q.customer), status: _cbS(q.status), bucket,
+    file('quotes', _cbKey(q.customer), { kind: 'quotation', ref: _cbS(q.quotationNo), customer: _cbS(q.customer), status: _cbS(q.status), bucket,
       owner: typeof flowQuotationOwner === 'function' ? flowQuotationOwner(q) : _cbS(q.salesperson || q.createdBy),
       value: typeof flowQuotationNet === 'function' ? flowQuotationNet(q) : _cbNum(q.total),
-      sent: _cbS(q.sentAtBasis) ? '' : _cbDate(q.sentAt), date: _cbDate(q.sentAt || q.date || q.createdAt) });
+      sent: _cbS(q.sentAtBasis) ? '' : _cbDate(q.sentAt), date: _cbDate(q.sentAt || q.date || q.createdAt), prNo: _cbS(q.prNo), linkedTo: qLink[_cbS(q.quotationNo)] || '' });
   });
   (r.salesOrders || []).forEach(s => {
     if (!s || !s.soNo || /^DEMO-/i.test(s.soNo) || !_cbS(s.customer)) return;
-    slot(_cbKey(s.customer)).sos.push({ kind: 'so', ref: _cbS(s.soNo), customer: _cbS(s.customer), status: _cbS(s.status), value: _cbNum(s.total),
-      date: _cbDate(s.date), quotationNo: _cbS(s.quotationNo) });
+    file('sos', _cbKey(s.customer), { kind: 'so', ref: _cbS(s.soNo), customer: _cbS(s.customer), status: _cbS(s.status), value: _cbNum(s.total),
+      date: _cbDate(s.date), quotationNo: _cbS(s.quotationNo), linkedTo: qLink[_cbS(s.quotationNo)] || '' });
   });
-  Object.keys(by).forEach(k => ['prs', 'quotes', 'sos'].forEach(t => by[k][t].sort((a, b) => b.date.localeCompare(a.date))));
-  return { today: _cbS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)), by,
+  [by, linked].forEach(m => Object.keys(m).forEach(k => ['prs', 'quotes', 'sos'].forEach(t => m[k][t].sort((a, b) => b.date.localeCompare(a.date)))));
+  return { today: _cbS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)), by, linked,
            names: cbNames(r) };
 }
 
@@ -87,9 +95,22 @@ function cbNames(raw) {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** A client's records: its PRs, quotations and sales orders, newest first, with the follow-up due on the day. */
+/** A client's records: its PRs, quotations and sales orders, newest first, with the follow-up due on the day.
+ *  A358: the records linked to this client (through a PR made for it) whatever their company is spelled, then the
+ *  records matched by its company name — never one linked to another client. Each says which (`linked`). */
 function cbRecords(ix, client) {
-  const g = ix.by[_cbKey(client.company)] || { prs: [], quotes: [], sos: [] };
+  const byName = ix.by[_cbKey(client.company)] || { prs: [], quotes: [], sos: [] };
+  const L = (ix.linked && ix.linked[_cbS(client.clientNo)]) || { prs: [], quotes: [], sos: [] };
+  const take = (type) => {
+    const seen = {}, out = [];
+    L[type].concat(byName[type].filter(x => !x.linkedTo)).forEach(x => {
+      if (seen[x.ref]) return;
+      seen[x.ref] = 1;
+      out.push(Object.assign({}, x, { linked: !!x.linkedTo && x.linkedTo === _cbS(client.clientNo) }));
+    });
+    return out.sort((a, b) => b.date.localeCompare(a.date));
+  };
+  const g = { prs: take('prs'), quotes: take('quotes'), sos: take('sos') };
   const quotes = g.quotes.map(q => {
     let due = null;
     if (q.bucket === 'sent' && q.sent) {
