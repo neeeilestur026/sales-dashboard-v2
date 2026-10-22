@@ -36,7 +36,6 @@
   --hx-scrim:rgba(11,16,32,.5); --hx-chart-grid:rgba(27,36,97,.10); --hx-blur:blur(18px) saturate(1.4);
   --hx-aurora-1:rgba(27,36,97,.22); --hx-aurora-2:rgba(0,174,239,.18);
   --hx-row-hover:rgba(46,49,146,.05);
-  --hx-loader-bg:#000; --hx-loader-ink:rgba(255,240,230,.86);   /* A359 · the sign-in pulse is black in both themes */
   --hx-r-sm:10px; --hx-r-md:14px; --hx-r-lg:18px; --hx-r-pill:999px;
   --hx-sh-1:0 1px 2px rgba(16,24,40,.04);
   --hx-sh-2:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(16,24,40,.04), 0 16px 40px -24px rgba(27,36,97,.4);
@@ -489,14 +488,6 @@ tr.total-row td, tr.total td, tfoot tr td { font-weight: 800; color: var(--hx-na
 .login-title { text-align: center; font: 800 22px/1.1 var(--hx-display); letter-spacing: -.02em; margin-bottom: .25rem; color: var(--hx-navy-text); }
 .login-subtitle { text-align: center; color: var(--hx-ink-2); font-size: .875rem; margin-bottom: 1.5rem; }
 .login-foot { text-align: center; margin-top: .9rem; font: 400 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
-/* A359 — the dot-matrix pulse after Sign In (js/login-loader.js paints the canvases). Always on black, in both looks. */
-.login-loader { position: fixed; inset: 0; z-index: 3000; background: var(--hx-loader-bg); opacity: 0; transition: opacity .28s ease-out; }
-.login-loader.on { opacity: 1; }
-.login-loader canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-.login-loader .ll-glow { filter: blur(var(--ll-blur, 11px)); mix-blend-mode: screen; }
-.login-loader .ll-label { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-size: 15px; font-weight: 500; line-height: 1.3; letter-spacing: .01em; color: var(--hx-loader-ink); }
-@media (prefers-reduced-motion: reduce) { .login-loader { transition: none; } }
-html[data-motion="off"] .login-loader { transition: none; }
 
 /* ─── 14 · Utilities ─────────────────────────────────────────────────────────────────────── */
 .text-center { text-align: center; }

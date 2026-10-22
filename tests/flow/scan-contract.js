@@ -119,7 +119,7 @@ console.log('\n4 · back to the scanner after signing in');
   a = authCtx(null);
   a.c.location.search = '?x=1';
   ok('the guard stores where you were before sending you to sign in', a.c.requireScanAccess() === null && a.ss.hx_next === 'scan.html?x=1' && a.c.location.href === 'index.html');
-  const IDX = read('js/index-inline.js');   // A359: the sign-in page's script moved out of index.html
+  const IDX = read('index.html');
   ok('the login page uses the helper on both paths', (IDX.match(/flowAfterLogin\((session|result)\.role\)/g) || []).length === 2 && !/_homeForRole\(/.test(IDX));
 }
 
