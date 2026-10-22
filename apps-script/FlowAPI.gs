@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 178;   // A350 — the Client Book, a private trial for the director. History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 179;   // A351 — the accounting, lead gen and admin daily reports (a trial; ProofReports gains Kind). History: see CHANGELOG at the end of this file.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -565,7 +565,8 @@ var SCHEMA = {
   // A347 — the sales daily report with proof (Neil's pack, 20 Oct 2026). Its own tab, read and written only by
   // saveProofReport / getProofReports; nothing else reads it and nothing is written to the ActivityLog.
   ProofReports:  ['Report No', 'Date', 'User', 'Role', 'Report JSON', 'Portal JSON', 'Created At', 'Updated At', 'Save Count',
-                  'Submitted At', 'Snapshot JSON'],   // A348 — the 4:30 report, fixed once submitted
+                  'Submitted At', 'Snapshot JSON',   // A348 — the 4:30 report, fixed once submitted
+                  'Kind'],                           // A351 — sales (blank) / accounting / leadgen / admin
   // A350 — the Client Book (a private trial): one row per client, and a log that is only ever appended to. Read and
   // written only by getClientBook / saveClientBookClient / setClientBookStatus / archiveClientBookClient.
   ClientBook:    ['Client No', 'Company', 'Key', 'Owner', 'Accreditation', 'Accreditation Step', 'Accreditation Note',
@@ -15592,6 +15593,11 @@ function _powRoles() {
   return list.length ? list : ['director'];
 }
 function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) >= 0; }
+/* A351 — one row per person per day PER KIND: the sales report (a blank Kind, every row saved before 179), and the
+   accounting, lead gen and admin reports. A call that names no kind is the sales report, so it reads what it always read. */
+var _POW_KINDS = ['sales', 'accounting', 'leadgen', 'admin'];
+function _powKind(v) { var k = String(v == null ? '' : v).trim().toLowerCase(); return k || 'sales'; }
+function _powDenied() { return 'The daily reports are in a trial; only ' + _powRoles().join(', ') + ' can use them.'; }
 function _powJson(s, max, label) {
   var t = String(s == null ? '' : s);
   if (!t) return { text: '{}' };
@@ -15605,7 +15611,8 @@ function _powOut(r) {
   return { reportNo: String(r['Report No'] || ''), date: _dateStr(r['Date']), user: String(r['User'] || ''), role: String(r['Role'] || ''),
            report: parse(r['Report JSON']), portal: parse(r['Portal JSON']),
            createdAt: _webIso(r['Created At']), updatedAt: _webIso(r['Updated At']), saveCount: _num(r['Save Count']),
-           submittedAt: _webIso(r['Submitted At']), snapshot: r['Snapshot JSON'] ? parse(r['Snapshot JSON']) : null };
+           submittedAt: _webIso(r['Submitted At']), snapshot: r['Snapshot JSON'] ? parse(r['Snapshot JSON']) : null,
+           kind: _powKind(r['Kind']) };
 }
 
 /* A348 — the two times a report must be able to prove are the server's, never the browser's: the 8:00 report's
@@ -15613,7 +15620,9 @@ function _powOut(r) {
    the 4:30 report is submitted once, and its Snapshot JSON and Submitted At are never rewritten after that.
    A report saved by the A347 form (no v:2) is kept under 'legacy' the first time the new form saves that day. */
 function _powCheck(p) {
-  if (!_powAllowed(p)) return { error: 'The sales daily report is in a trial; only ' + _powRoles().join(', ') + ' can use it.' };
+  if (!_powAllowed(p)) return { error: _powDenied() };
+  var kind = _powKind(p.kind);
+  if (_POW_KINDS.indexOf(kind) < 0) return { error: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
   var user = String(p.actorName || '').trim();
   if (!user) return { error: 'Sign in again — the report has no name to save under.' };
   var date = String(p.date || '').trim();
@@ -15622,8 +15631,10 @@ function _powCheck(p) {
   var rep = _powJson(p.reportJson, _POW_MAX_REPORT, 'The report'); if (rep.error) return { error: rep.error };
   var por = _powJson(p.portalJson, _POW_MAX_PORTAL, 'The portal numbers'); if (por.error) return { error: por.error };
   var hit = null;
-  _rows('ProofReports').forEach(function (r) { if (_dateStr(r['Date']) === date && String(r['User']).trim().toLowerCase() === user.toLowerCase()) hit = r; });
-  return { user: user, date: date, report: rep.text, portal: por.text, hit: hit };
+  _rows('ProofReports').forEach(function (r) {
+    if (_dateStr(r['Date']) === date && String(r['User']).trim().toLowerCase() === user.toLowerCase() && _powKind(r['Kind']) === kind) hit = r;
+  });
+  return { user: user, date: date, kind: kind, report: rep.text, portal: por.text, hit: hit };
 }
 function _powWrite(c, p, submit) {
   var sh = _sheet('ProofReports'), now = _now(), hit = c.hit, text = c.report;
@@ -15642,10 +15653,11 @@ function _powWrite(c, p, submit) {
   var count = hit ? _num(hit['Save Count']) + 1 : 1;
   var subAt = hit && hit['Submitted At'] ? hit['Submitted At'] : (submit ? now : '');
   var snap = hit && hit['Submitted At'] ? String(hit['Snapshot JSON'] || '') : (submit ? submit : '');
-  var vals = [no, c.date, c.user, String(p.actorRole || ''), text, c.portal, hit ? hit['Created At'] : now, now, count, subAt, snap];
+  var vals = [no, c.date, c.user, String(p.actorRole || ''), text, c.portal, hit ? hit['Created At'] : now, now, count, subAt, snap,
+              c.kind === 'sales' ? '' : c.kind];   // A351 — a sales row keeps its blank Kind, as every row before 179 has
   if (hit) sh.getRange(hit.rowIndex, 1, 1, SCHEMA.ProofReports.length).setValues([vals]);
   else _append('ProofReports', vals);
-  return { success: true, reportNo: no, date: c.date, user: c.user, saveCount: count, updatedAt: _webIso(now),
+  return { success: true, reportNo: no, date: c.date, user: c.user, kind: c.kind, saveCount: count, updatedAt: _webIso(now),
            submittedAt: _webIso(subAt), givenAt: obj.v === 2 ? obj.am.givenAt : '' };
 }
 
@@ -15672,13 +15684,16 @@ function submitProofReport(p) {
   return out;
 }
 
-/** getProofReports({from?, to?, user?}) — saved reports, newest first. A read never creates the tab. */
+/** getProofReports({from?, to?, user?, kind?}) — saved reports of one kind (sales when none is named), newest first.
+ *  A read never creates the tab. */
 function getProofReports(p) {
   p = p || {};
-  if (!_powAllowed(p)) return { success: false, message: 'The sales daily report is in a trial; only ' + _powRoles().join(', ') + ' can use it.' };
+  if (!_powAllowed(p)) return { success: false, message: _powDenied() };
+  var kind = _powKind(p.kind);
+  if (_POW_KINDS.indexOf(kind) < 0) return { success: false, message: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
   var sh = _ss().getSheetByName('ProofReports');
   if (!sh || sh.getLastRow() < 2) return { success: true, data: [] };
-  var rows = _rows('ProofReports');
+  var rows = _rows('ProofReports').filter(function (r) { return _powKind(r['Kind']) === kind; });
   if (p.user) rows = rows.filter(function (r) { return String(r['User']).trim().toLowerCase() === String(p.user).trim().toLowerCase(); });
   if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || '0000-01-01', p.to || '9999-12-31');
   return { success: true, data: rows.map(_powOut).sort(function (a, b) { return b.date.localeCompare(a.date) || a.user.localeCompare(b.user); }) };
@@ -19301,6 +19316,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A351 THE ACCOUNTING, LEAD GEN AND ADMIN DAILY REPORTS (179; A327 takes 180 or later). Neil, 22 Oct 2026: daily reports like the sales one for the other three roles, first on the director's dashboard, still a private trial (proofReportRoles, default director; no ActivityLog, not DailyReports). ProofReports gains Kind (appended): one row per person per day per kind; a blank Kind is the sales report, so every row saved before 179 and every call that names no kind (the sales report, the Client Book's report lines) reads exactly what it read before. saveProofReport / submitProofReport / getProofReports take kind = sales | accounting | leadgen | admin; anything else is refused. No new actions.
 A350 THE CLIENT BOOK, A PRIVATE TRIAL (178; A327 takes 179 or later). Neil, 21 Oct 2026: a client list with several contact people (each with several emails and phones), the accreditation (Accredited / On process / Not accredited, with its last update) and, once accredited, the sales status, read beside the client's purchase requests and quotations, and tracked in the Sales Daily Report trial. New tabs ClientBook (one row per client; contacts as JSON) and ClientBookLog (every change, appended only). getClientBook, saveClientBookClient (duplicates by _canonKey refused unless allowed), setClientBookStatus (the lists enforced; a sales status only for an accredited client) and archiveClientBookClient (archive or restore, never a delete) are secured and refuse every role not in FlowSettings 'clientBookRoles' (default director). It never writes Clients, LgAccred, PRs or quotations, and nothing goes to the ActivityLog. Reads never create the tabs.
 A348 THE SALES DAILY REPORT, REDESIGNED (177; A327 takes 178 or later). Neil, 21 Oct 2026: the report is the count - the portal's numbers, one-line log lines with links, one line of plan at 8:00 and one of blocker at 4:30 - still a private trial on the director's dashboard. ProofReports gains Submitted At and Snapshot JSON. submitProofReport saves the day and fixes the 4:30 numbers for good (a second submit is refused; later saves carry the snapshot over untouched). saveProofReport stamps the 8:00 report's givenAt with the server time once (giveAm) and keeps the stored time over whatever the page sends. A day saved by the A347 form is kept under 'legacy' the first time the new form saves it. Still director-only (proofReportRoles), still no ActivityLog row.
 A347 THE SALES DAILY REPORT WITH PROOF, A PRIVATE TRIAL (176; A327 takes 177 or later). Neil, 21 Oct 2026: the form from his pack (Hi-ESCORP_Proof_of_Work_Sales.pdf) - the 8:00 huddle lines, the day's log, the 4:30 lines and the Friday lines, each with the record that proves it - first on the director's dashboard, for him to try before anyone else sees it. New tab ProofReports (one row per person per day; the form as Report JSON, the portal's numbers at save time as Portal JSON). saveProofReport and getProofReports are secured and refuse every role not in FlowSettings 'proofReportRoles' (default director); the name saved under is the one Flask stamps. Not a DailyReports row, not in All Daily Reports, not written to the ActivityLog. Reads never create the tab.

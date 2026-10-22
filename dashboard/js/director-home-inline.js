@@ -72,6 +72,7 @@
 
   // ── Panel mounts (staggered, so the payroll calls go first) ──
   on(document, 'DOMContentLoaded', function () {
+    if (typeof teamReport === 'function') { teamReport('acctReport', 'accounting'); teamReport('lgReport', 'leadgen'); teamReport('adminReport', 'admin'); }   // A351 — first on the page
     if (typeof salesReport === 'function') salesReport('proof');   // A348 — first on the page, so it loads first
     dhLoadPoStrip();
     if (typeof clientBookCard === 'function') clientBookCard('cbcBody');   // A350 — the Client Book trial's counts
@@ -173,7 +174,7 @@
         links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id); });
       });
     }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
-    ['proof', 'inbox', 'pulse', 'team', 'payroll'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
+    ['acctReport', 'lgReport', 'adminReport', 'proof', 'inbox', 'pulse', 'team', 'payroll'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
   })();
 
   // ── The tab indicator slides under whichever .dh-tab is active ──

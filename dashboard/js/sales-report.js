@@ -259,7 +259,8 @@ function _srRefresh() {
   _srRefreshLinkSelect();
   _srId('srLog').innerHTML = _srLogRows();
   /* What holds a form is redrawn only when its shape changes, and never under the person's cursor. */
-  const typingIn = (el) => !!(el && document.activeElement && el.contains(document.activeElement));
+  /* A351 — only a FIELD being typed in holds a redraw back; the Submit button just clicked kept the 4:30 card on "Due". */
+  const typingIn = (el) => { const a = document.activeElement; return !!(el && a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')); };
   const vKey = [n.dt.type, SR_UI.showVisitForm, (st.visits || []).length, n.dt.planned.length, (SR_UI.sent || []).length].join('|');
   const vBox = _srId('srVisits');
   if (vBox.dataset.key !== vKey && !typingIn(vBox)) { vBox.dataset.key = vKey; vBox.innerHTML = _srVisitsHtml(n.dt); }
