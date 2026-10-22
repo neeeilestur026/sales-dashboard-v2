@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 180;   // A354 — the Client Book's Major / Minor label (ClientBook gains Tier). History: see CHANGELOG at the end of this file.
+var FLOW_VERSION = 180;   // A354 — the Client Book's labels: Major / Minor, sector, site address; status apart from accreditation. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -573,7 +573,7 @@ var SCHEMA = {
                   'Accredited Until', 'Accreditation Updated At', 'Status', 'Status Note', 'Status Ref', 'Status Updated At',
                   'Next Step', 'Next Step Date', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At',
                   'Archived At', 'Archive Reason',
-                  'Tier'],   // A354 — Major / Minor
+                  'Tier', 'Sector', 'Site Address'],   // A354 — Major / Minor, the industry, the plant's address
   ClientBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At']
 };
 
@@ -15708,8 +15708,14 @@ function getProofReports(p) {
    PRs or quotations, and nothing goes to the ActivityLog. Every change is a ClientBookLog row; nothing is deleted. */
 var CB_ACCRED = ['Accredited', 'On process', 'Not accredited'];
 var CB_STEPS = ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'];
-var CB_STATUS = ['Pending RFQ', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];
+var CB_STATUS = ['RFQ pending', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];   // A354: "RFQ pending" (was Pending RFQ)
 var CB_TIERS = ['Major', 'Minor'];   // A354 — Neil, 22 Oct: every client is labelled Major or Minor
+var CB_SECTORS = ['Oil and gas', 'Cement', 'Power', 'Aviation', 'Automotive', 'Construction', 'Mining', 'Others'];   // A354 — and its industry
+/** A sector from the list (any case), or the name typed for "Others" (kept as typed, at most 60 characters). */
+function _cbSector(v) {
+  var t = _webCell(v).slice(0, 60), hit = CB_SECTORS.filter(function (x) { return x.toLowerCase() === t.toLowerCase(); })[0];
+  return hit || t;
+}
 function _cbTier(v) { var t = String(v == null ? '' : v).trim().toLowerCase(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
 var _CB_MAX_CONTACTS = 20000;
 function _cbRoles() {
@@ -15774,7 +15780,7 @@ function _cbOut(r) {
            nextStepDate: r['Next Step Date'] ? _dateStr(r['Next Step Date']) : '', contacts: contacts, notes: String(r['Notes'] || ''),
            createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''),
            updatedAt: _webIso(r['Updated At']), archivedAt: _webIso(r['Archived At']), archiveReason: String(r['Archive Reason'] || ''),
-           tier: String(r['Tier'] || '') };
+           tier: String(r['Tier'] || ''), sector: String(r['Sector'] || ''), siteAddress: String(r['Site Address'] || '') };
 }
 
 /** getClientBook() — every client (archived ones too) and the whole log. A read never creates the tabs. */
@@ -15787,11 +15793,11 @@ function getClientBook(p) {
     return { logNo: String(r['Log No']), clientNo: String(r['Client No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
              to: String(r['To'] || ''), note: String(r['Note'] || ''), ref: String(r['Ref'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
   }) : [];
-  return { success: true, clients: clients, log: log, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS } };
+  return { success: true, clients: clients, log: log, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
 }
 
-/** saveClientBookClient({clientNo?, company, tier, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
- *  A354: a new client must be Major or Minor; an edit that sends no tier keeps the one it has. */
+/** saveClientBookClient({clientNo?, company, tier, sector, siteAddress, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
+ *  A354: a new client must be Major or Minor and have its sector; an edit that sends neither keeps what it has. */
 function saveClientBookClient(p) {
   var no = _cbDenied(p);
   if (no) return { success: false, message: no };
@@ -15809,6 +15815,9 @@ function saveClientBookClient(p) {
   var tier = _cbTier(p.tier);
   if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: 'A client is Major or Minor.' };
   if (!row && !tier) return { success: false, message: 'Say whether the client is Major or Minor.' };
+  var sector = _cbSector(p.sector);
+  if (!row && !sector) return { success: false, message: 'Say which industry the client is in.' };
+  var site = p.siteAddress === undefined || p.siteAddress === null ? null : _webCell(p.siteAddress, true).slice(0, 300);
   var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true';
   if (!allow) {
     var twin = null;
@@ -15822,15 +15831,19 @@ function saveClientBookClient(p) {
   Object.assign(obj, { 'Company': company, 'Key': key, 'Owner': owner, 'Contacts JSON': ct.text, 'Notes': _webCell(p.notes, true).slice(0, 2000),
                        'Next Step': _webCell(p.nextStep).slice(0, 190), 'Next Step Date': nextDate, 'Updated By': by, 'Updated At': now });
   if (tier) obj['Tier'] = tier;
+  if (sector) obj['Sector'] = sector;
+  if (site !== null) obj['Site Address'] = site;
   var clientNo = row ? String(row['Client No']) : _nextNumber('ClientBook', 1, 'CB');
   obj['Client No'] = clientNo;
   _cbPut(row, obj);
   if (!row) {
-    _cbLog(clientNo, 'created', '', company, tier + '. ' + (owner ? 'Owner: ' + owner + '. ' : '') + obj['Accreditation'] + '.', '', by);
+    _cbLog(clientNo, 'created', '', company, tier + ', ' + sector + '. ' + (owner ? 'Owner: ' + owner + '. ' : '') + obj['Accreditation'] + '.', '', by);
   } else {
     var changed = [];
     if (String(row['Company']) !== company) changed.push('company "' + row['Company'] + '" to "' + company + '"');
     if (tier && String(row['Tier'] || '') !== tier) changed.push('the label ' + (row['Tier'] || 'not set') + ' to ' + tier);
+    if (sector && String(row['Sector'] || '') !== sector) changed.push('the sector ' + (row['Sector'] || 'not set') + ' to ' + sector);
+    if (site !== null && String(row['Site Address'] || '') !== site) changed.push('the site address');
     if (String(row['Owner']) !== owner) changed.push('owner ' + (row['Owner'] || '—') + ' to ' + (owner || '—'));
     if (String(row['Next Step']) !== obj['Next Step'] || (row['Next Step Date'] ? _dateStr(row['Next Step Date']) : '') !== nextDate) changed.push('next step');
     if (String(row['Notes']) !== obj['Notes']) changed.push('notes');
@@ -15867,7 +15880,7 @@ function setClientBookStatus(p) {
     _cbPut(row, Object.assign(obj, { 'Updated By': by, 'Updated At': now }));
     _cbLog(String(row['Client No']), 'accreditation', from, value + (step ? ' (' + step + ')' : '') + (until ? ' until ' + until : ''), note, '', by);
   } else if (kind === 'status') {
-    if (String(row['Accreditation']) !== 'Accredited') return { success: false, message: 'The sales status is for an accredited client; this one is ' + (row['Accreditation'] || 'not accredited') + '.' };
+    /* A354 — the status is its own label now, apart from the accreditation: a quotation can go out before a client is accredited. */
     if (CB_STATUS.indexOf(value) < 0) return { success: false, message: 'The status must be one of: ' + CB_STATUS.join(', ') + '.' };
     var ref = _webCell(p.ref).slice(0, 60);
     from = String(row['Status'] || '');
@@ -19326,7 +19339,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
-A354 THE CLIENT BOOK'S MAJOR / MINOR LABEL (180; A327 takes 181 or later). Neil, 22 Oct 2026: "add label on each client if major or minor". ClientBook gains Tier (appended; _cbPut and the status/archive writers copy whole rows by header, so every write stays 24 wide). saveClientBookClient takes tier = Major | Minor: a new client must have one, an edit that sends none keeps the one it has, a change is logged under details ("the label Minor to Major"). getClientBook returns tier and lists.tiers.
+A354 THE CLIENT BOOK'S LABELS (180; A327 takes 181 or later). Neil, 22 Oct 2026: "add label on each client if major or minor", then "add industry or sector … also site address, also separate the accreditation as a separate label … then status". ClientBook gains Tier, Sector and Site Address (appended; _cbPut and the status/archive writers copy whole rows by header, so every write stays 26 wide). saveClientBookClient takes tier = Major | Minor and sector = Oil and gas | Cement | Power | Aviation | Automotive | Construction | Mining | Others (or the name typed for Others): a new client must have both; an edit that sends neither keeps what it has; siteAddress is optional; every change is logged under details. The sales status is no longer held back until the client is accredited — the two are separate labels — and "Pending RFQ" reads "RFQ pending". getClientBook returns tier, sector, siteAddress and lists.tiers / lists.sectors.
 A351 THE ACCOUNTING, LEAD GEN AND ADMIN DAILY REPORTS (179; A327 takes 180 or later). Neil, 22 Oct 2026: daily reports like the sales one for the other three roles, first on the director's dashboard, still a private trial (proofReportRoles, default director; no ActivityLog, not DailyReports). ProofReports gains Kind (appended): one row per person per day per kind; a blank Kind is the sales report, so every row saved before 179 and every call that names no kind (the sales report, the Client Book's report lines) reads exactly what it read before. saveProofReport / submitProofReport / getProofReports take kind = sales | accounting | leadgen | admin; anything else is refused. No new actions.
 A350 THE CLIENT BOOK, A PRIVATE TRIAL (178; A327 takes 179 or later). Neil, 21 Oct 2026: a client list with several contact people (each with several emails and phones), the accreditation (Accredited / On process / Not accredited, with its last update) and, once accredited, the sales status, read beside the client's purchase requests and quotations, and tracked in the Sales Daily Report trial. New tabs ClientBook (one row per client; contacts as JSON) and ClientBookLog (every change, appended only). getClientBook, saveClientBookClient (duplicates by _canonKey refused unless allowed), setClientBookStatus (the lists enforced; a sales status only for an accredited client) and archiveClientBookClient (archive or restore, never a delete) are secured and refuse every role not in FlowSettings 'clientBookRoles' (default director). It never writes Clients, LgAccred, PRs or quotations, and nothing goes to the ActivityLog. Reads never create the tabs.
 A348 THE SALES DAILY REPORT, REDESIGNED (177; A327 takes 178 or later). Neil, 21 Oct 2026: the report is the count - the portal's numbers, one-line log lines with links, one line of plan at 8:00 and one of blocker at 4:30 - still a private trial on the director's dashboard. ProofReports gains Submitted At and Snapshot JSON. submitProofReport saves the day and fixes the 4:30 numbers for good (a second submit is refused; later saves carry the snapshot over untouched). saveProofReport stamps the 8:00 report's givenAt with the server time once (giveAm) and keeps the stored time over whatever the page sends. A day saved by the A347 form is kept under 'legacy' the first time the new form saves it. Still director-only (proofReportRoles), still no ActivityLog row.
