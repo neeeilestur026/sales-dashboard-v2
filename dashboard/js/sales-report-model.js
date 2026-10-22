@@ -110,7 +110,7 @@ function srIndex(raw) {
     sos: (r.salesOrders || []).filter(s => s && !_srDemo(s.soNo)),
     activity: r.activity || [], calls: r.calls || [], visits: r.visits || [], itins: r.itineraries || [],
     hasSO: {}, links: {}, qByNo: {}, prs: {}, prCreated: {}, qSent: {},
-    book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [] }   // A350 — the Client Book trial, when FlowAPI 178 is in
+    book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [], links: (r.book && r.book.links) || [] }   // A350 — the Client Book trial, when FlowAPI 178 is in; A360 its links
   };
   ix.sos.forEach(s => { if (s.quotationNo) ix.hasSO[_srS(s.quotationNo)] = true; });
   ix.quotations.forEach(q => { ix.qByNo[_srS(q.quotationNo)] = q; });
@@ -409,8 +409,9 @@ function srPortalFeed(ix, me, day, sent, received) {
   ix.activity.filter(a => _srSame(a.user, me.name) && _srDate(a.date || a.timestamp) === day && (a.module === 'Pricing Request' || a.module === 'Quotation'))
     .forEach(a => {
       const pr = a.module === 'Pricing Request', q = !pr && ix.qByNo[_srS(a.refNo)], p = pr && ix.prs[_srS(a.refNo)];
-      /* A358 — a PR made for a Client Book client (and its quotation, through the PR No) names that client */
-      const cbNo = _srS((p && p.clientNo) || (q && ix.prs[_srS(q.prNo)] && ix.prs[_srS(q.prNo)].clientNo));
+      /* A358 — a PR made for a Client Book client (and its quotation, through the PR No) names that client;
+         A360 — a record connected by hand (or taken off) on the Client Book decides first */
+      const cbNo = pr ? srBookClient(ix, 'pr', a.refNo) : srBookClient(ix, 'quotation', a.refNo);
       const cb = cbNo ? ix.book.clients.find(c => _srS(c.clientNo) === cbNo) : null;
       items.push({ kind: pr ? 'pr' : 'quotation', sort: srMinutes(a.timestamp), time: srClock(a.timestamp), ref: _srS(a.refNo),
         client: cbNo ? { no: cbNo, company: cb ? _srS(cb.company) : cbNo } : null,
@@ -425,10 +426,21 @@ function srPortalFeed(ix, me, day, sent, received) {
   return items.sort((a, b) => a.sort - b.sort);
 }
 /** One Client Book log row as a feed line. */
+/** A360 — the Client Book client a PR or quotation belongs to: its own link row (blank = none), else the client its PR
+ *  was made for, else (a quotation) its PR's. The same rule as FlowAPI 183's _cbLinkOf. */
+function srBookClient(ix, kind, no) {
+  const n = _srS(no), own = {};
+  (ix.book.links || []).forEach(l => { own[_srS(l.kind) + ':' + _srS(l.no)] = _srS(l.clientNo); });
+  if ((kind + ':' + n) in own) return own[kind + ':' + n];
+  if (kind === 'pr') return _srS(ix.prs[n] && ix.prs[n].clientNo);
+  const q = ix.qByNo[n];
+  return q && _srS(q.prNo) ? srBookClient(ix, 'pr', q.prNo) : '';
+}
 function srClientBookText(l) {
   const ch = (what) => what + (l.from ? ' ' + _srS(l.from) + ' → ' : ' ') + _srS(l.to) + (l.ref ? ' (' + _srS(l.ref) + ')' : '');
   return l.kind === 'created' ? 'Added to the Client Book' : l.kind === 'accreditation' ? ch('Accreditation') : l.kind === 'status' ? ch('Status')
     : l.kind === 'contacts' ? 'Contacts updated' : l.kind === 'archived' ? 'Archived from the Client Book' : l.kind === 'restored' ? 'Restored to the Client Book'
+    : l.kind === 'linked' ? 'Connected ' + (_srS(l.ref) || 'a record') : l.kind === 'unlinked' ? 'Took ' + (_srS(l.ref) || 'a record') + ' off'   // A360
     : 'Client details updated';
 }
 /** "Other portal activity today" — the rest of the person's log, not part of the sales report. */

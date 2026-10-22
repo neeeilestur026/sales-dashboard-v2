@@ -301,6 +301,68 @@ async function boot(o) {
     ok('  a record matched only by name says so', J('cbRecords(IX, byNo("CB-0001"))').prs.every(x => x.linked === false));
   }
 
+  sec('5d · A360: old purchase requests and quotations connected by hand');
+  {
+    const CBJS = read('js/client-book.js');
+    C.__araw = { today: '2026-10-21',
+      prs: [{ prNo: 'PR-A1', customer: 'Holcim Phils. Inc.', status: 'Quoted', salesperson: G, date: '2026-03-01' },
+            { prNo: 'PR-A2', customer: 'Holcim Davao', status: 'Quoted', salesperson: G, date: '2026-03-02' },
+            { prNo: 'PR-A3', customer: 'Holcim Davao Plant', status: 'Quoted', salesperson: K, date: '2026-03-03' },
+            { prNo: 'PR-A4', customer: 'Holcim', status: 'Quoted', salesperson: G, date: '2026-03-04', clientNo: 'CB-H' },
+            { prNo: 'PR-A5', customer: 'Holcim Davao', status: 'Requested', requestedBy: G, date: '2026-03-05' }],
+      quotations: [{ quotationNo: 'Q-A1', customer: 'HOLCIM PHIL', status: 'Sent', date: '2026-03-06', total: 100, salesperson: G },
+                   { quotationNo: 'Q-A2', customer: 'Holcim', status: 'Sent', date: '2026-03-07', total: 200, salesperson: G, prNo: 'PR-A4' },
+                   { quotationNo: 'Q-A3', customer: 'Other Co', status: 'Sent', date: '2026-03-08', total: 300, salesperson: G }],
+      salesOrders: [{ soNo: 'SO-A1', customer: 'Somebody', quotationNo: 'Q-A3', date: '2026-03-09', total: 290 }] };
+    C.__hol = { clientNo: 'CB-H', company: 'Holcim Philippines', owner: G };
+    const recs = (links) => { C.__alinks = links; return J('cbRecords(cbIndex(Object.assign({}, __araw, { links: __alinks })), __hol)'); };
+    const refs = (x) => x.prs.concat(x.quotes, x.sos).map(y => y.ref + ':' + (y.linked ? y.how : 'name')).sort();
+    eq('without links: the PR made for it, its quotation through the PR, and the name matches', refs(recs([])), ['PR-A1:name', 'PR-A4:made', 'Q-A1:name', 'Q-A2:pr']);
+    eq('connected by hand: a PR under another spelling joins, and a quotation\'s sales order follows it', refs(recs([{ kind: 'pr', no: 'PR-A2', clientNo: 'CB-H' }, { kind: 'quotation', no: 'Q-A3', clientNo: 'CB-H' }])),
+       ['PR-A1:name', 'PR-A2:linked', 'PR-A4:made', 'Q-A1:name', 'Q-A2:pr', 'Q-A3:linked', 'SO-A1:quotation']);
+    eq('taken off: a record is no client\'s, not even by its name', refs(recs([{ kind: 'pr', no: 'PR-A1', clientNo: '' }, { kind: 'quotation', no: 'Q-A2', clientNo: '' }])), ['PR-A4:made', 'Q-A1:name']);
+    eq('  a PR taken off takes its quotation with it', refs(recs([{ kind: 'pr', no: 'PR-A4', clientNo: '' }])), ['PR-A1:name', 'Q-A1:name']);
+    eq('  a row beats the PR\'s own client, and a quotation\'s own row beats its PR\'s', refs(recs([{ kind: 'pr', no: 'PR-A4', clientNo: 'CB-X' }, { kind: 'quotation', no: 'Q-A2', clientNo: 'CB-H' }])), ['PR-A1:name', 'Q-A1:name', 'Q-A2:linked']);
+    eq('similar names: words added, or nearly the same spelling — never sister firms or two plants that only share a word',
+       J('[cbNear("Holcim Philippines", "Holcim Davao"), cbNear("Aboitiz", "Aboitiz Power Corp"), cbNear("SN", "SN Aboitiz"), cbNear("Itogon Soyuc", "ITOGON SUYOC"), cbNear("Holcim", "HOLCIM PHILS INC"), cbNear("Therma Luzon", "Therma Visayas, Inc."), cbNear("Therma Luzon", "THERMA MARINE"), cbNear("Davao Power", "Mindanao Power")]'),
+       [true, true, true, true, false, false, false, false]);
+    C.__alinks = [{ kind: 'pr', no: 'PR-A2', clientNo: 'CB-H' }];
+    run('var IXA = cbIndex(Object.assign({}, __araw, { links: __alinks }));');
+    const find = (o) => J('cbFindRecords(IXA, __hol, ' + JSON.stringify(o) + ').items').map(x => x.ref);
+    eq('suggestions for Gerald: his own similar names not on a client (Kim\'s and the linked one left out)', find({ me: G }), ['PR-A5']);
+    eq('  the director is offered Kim\'s too', find({ all: true }), ['PR-A5', 'PR-A3']);
+    eq('search: every word in the number or the company', [find({ me: G, q: 'other' }), find({ me: G, q: 'q-a3' }), find({ me: G, q: 'holcim davao' })], [['Q-A3'], ['Q-A3'], ['PR-A5']]);
+    eq('  a rep never finds another rep\'s record; the director does', [find({ me: G, q: 'PR-A3' }), find({ all: true, q: 'PR-A3' })], [[], ['PR-A3']]);
+    C.__hol2 = { clientNo: 'CB-H2', company: 'Holcim Two', owner: G };
+    eq('  a record on a client the rep cannot see is not offered to move; one on their own is', [J('cbFindRecords(IXA, __hol2, { me: ' + JSON.stringify(G) + ', q: "PR-A2" }).items').length,
+       J('cbFindRecords(IXA, __hol2, { me: ' + JSON.stringify(G) + ', q: "PR-A2", clientNos: { "CB-H": 1 } }).items').length], [0, 1]);
+    eq('the timeline names the change', J('[cbLogText({ kind: "linked" }), cbLogText({ kind: "unlinked" })]'), ['Connected', 'Taken off this client']);
+
+    const v183 = await boot({ v: 183 });
+    v183.run('cbDetail("CB-0001", null)');
+    const d = v183.run('__shown');
+    ok('the page from FlowAPI 183: Link on each record matched by name, none on a sales order', /data-link="pr\|PR-1">Link</.test(d) && /data-link="quotation\|Q-1">Link</.test(d) && !/data-link="so/.test(d) && !/read only/.test(d));
+    ok('  "Link all 2 matched by name", and the finder', /data-linkall>Link all 2 matched by name</.test(d) && /Connect a past purchase request or quotation/.test(d) && /<input type="search" class="cb-in" data-find/.test(d) && /<div data-found><\/div>/.test(d));
+    const linked = await boot({ v: 183, book: Object.assign({}, BOOK, { links: [{ kind: 'pr', no: 'PR-1', clientNo: 'CB-0001' }] }) });
+    linked.run('cbDetail("CB-0001", null)');
+    const dl = linked.run('__shown');
+    ok('  a connected record says so and offers Take off', /PR-1<\/a> <span class="cb-badge ok">Linked<\/span>/.test(dl) && /data-unlink="pr\|PR-1">Take off</.test(dl) && !/data-linkall/.test(dl));
+    const old = await boot({ v: 182 });
+    old.run('cbDetail("CB-0001", null)');
+    ok('  before 183: read only, no buttons', /From the portal <span class="cb-sub">read only<\/span>/.test(old.run('__shown')) && !/data-link|data-find/.test(old.run('__shown')));
+    const kim = await boot({ v: 183, session: { username: 'kim', name: K, role: 'sales' } });
+    kim.run('cbDetail("CB-0002", null)');
+    const dk = kim.run('__shown');
+    ok('  a rep gets Link only on her own records', /data-link="pr\|PR-2"/.test(dk) && /data-link="quotation\|Q-2"/.test(dk));
+    kim.run('cbDetail("CB-0001", null)');
+    ok('  and none on Gerald\'s', !/data-link=/.test(kim.run('__shown').split('Connect a past')[0]));
+    ok('the buttons send one record, all of them, or take one off; the page reads the book again after',
+       /send\(b, 'linkClientBookRecords', \{ clientNo: no, records: JSON\.stringify\(loose\.map\(x => \(\{ kind: x\.kind, no: x\.ref \}\)\)\) \}/.test(CBJS)
+       && /send\(b, 'linkClientBookRecords', \{ clientNo: no, records: JSON\.stringify\(\[\{ kind, no: ref \}\]\) \}/.test(CBJS) && /send\(b, 'unlinkClientBookRecord', \{ kind, no: ref \}/.test(CBJS)
+       && /const res = await cbPost\(recs, action, params\);/.test(CBJS));
+    ok('  and the book\'s links are indexed every time it is read', /CB\.ix = cbIndex\(Object\.assign\(\{\}, CB\.raw \|\| \{\}, \{ links: CB\.ok \? book\.links \|\| \[\] : \[\] \}\)\);/.test(CBJS));
+  }
+
   sec('6 · the card, who sees it, the site rules');
   const card = async (resp) => {
     const box = { innerHTML: '' };
@@ -348,7 +410,7 @@ async function boot(o) {
   const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/FlowAPI.gs'), 'utf8');
   const HANDLERS = Object.keys(eval('({' + GS.match(/var HANDLERS = \{([\s\S]*?)\n\};/)[1].replace(/\/\/.*$/mg, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/:\s*\w+/g, ': 1') + '})'));
   const named = (src) => { const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/mg, ''); return HANDLERS.filter(h => new RegExp("'" + h + "'").test(code)).sort(); };
-  eq('of ' + HANDLERS.length + ' FlowAPI actions the page names only its own four, the daily reports and plain reads', named(JS + M), ['archiveClientBookClient', 'getActivityLog', 'getClientBook', 'getClients', 'getPricingRequests', 'getProofReports', 'getQuotations', 'getSalesOrders', 'saveClientBookClient', 'setClientBookStatus']);
+  eq('of ' + HANDLERS.length + ' FlowAPI actions the page names only its own six (A360: link and take off), the daily reports and plain reads', named(JS + M), ['archiveClientBookClient', 'getActivityLog', 'getClientBook', 'getClients', 'getPricingRequests', 'getProofReports', 'getQuotations', 'getSalesOrders', 'linkClientBookRecords', 'saveClientBookClient', 'setClientBookStatus', 'unlinkClientBookRecord']);
   eq('  the card names only getClientBook', named(CARD), ['getClientBook']);
   ok('  nothing writes the real client list, PRs or quotations', !/addClient|updateClient|saveClient\b|savePricingRequest|updateQuotation|closeQuotation|setLgAccred|logSalesCall/.test(JS + M + CARD));
   const SRC = H + JS + M + CARD;

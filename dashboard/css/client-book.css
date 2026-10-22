@@ -100,6 +100,18 @@ body.cb-open-dlg { overflow: hidden; }
 .cb-hist .tm, .cb-recs .tm { color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
 .cb-recs .amt { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
 .cb-recs a { color: var(--hx-navy-text); font-weight: 700; }
+/* A360 — connecting past records: Link / Take off on a row, Link all, and the finder */
+.cb-recs .cb-recend { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.cb-recbtn { padding: 3px 11px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-pill); background: var(--hx-card); color: var(--hx-navy-text); font: 600 12px/1.4 var(--hx-text); white-space: nowrap; cursor: pointer; }
+.cb-recbtn:hover { border-color: var(--hx-navy-text); }
+.cb-recbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+.cb-recbtn:disabled { opacity: .5; cursor: default; }
+.cb-recbtn[data-unlink] { color: var(--hx-ink-2); }
+.cb-recsbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.cb-find { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hx-hair-2); }
+.cb-find h5 { margin: 0; font: 700 13px/1.3 var(--hx-text); color: var(--hx-ink); }
+.cb-find label { display: flex; flex-direction: column; gap: 4px; font: 600 12px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+.cb-find .cb-recs { margin: 0; }
 
 @media (max-width: 899px) {
   .cb-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -109,7 +121,7 @@ body.cb-open-dlg { overflow: hidden; }
   .cb-grid2 { grid-template-columns: minmax(0, 1fr); }
   .cb-overlay .cb-modal { padding: 18px 16px 22px; }
   .cb-hist li, .cb-recs li { grid-template-columns: 78px minmax(0, 1fr); }
-  .cb-recs .amt { grid-column: 2; text-align: left; }
+  .cb-recs .cb-recend { grid-column: 2; justify-content: flex-start; }
   .cb-mhead { flex-direction: column-reverse; }
   .cb-mhead .btn { align-self: flex-end; }
 }

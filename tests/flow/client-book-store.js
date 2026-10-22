@@ -25,7 +25,7 @@ sec('1 · the version, and nothing else is touched');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 182', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 182);
+  ok('getVersion = 183', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 183);
   const g = call(c, 'getClientBook', NEIL);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.clients.length === 0 && g.log.length === 0 && !('ClientBook' in store) && !('ClientBookLog' in store), g);
   ok('  and gives the page the server\'s lists', g.lists.accreditation.join() === 'Accredited,On process,Not accredited' && g.lists.status.length === 9 && g.lists.steps.length === 4);

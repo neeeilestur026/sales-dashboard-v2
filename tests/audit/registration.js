@@ -87,6 +87,8 @@ const EXCEPTIONS = {
     saveClientBookClient:    'A350 — the Client Book is a private trial; each change is its own ClientBookLog row',
     setClientBookStatus:     'A350 — the Client Book trial; each change is its own ClientBookLog row',
     archiveClientBookClient: 'A350 — the Client Book trial; each change is its own ClientBookLog row',
+    linkClientBookRecords:   'A360 — connecting a record to a client is its own ClientBookLog row',
+    unlinkClientBookRecord:  'A360 — the same: each change is its own ClientBookLog row',
     uploadScanPhoto:    'A318 — one row per photo would drown the report; the post that cites it is logged',
     ensureItemLabels:   'A318 — making a label code is bookkeeping, not a task',
     logLabelPrint:      'A318 — printing a label is not a task'
