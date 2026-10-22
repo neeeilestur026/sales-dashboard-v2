@@ -191,6 +191,24 @@ eq('  each kind of change reads plainly', ['created', 'accreditation', 'contacts
    ['Added to the Client Book', 'Accreditation On process → Accredited', 'Contacts updated', 'Client details updated', 'Archived from the Client Book', 'Restored to the Client Book']);
 ok('  without FlowAPI 178 there are no clients to link and no client feed', links.client.length === 0 && !feed.some(x => x.kind === 'client'));
 
+sec('6b · A356: the call form picks the company and the person from the Client Book');
+{
+  const J = (code) => JSON.parse(run('JSON.stringify(' + code + ')'));
+  C.__book2 = JSON.parse(JSON.stringify(C.__book));
+  C.__book2.clients[1].tier = 'Major'; C.__book2.clients[1].sector = 'Cement';
+  C.__book2.clients[1].contacts = [{ id: 'P1', name: 'Ben Santos', position: 'Maintenance planner', emails: ['ben@philcement.ph'], phones: [], primary: false },
+                                   { id: 'P2', name: 'Ana Cruz', position: 'Purchasing officer', emails: ['ana@philcement.ph'], phones: ['0917 123 4567'], primary: true }];
+  run('var IXC = srIndex(Object.assign({}, __raw, { book: __book2 }));');
+  eq('the companies to pick from: his own clients first, archived ones left out', J('srBookClients(IXC, ME).map(function (c) { return c.clientNo; })'), ['CB-0001', 'CB-0002']);
+  const L = J('srCallLookup(IXC, ME, "philcement corp", "")');
+  ok('a company typed in any case or punctuation is found, and the call is linked to it', L.client && L.client.clientNo === 'CB-0001' && JSON.stringify(L.link) === JSON.stringify({ linkType: 'client', linkId: 'CB-0001' }), L.link);
+  eq('  its contact people, the main contact first', L.people.map(p => p.name), ['Ana Cruz', 'Ben Santos']);
+  eq('a contact is found by name, or by name and position', [J('srCallLookup(IXC, ME, "Philcement Corp.", "ana cruz").contact.id'), J('srCallLookup(IXC, ME, "Philcement Corp.", "Ben Santos, Maintenance planner").contact.id')], ['P2', 'P1']);
+  ok('a company not in the book is no client, and the call is not linked', J('srCallLookup(IXC, ME, "Some New Plant", "")').client === null && J('srCallLookup(IXC, ME, "Some New Plant", "")').link === null);
+  ok('an archived client is not offered', J('srCallLookup(IXC, ME, "Gone Co", "")').client === null);
+  eq('a contact reads "Name, Position"', run('srContactLabel({ name: "Ana Cruz", position: "Purchasing officer" })'), 'Ana Cruz, Purchasing officer');
+}
+
 sec('7 · the week');
 C.__reports = { '2026-10-19': { report: srBlankWith(14), submittedAt: '2026-10-19T08:31:00.000Z' }, '2026-10-20': { report: srBlankWith(20) } };
 function srBlankWith(n) { return { v: 2, lines: Array.from({ length: n }, (_, i) => ({ id: 'w' + n + i, type: 'Call', company: 'C', result: i ? 'Reached' : 'Booked', loggedAt: (n === 14 ? '2026-10-19' : '2026-10-20') + 'T03:00:00.000Z', history: [] })) }; }
@@ -213,6 +231,20 @@ ok('my log: a line without a link says "No link — add one"', /No link — add 
 ok('  the old page\'s call is grey, marked as in the portal\'s log', /CALL-1 · in the portal&#39;s log|CALL-1 · in the portal's log/.test(log));
 ok('  edit and void on each live line, never delete', /data-edit=/.test(log) && /data-void=/.test(log) && !/data-del/.test(log));
 const keepLink = run('_srLinkOptionsHtml("dr|DR-0207", "DR-0207")');
+{
+  const keep = run('SR_UI.ix');
+  run('SR_UI.ix = IXC;');
+  const form = run('_srCallForm()');
+  ok('A356: the form\'s Company and Person pick from the Client Book (and can still be typed)', /name="company" list="srBookCos" required/.test(form) && /name="person" list="srBookPeople"/.test(form) &&
+     /<datalist id="srBookCos"><option value="Philcement Corp\.">Major · Cement · Accredited · Quotation sent<\/option><option value="Zeta Mining">On process · Kim Reyes(&#39;|')s client<\/option>/.test(form), form.slice(0, 700));
+  const hint = run('_srCallHintHtml(srCallLookup(IXC, ME, "Philcement Corp.", "Ana Cruz, Purchasing officer"), "Philcement Corp.")');
+  ok('  what the book has on file: the client\'s labels, and the contact\'s phone and email', /Client Book<\/span> Major · Cement · Accredited · Quotation sent/.test(hint) && /Ana Cruz, Purchasing officer: 0917 123 4567 · ana@philcement\.ph/.test(hint), hint);
+  ok('  before a contact is picked, how many there are', /2 contacts to pick from/.test(run('_srCallHintHtml(srCallLookup(IXC, ME, "Philcement Corp.", ""), "Philcement Corp.")')));
+  ok('  and a new company says it is not in the book', run('_srCallHintHtml(srCallLookup(IXC, ME, "Some New Plant", ""), "Some New Plant")') === 'Not in the Client Book.');
+  ok('  a company typed in another case is logged as the book spells it', /company: book\.client \? book\.client\.company : company/.test(fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8')));
+  ok('  the other line dialogs\' company fields pick from the same list', (fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8').match(/name="company" list="srBookCos"/g) || []).length === 4);
+  C.__keepIx = keep; run('SR_UI.ix = __keepIx;');
+}
 ok('editing a line keeps its own link on offer, chosen, even when it is not in today\'s lists (a DR number)', /<option value="dr\|DR-0207" selected>Keep: DR-0207<\/option>/.test(keepLink), keepLink.slice(0, 200));
 {
   const h = run('(function () { var k = SR_UI.ix; SR_UI.ix = IXB; var h = _srLinkOptionsHtml(""); SR_UI.ix = k; return h; })()');
