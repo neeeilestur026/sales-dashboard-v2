@@ -4,9 +4,15 @@
  * emails and phones), accreditation with its history, the sales status once accredited (with what the portal's records
  * say), the client's purchase requests, quotations and sales orders, the Sales Daily Report lines about it, and the
  * whole timeline. The numbers and matching are js/client-book-model.js (pure, tested). Saving is the trial's own four
- * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations. */
+ * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations.
+ *
+ * A362 (Neil, 22 Oct 2026: "its too long … re design it … using apple design skill"): laid out like Contacts on a Mac.
+ * A compact list on the left and the client on the right, each scrolling on its own, so the page fits the window; on a
+ * tablet or phone the client opens as a sheet. The client is four tabs — Overview, Records, Contacts, Timeline — under a
+ * sticky header, and every form waits behind its own Update / Edit button. */
 
 const CB = { me: null, all: true, ix: null, raw: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false, v183: false,
+             tab: 'overview', wasSplit: null,
              f: { q: '', accreditation: '', tier: '', sector: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
 
 function _cbE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
@@ -25,13 +31,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   _cbId('cbExport').addEventListener('click', cbExport);
   _cbId('cbChips').addEventListener('click', (e) => { const b = e.target.closest('[data-chip]'); if (b) cbChip(b.getAttribute('data-chip')); });
   _cbId('cbTable').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) cbDetail(b.getAttribute('data-open'), b); });
+  _cbId('cbTable').addEventListener('keydown', cbListKeys);
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', cbOnResize);
   await cbLoad();
 });
 
 /* ── load ─────────────────────────────────────────────────────────────────────────────────────── */
 
 async function cbLoad() {
-  _cbId('cbTable').innerHTML = '<tbody><tr><td class="cb-empty">Reading the Client Book…</td></tr></tbody>';
+  _cbId('cbTable').innerHTML = '<p class="cb-empty">Reading the Client Book…</p>';
   const today = flowToday(), from = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 120); return d.toISOString().slice(0, 10); })();
   const read = (a, p) => fetchFlow(a, p || {}).then(r => (r && r.success !== false ? r.data : null)).catch(() => null);
   CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
@@ -51,6 +59,9 @@ async function cbLoad() {
   cbRender();
   const ask = new URLSearchParams(location.search || '').get('client');   // a Sales Daily Report line links here
   if (ask && CB.clients.some(c => c.clientNo === ask)) cbDetail(ask, null);
+  else if (cbSplit()) { const first = cbFilter(CB.clients, CB.log, CB.ix, CB.f)[0]; if (first) cbDetail(first.clientNo, null); else cbPaneEmpty(); }
+  CB.wasSplit = cbSplit();
+  cbFit();
 }
 function cbTakeBook(book) {
   CB.ok = !!(book && book.success);
@@ -69,10 +80,64 @@ async function cbReload() {
 
 /** A358 — a rep's page: their own clients. */
 function cbRepHeader() {
-  const h = document.querySelector('.hband h1'), p = document.querySelector('.hband h1 + p'), t = document.querySelector('.cb-trial');
+  const h = _cbId('cbH1'), p = _cbId('cbLede'), t = _cbId('cbTrial');
   if (h) h.textContent = 'My clients';
-  if (p) p.textContent = 'Your clients with their contact people, accreditation and where the sales stand, beside your purchase requests and quotations. Pick a client on a new purchase request to keep it with them.';
+  if (p) p.textContent = 'Your clients with their people, accreditation and sales status. Pick a client on a new purchase request to keep it with them.';
   if (t) t.textContent = 'Only you and the director see these';
+}
+
+/* ── A362 · the split view ──────────────────────────────────────────────────────────────────────── */
+
+const CB_SPLIT_MQ = '(min-width: 1180px)';
+/** Wide enough to show the client beside the list (otherwise it opens as a sheet). */
+function cbSplit() {
+  try { return !!_cbId('cbPane') && !!(window.matchMedia && window.matchMedia(CB_SPLIT_MQ).matches); } catch (e) { return false; }
+}
+/** The list and the client fill the rest of the window, so the page never grows past the screen. */
+function cbFit() {
+  const sp = _cbId('cbSplit');
+  if (!sp || !sp.getBoundingClientRect || !sp.style || !sp.style.setProperty) return;
+  if (!cbSplit()) { sp.style.removeProperty('--cb-h'); return; }
+  const top = sp.getBoundingClientRect().top + (window.scrollY || 0);
+  const h = Math.max(440, Math.round(window.innerHeight - top - 20));
+  sp.style.setProperty('--cb-h', h + 'px');
+  const over = document.documentElement.scrollHeight - window.innerHeight;   // the page's own bottom padding
+  if (over > 0 && h - over >= 440) sp.style.setProperty('--cb-h', (h - over) + 'px');
+}
+function cbOnResize() {
+  const now = cbSplit();
+  if (now !== CB.wasSplit) {
+    CB.wasSplit = now;
+    if (now && CB.open) cbDetail(CB.open, CB.back);          // the open sheet moves into the pane
+    else if (now) cbPaneEmpty();
+    else CB.open = '';                                       // the pane is gone; a tap opens the sheet
+  }
+  cbFit();
+}
+function cbPaneEmpty() {
+  const pane = _cbId('cbPane');
+  if (pane) pane.innerHTML = '<div class="cb-pane-empty"><p>' + (CB.clients.length ? 'Choose a client to see their people, accreditation, sales status and records.' : 'Your clients will show here.') + '</p></div>';
+}
+/** Up and down move through the list (and open the client beside it). */
+function cbListKeys(e) {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const all = Array.prototype.slice.call(_cbId('cbTable').querySelectorAll('.cb-open')), i = all.indexOf(document.activeElement);
+  const next = all[i < 0 ? 0 : Math.min(all.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+  if (!next) return;
+  e.preventDefault();
+  next.focus();
+  if (cbSplit()) cbDetail(next.getAttribute('data-open'), next);
+}
+/** The open client is marked in the list. */
+function cbMarkOpen() {
+  const t = _cbId('cbTable');
+  if (!t || !t.querySelectorAll) return;
+  t.querySelectorAll('.cb-open').forEach(b => {
+    const on = b.getAttribute('data-open') === CB.open;
+    b.classList.toggle('on', on);
+    if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    if (on && cbSplit() && b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });   // opened from a link or the keys
+  });
 }
 
 /* ── the list ─────────────────────────────────────────────────────────────────────────────────── */
@@ -85,7 +150,8 @@ function cbRender() {
     : 'Could not read the Client Book: ' + _cbE(CB.okMsg)) + '</div>';
   _cbId('cbAdd').disabled = !CB.ok;
   const sum = cbSummary(CB.clients, CB.log, CB.ix.today), f = CB.f;
-  const chip = (key, label, count) => '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
+  // A362 — a chip with nothing in it is left out (All stays, and so does the chip you are on)
+  const chip = (key, label, count) => (!count && key !== 'all' && !cbChipOn(key)) ? '' : '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
     _cbE(label) + ' <span class="n">' + count + '</span></button>';
   _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('t:Major', 'Major', sum.major) + chip('t:Minor', 'Minor', sum.minor) +
     (sum.noLabel ? chip('t:none', 'No label', sum.noLabel) : '') +   // A361 — imported clients wait for their Major / Minor label
@@ -97,10 +163,10 @@ function cbRender() {
   if (!CB.built) {
     CB.built = true;
     _cbId('cbFilters').innerHTML =
-      '<label class="cb-search"><span>Search</span><input type="search" id="cbQ" placeholder="Company, contact, email or phone" autocomplete="off"></label>' +
-      '<label><span>Sector</span><select id="cbSector"></select></label>' +
-      '<label><span>Status</span><select id="cbStatus"></select></label>' + (CB.all ? '<label><span>Owner</span><select id="cbOwner"></select></label>' : '') +
-      '<label><span>Sort</span><select id="cbSort">' + [['updated', 'Last update'], ['company', 'Company'], ['next', 'Next step date'], ['open', 'Open quotations']].map(x => opt(x[0], f.sort, x[1])).join('') + '</select></label>';
+      '<label class="cb-search"><span class="cb-sr">Search</span><input type="search" id="cbQ" placeholder="Search company, contact, email or phone" autocomplete="off"></label>' +
+      '<label><span class="cb-sr">Sector</span><select id="cbSector"></select></label>' +
+      '<label><span class="cb-sr">Status</span><select id="cbStatus"></select></label>' + (CB.all ? '<label><span class="cb-sr">Owner</span><select id="cbOwner"></select></label>' : '') +
+      '<label><span class="cb-sr">Sort</span><select id="cbSort">' + [['updated', 'Sort: last update'], ['company', 'Sort: company'], ['next', 'Sort: next step date'], ['open', 'Sort: open quotations']].map(x => opt(x[0], f.sort, x[1])).join('') + '</select></label>';
     _cbId('cbQ').addEventListener('input', (e) => { f.q = e.target.value; cbRenderTable(); });
     ['cbSector', 'cbStatus', 'cbOwner', 'cbSort'].filter(id => _cbId(id)).forEach(id => _cbId(id).addEventListener('change', (e) => {
       f[{ cbSector: 'sector', cbStatus: 'status', cbOwner: 'owner', cbSort: 'sort' }[id]] = e.target.value; cbRenderTable();
@@ -110,6 +176,7 @@ function cbRender() {
   _cbId('cbStatus').innerHTML = opt('', f.status, 'Any status') + _cbLists().status.map(s => opt(s, f.status)).join('');
   if (_cbId('cbOwner')) _cbId('cbOwner').innerHTML = opt('', f.owner, 'Any owner') + owners.map(o => opt(o, f.owner)).join('');
   cbRenderTable();
+  cbFit();
 }
 function cbChipOn(key) {
   const f = CB.f;
@@ -133,14 +200,13 @@ function cbRenderTable() {
   const rows = cbFilter(CB.clients, CB.log, CB.ix, CB.f);
   const t = _cbId('cbTable');
   if (!CB.clients.length) {
-    t.innerHTML = '<tbody><tr><td class="cb-empty">' + (CB.ok ? 'No clients yet. Press Add client to start the book.' : 'Nothing to show yet.') + '</td></tr></tbody>';
+    t.innerHTML = '<p class="cb-empty">' + (CB.ok ? 'No clients yet. Press Add client to start the book.' : 'Nothing to show yet.') + '</p>';
     _cbId('cbFoot').textContent = '';
     return;
   }
-  t.innerHTML = '<thead><tr><th scope="col">Company</th><th scope="col">Owner</th><th scope="col">Accreditation</th><th scope="col">Sales status</th>' +
-    '<th scope="col">From the portal</th><th scope="col">Next step</th><th scope="col">Last update</th></tr></thead><tbody>' +
-    (rows.length ? rows.map(cbRow).join('') : '<tr><td colspan="7" class="cb-empty">No client matches.</td></tr>') + '</tbody>';
-  _cbId('cbFoot').textContent = rows.length + ' of ' + CB.clients.filter(c => !!c.archivedAt === CB.f.archived).length + ' shown.';
+  t.innerHTML = rows.length ? rows.map(cbRow).join('') : '<p class="cb-empty">No client matches.</p>';
+  const of = CB.clients.filter(c => !!c.archivedAt === CB.f.archived).length;
+  _cbId('cbFoot').textContent = (rows.length === of ? of + (of === 1 ? ' client' : ' clients') : rows.length + ' of ' + of + ' clients') + (CB.f.archived ? ', archived' : '');
 }
 
 function cbBadge(text, tone) { return '<span class="cb-badge ' + (tone || '') + '">' + _cbE(text) + '</span>'; }
@@ -175,23 +241,29 @@ function cbSectorOf(form) {
 function cbAccTone(a) { return a === 'Accredited' ? 'ok' : a === 'On process' ? 'mid' : 'off'; }
 function cbStatusTone(s) { return s === 'PO received' ? 'ok' : s === 'Lost' || s === 'No requirement now' ? 'off' : s ? 'mid' : ''; }
 
+/** A362 — a day in the list: "22 Oct" this year, "22 Oct 2025" before. */
+function cbShortDay(v) { const d = cbDay(v), y = String(CB.ix && CB.ix.today || '').slice(0, 4); return y && d.slice(-4) === y ? d.slice(0, -5) : d; }
+/** A362 — the town of a site address: its last two parts ("Brgy. Bigte, Norzagaray, Bulacan" → "Norzagaray, Bulacan"). */
+function cbPlace(addr) { const parts = String(addr || '').split(',').map(x => x.trim()).filter(Boolean); return parts.slice(-2).join(', '); }
+
+/** One client in the list: three short lines — the company and its last update; its label, industry, town (and owner,
+ *  for the director); its accreditation and sales status, its records, and anything that needs attention. */
 function cbRow(c) {
-  const p = cbPrimary(c), fl = cbFlags(c, CB.log, CB.clients, CB.ix.today), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c);
-  const acc = cbAccredLast(c, CB.log);
-  return '<tr class="' + (c.archivedAt ? 'archived' : '') + '"><td><button type="button" class="cb-open" data-open="' + _cbE(c.clientNo) + '">' + _cbE(c.company) + '</button>' + cbLabels(c) +
-      (c.siteAddress ? '<span class="cb-sub">' + _cbE(c.siteAddress) + '</span>' : '') +
-      (p ? '<span class="cb-sub">' + _cbE([p.name, p.position].filter(Boolean).join(', ')) + ((c.contacts || []).length > 1 ? ' + ' + ((c.contacts || []).length - 1) + ' more' : '') + '</span>' : '<span class="cb-sub">No contact yet</span>') +
-      (fl.twins.length ? '<span class="cb-flag">Possible duplicate</span>' : '') + '</td>' +
-    '<td>' + _cbE(c.owner || '—') + '</td>' +
-    '<td>' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.accreditationStep ? '<span class="cb-sub">' + _cbE(c.accreditationStep) + '</span>' : '') +
-      (c.accreditation === 'Accredited' ? (c.accreditedUntil ? '<span class="cb-sub' + (fl.expired || fl.expiring ? ' warn' : '') + '">' + (fl.expired ? 'Expired ' : 'Until ') + _cbE(cbDay(c.accreditedUntil)) + '</span>' : '')
-        : '<span class="cb-sub">Last update ' + _cbE(cbDay(acc.at) || '—') + '</span>') + '</td>' +
-    '<td>' + (c.status ? cbBadge(c.status, cbStatusTone(c.status)) + '<span class="cb-sub">since ' + _cbE(cbDay(c.statusUpdatedAt)) + '</span>' : '<span class="cb-dim">No status yet</span>') +
-      (say && say.suggest ? '<span class="cb-say">Records say: ' + _cbE(say.status) + '</span>' : '') + '</td>' +
-    '<td>' + (r.total ? _cbE(r.prs.length + ' PR' + (r.prs.length === 1 ? '' : 's') + ' · ' + r.quotes.length + ' quotation' + (r.quotes.length === 1 ? '' : 's')) +
-      (r.openValue ? '<span class="cb-sub">' + _cbE(cbMoney(r.openValue)) + ' open</span>' : '') : '<span class="cb-dim">None yet</span>') + '</td>' +
-    '<td>' + (c.nextStep ? _cbE(c.nextStep) : '<span class="cb-dim">—</span>') + (c.nextStepDate ? '<span class="cb-sub' + (fl.nextOverdue ? ' warn' : '') + '">' + _cbE(cbDay(c.nextStepDate)) + '</span>' : '') + '</td>' +
-    '<td>' + _cbE(cbDay(fl.lastUpdate) || '—') + (fl.needsUpdate ? '<span class="cb-sub warn">' + fl.daysSince + ' days ago</span>' : '') + (c.archivedAt ? '<span class="cb-sub">Archived</span>' : '') + '</td></tr>';
+  const fl = cbFlags(c, CB.log, CB.clients, CB.ix.today), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c);
+  const meta = [c.tier ? _cbE(c.tier) : '<span class="cb-nolabel">No label</span>', c.sector ? _cbE(c.sector) : '<span class="cb-nolabel">No sector</span>',
+    _cbE(cbPlace(c.siteAddress)), CB.all ? _cbE(c.owner || 'No owner') : ''].filter(Boolean).join(' · ');
+  const acc = cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.accreditation === 'Accredited'
+      ? (c.accreditedUntil ? ' <span class="' + (fl.expired || fl.expiring ? 'cb-warnt' : '') + '">' + (fl.expired ? 'expired ' : 'until ') + _cbE(cbDay(c.accreditedUntil)) + '</span>' : '')
+      : (c.accreditationStep ? ' ' + _cbE(c.accreditationStep) : ''));
+  const recs = r.total ? r.prs.length + ' PR' + (r.prs.length === 1 ? '' : 's') + ' · ' + r.quotes.length + ' quotation' + (r.quotes.length === 1 ? '' : 's') + (r.openValue ? ' · ' + cbMoney(r.openValue) + ' open' : '') : '';
+  const flags = [fl.twins.length ? 'Possible duplicate' : '', fl.needsUpdate ? 'Not updated in ' + fl.daysSince + ' days' : '', fl.nextOverdue ? 'Next step overdue (' + cbDay(c.nextStepDate) + ')' : ''].filter(Boolean);
+  return '<div class="cb-item" role="listitem"><button type="button" class="cb-open' + (c.archivedAt ? ' archived' : '') + (CB.open === c.clientNo ? ' on" aria-current="true' : '') + '" data-open="' + _cbE(c.clientNo) + '">' +
+    '<span class="cb-r1"><span class="cb-name">' + _cbE(c.company) + '</span><span class="cb-when">' + (c.archivedAt ? 'Archived' : _cbE(cbShortDay(fl.lastUpdate) || '')) + '</span></span>' +
+    '<span class="cb-r2">' + meta + '</span>' +
+    '<span class="cb-r3">' + acc + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') + (recs ? ' <span>' + _cbE(recs) + '</span>' : '') + '</span>' +
+    (flags.length || (say && say.suggest) ? '<span class="cb-r4">' + flags.map(x => '<span class="cb-flag">' + _cbE(x) + '</span>').join('') +
+      (say && say.suggest ? '<span class="cb-say">Records say: ' + _cbE(say.status) + '</span>' : '') + '</span>' : '') +
+    '</button></div>';
 }
 
 function cbExport() {
@@ -222,20 +294,32 @@ function cbOverlay() {
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ov.classList.contains('open')) cbClose(); });
   return ov;
 }
-function cbShow(html, back) {
-  const ov = cbOverlay(), box = ov.querySelector('.cb-modal');
+/** Show a client (o.pane: beside the list when there is room) or a form (always a sheet over the page). Each showing
+ *  is a fresh element, so the listeners of the last one never pile up on the next. */
+function cbShow(html, back, o) {
   CB.back = back || CB.back;
-  box.innerHTML = html;
+  if (o && o.pane && cbSplit()) {
+    const ov = _cbId('cbOverlay');
+    if (ov && ov.classList.contains('open')) { ov.classList.remove('open'); document.body.classList.remove('cb-open-dlg'); }
+    const pane = _cbId('cbPane'), was = pane.querySelector('.cb-sheet'), same = !!was && was.getAttribute('data-no') === CB.open, top = pane.scrollTop;
+    pane.innerHTML = '<div class="cb-sheet cb-detail' + (same ? '' : ' cb-enter') + '" data-no="' + _cbE(CB.open) + '">' + html + '</div>';
+    pane.scrollTop = same ? top : 0;
+    return pane.firstChild;
+  }
+  const ov = cbOverlay(), box = ov.querySelector('.cb-modal');
+  box.innerHTML = '<div class="cb-sheet' + (o && o.pane ? ' cb-detail' : '') + '">' + html + '</div>';
   ov.classList.add('open');
   document.body.classList.add('cb-open-dlg');
-  return box;
+  return box.firstChild;
 }
+/** Where the open client is drawn now. */
+function cbHost() { return (cbSplit() && _cbId('cbPane')) || cbOverlay(); }
 function cbClose() {
   const ov = _cbId('cbOverlay');
   if (!ov) return;
   ov.classList.remove('open');
   document.body.classList.remove('cb-open-dlg');
-  CB.open = '';
+  if (!cbSplit()) CB.open = '';                              // beside the list the client stays open
   if (CB.back && CB.back.focus) CB.back.focus();
 }
 function cbMsg(box, text, bad) { const m = box.querySelector('.cb-msg'); if (m) { m.textContent = text; m.className = 'cb-msg' + (bad ? ' bad' : ' ok'); } }
@@ -345,17 +429,20 @@ function cbAddDialog(back) {
   company.focus();
 }
 
-/* One client's detail */
+/* One client's detail. A362: a header that stays put (the company, its labels, the tabs) over four tabs — Overview,
+   Records, Contacts, Timeline. Every panel is drawn at once and the tabs only show one, so a form keeps what was typed
+   when you look elsewhere; every form waits behind its own Update / Edit button. */
+const CB_TABS = ['overview', 'records', 'contacts', 'timeline'];
 function cbDetail(no, back) {
   const c = CB.clients.find(x => x.clientNo === no);
   if (!c) return;
   CB.open = no;
+  if (CB_TABS.indexOf(CB.tab) < 0) CB.tab = 'overview';
   const lists = _cbLists(), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c), fl = cbFlags(c, CB.log, CB.clients, CB.ix.today);
-  const log = cbLogFor(CB.log, no), acc = cbAccredLast(c, CB.log), lines = cbDayLines(CB.reports, c);
+  const log = cbLogFor(CB.log, no), acc = cbAccredLast(c, CB.log), lines = cbDayLines(CB.reports, c), people = c.contacts || [], main = cbPrimary(c);
   const live = !c.archivedAt && CB.ok;
   const refOpts = r.quotes.map(q => ({ v: q.ref, l: 'Quotation ' + q.ref + ' — ' + q.status })).concat(r.prs.map(p => ({ v: p.ref, l: 'PR ' + p.ref + ' — ' + p.status })))
     .concat(r.sos.map(s => ({ v: s.ref, l: 'Sales order ' + s.ref })));
-  const hist = (kinds) => log.filter(l => kinds.indexOf(l.kind) >= 0).map(cbLogLi).join('');
   const link = (kind, ref) => kind === 'pr' ? '<a href="flow-pricing-request.html?pr=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>'
     : kind === 'quotation' ? '<a href="flow-quotations.html?review=' + encodeURIComponent(ref) + '">' + _cbE(ref) + '</a>' : '<b>' + _cbE(ref) + '</b>';
   /* A360 — from FlowAPI 183 a record can be connected here (Link), taken off (Take off), or found and connected below.
@@ -376,78 +463,107 @@ function cbDetail(no, back) {
   const loose = canLink ? r.prs.concat(r.quotes).filter(x => !x.linked && mineRec(x)) : [];
   const clientNos = {}; CB.clients.forEach(k => { clientNos[k.clientNo] = 1; });
   const sugg = canLink ? cbFindRecords(CB.ix, c, { me: CB.me, all: CB.all, clientNos }) : { items: [], more: 0 };
-  const box = cbShow(
-    '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
-      ' ' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') +
-      (c.archivedAt ? ' ' + cbBadge('Archived', 'off') : '') + '</p></div><button type="button" class="btn btn-secondary" data-close>Close</button></header>' +
-    (fl.twins.length ? '<p class="cb-warn">Possible duplicate of ' + _cbE(fl.twins.join(', ')) + ' (the same company).</p>' : '') +
-    (c.archivedAt ? '<p class="cb-warn">Archived ' + _cbE(cbDay(c.archivedAt)) + ': ' + _cbE(c.archiveReason) + '</p>' : '') +
-    (c.siteAddress ? '<p class="cb-sub">Site: ' + _cbE(c.siteAddress) + '</p>' : '') +
 
-    '<section class="cb-sec"><h4>Accreditation</h4>' +
-      '<p class="cb-sub">' + (c.accreditation === 'Accredited' ? (c.accreditedUntil ? 'Accredited until ' + _cbE(cbDay(c.accreditedUntil)) + (fl.expired ? ' — expired' : fl.expiring ? ' — expiring soon' : '') : 'Accredited')
-        : 'Last update ' + _cbE(cbDay(acc.at) || '—') + (acc.note ? ': ' + _cbE(acc.note) : '')) + '</p>' +
-      (live ? '<form class="cb-form" data-kind="accreditation"><fieldset class="cb-pills"><legend class="cb-sr">Accreditation</legend>' +
-        lists.accreditation.map(a => '<label class="cb-pill"><input type="radio" name="pick" value="' + a + '"' + (a === c.accreditation ? ' checked' : '') + '><span>' + a + '</span></label>').join('') + '</fieldset>' +
-        '<div class="cb-grid2"><label>Step (on process)<select class="cb-in" name="step"><option value="">—</option>' + lists.steps.map(s => '<option' + (s === c.accreditationStep ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
-        '<label>Accredited until<input type="date" class="cb-in" name="until" value="' + _cbE(c.accreditedUntil) + '"></label></div>' +
-        '<label>What changed (one line)<input type="text" class="cb-in" name="note" maxlength="500" placeholder="Vendor forms submitted to purchasing"></label>' +
-        '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save the accreditation update</button></div></form>' : '') +
-      (hist(['accreditation', 'created']) ? '<ul class="cb-hist">' + hist(['accreditation', 'created']) + '</ul>' : '') + '</section>' +
+  const tab = (id, label, n) => '<button type="button" role="tab" class="cb-tab" id="cbTab-' + id + '" aria-controls="cbPanel-' + id + '" aria-selected="' + (CB.tab === id) + '"' +
+    ' tabindex="' + (CB.tab === id ? 0 : -1) + '" data-tab="' + id + '">' + label + (n ? ' <span class="n">' + n + '</span>' : '') + '</button>';
+  const panel = (id, html) => '<div class="cb-panel" role="tabpanel" id="cbPanel-' + id + '" aria-labelledby="cbTab-' + id + '"' + (CB.tab === id ? '' : ' hidden') + '>' + html + '</div>';
+  const fact = (label, value, action, form) => '<div class="cb-fact"><span class="cb-fk">' + label + '</span><span class="cb-fv">' + value + '</span>' + (action || '') + (form || '') + '</div>';
+  const reveal = (id, label) => live ? '<button type="button" class="cb-recbtn cb-act" data-reveal="' + id + '" aria-expanded="false" aria-controls="' + id + '">' + label + '</button>' : '';
+  const goto = (id, label) => '<button type="button" class="cb-recbtn cb-act" data-goto="' + id + '">' + label + '</button>';
+  const mail = (e) => '<a href="mailto:' + _cbE(e) + '">' + _cbE(e) + '</a>', tel = (t) => '<a href="tel:' + _cbE(String(t).replace(/[^\d+]/g, '')) + '">' + _cbE(t) + '</a>';
 
-    '<section class="cb-sec"><h4>Sales status</h4>' +
-      ((say && say.status !== c.status ? '<div class="cb-sayline' + (say.suggest ? ' on' : '') + '"><span>The records say: <b>' + _cbE(say.status) + '</b> — ' + _cbE(say.why) + ' (' + _cbE(cbDay(say.date)) + ').</span>' +
-          (say.suggest && live ? '<button type="button" class="btn btn-secondary" data-usesay>Use it</button>' : '') + '</div>' : '') +
-        (c.status ? '<p class="cb-sub">' + cbBadge(c.status, cbStatusTone(c.status)) + ' since ' + _cbE(cbDay(c.statusUpdatedAt)) + (c.statusRef ? ' · ' + _cbE(c.statusRef) : '') + (c.statusNote ? ' — ' + _cbE(c.statusNote) : '') + '</p>' : '') +
-        (live ? '<form class="cb-form" data-kind="status"><div class="cb-grid2"><label>Status<select class="cb-in" name="pick">' + lists.status.map(s => '<option' + (s === c.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
-          '<label>Linked to<select class="cb-in" name="ref"><option value="">No record</option>' + refOpts.map(o => '<option value="' + _cbE(o.v) + '"' + (o.v === c.statusRef ? ' selected' : '') + '>' + _cbE(o.l) + '</option>').join('') + '</select></label></div>' +
-          '<label>What changed (one line)<input type="text" class="cb-in" name="note" maxlength="500"></label>' +
-          '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save the status</button></div></form>' : '') +
-        (hist(['status']) ? '<ul class="cb-hist">' + hist(['status']) + '</ul>' : '')) + '</section>' +
+  const head = '<header class="cb-dhead"><div class="cb-dtop"><div class="cb-dtitle"><h3 id="cbTitle">' + _cbE(c.company) + '</h3>' +
+      '<p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
+      (c.archivedAt ? ' ' + cbBadge('Archived', 'off') : '') + '</p>' +
+      '<p class="cb-dmeta">' + [_cbE(c.clientNo), CB.all ? _cbE(c.owner || 'No owner') : '', c.siteAddress ? 'Site: ' + _cbE(c.siteAddress) : ''].filter(Boolean).join(' · ') + '</p></div>' +
+      '<button type="button" class="btn btn-secondary cb-close" data-close>Close</button></div>' +
+    '<div class="cb-tabs" role="tablist" aria-label="About ' + _cbE(c.company) + '">' + tab('overview', 'Overview') + tab('records', 'Records', r.total) +
+      tab('contacts', 'Contacts', people.length) + tab('timeline', 'Timeline', log.length) + '</div></header>';
 
-    '<section class="cb-sec" id="cbRecs"><h4>From the portal' + (canLink ? '' : ' <span class="cb-sub">read only</span>') + '</h4>' +
+  const warns = (fl.twins.length ? '<p class="cb-warn">Possible duplicate of ' + _cbE(fl.twins.join(', ')) + ' (the same company).</p>' : '') +
+    (c.archivedAt ? '<p class="cb-warn">Archived ' + _cbE(cbDay(c.archivedAt)) + ': ' + _cbE(c.archiveReason) + '</p>' : '');
+
+  const accForm = live ? '<form class="cb-form cb-subform" data-kind="accreditation" id="cbAccForm" hidden><fieldset class="cb-pills"><legend class="cb-sr">Accreditation</legend>' +
+      lists.accreditation.map(a => '<label class="cb-pill"><input type="radio" name="pick" value="' + a + '"' + (a === c.accreditation ? ' checked' : '') + '><span>' + a + '</span></label>').join('') + '</fieldset>' +
+      '<div class="cb-grid2"><label>Step (on process)<select class="cb-in" name="step"><option value="">—</option>' + lists.steps.map(s => '<option' + (s === c.accreditationStep ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
+      '<label>Accredited until<input type="date" class="cb-in" name="until" value="' + _cbE(c.accreditedUntil) + '"></label></div>' +
+      '<label>What changed (one line)<input type="text" class="cb-in" name="note" maxlength="500" placeholder="Vendor forms submitted to purchasing"></label>' +
+      '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save the accreditation update</button></div></form>' : '';
+  const statusForm = live ? '<form class="cb-form cb-subform" data-kind="status" id="cbStatusForm" hidden><div class="cb-grid2"><label>Status<select class="cb-in" name="pick">' + lists.status.map(s => '<option' + (s === c.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
+      '<label>Linked to<select class="cb-in" name="ref"><option value="">No record</option>' + refOpts.map(o => '<option value="' + _cbE(o.v) + '"' + (o.v === c.statusRef ? ' selected' : '') + '>' + _cbE(o.l) + '</option>').join('') + '</select></label></div>' +
+      '<label>What changed (one line)<input type="text" class="cb-in" name="note" maxlength="500"></label>' +
+      '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save the status</button></div></form>' : '';
+  const accText = c.accreditation === 'Accredited'
+    ? (c.accreditedUntil ? 'until ' + _cbE(cbDay(c.accreditedUntil)) + (fl.expired ? ' — <span class="cb-warnt">expired</span>' : fl.expiring ? ' — <span class="cb-warnt">expiring soon</span>' : '') : '')
+    : (c.accreditationStep ? _cbE(c.accreditationStep) + ' · ' : '') + 'last update ' + _cbE(cbDay(acc.at) || '—') + (acc.note ? ': ' + _cbE(acc.note) : '');
+  const SR_SHOWN = 4;
+  const overview = warns +
+    (say && say.status !== c.status ? '<div class="cb-sayline' + (say.suggest ? ' on' : '') + '"><span>The records say: <b>' + _cbE(say.status) + '</b> — ' + _cbE(say.why) + ' (' + _cbE(cbDay(say.date)) + ').</span>' +
+      (say.suggest && live ? '<button type="button" class="btn btn-secondary" data-usesay>Use it</button>' : '') + '</div>' : '') +
+    '<div class="cb-facts">' +
+      fact('Accreditation', cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (accText ? ' <span class="cb-fsub">' + accText + '</span>' : ''), reveal('cbAccForm', 'Update'), accForm) +
+      fact('Sales status', c.status ? cbBadge(c.status, cbStatusTone(c.status)) + ' <span class="cb-fsub">since ' + _cbE(cbDay(c.statusUpdatedAt)) + (c.statusRef ? ' · ' + _cbE(c.statusRef) : '') +
+        (c.statusNote ? ' — ' + _cbE(c.statusNote) : '') + '</span>' : '<span class="cb-dim">No status yet</span>', reveal('cbStatusForm', 'Update'), statusForm) +
+      fact('Next step', c.nextStep || c.nextStepDate ? _cbE(c.nextStep || '—') + (c.nextStepDate ? ' <span class="cb-fsub' + (fl.nextOverdue ? ' cb-warnt' : '') + '">' + _cbE(cbDay(c.nextStepDate)) + (fl.nextOverdue ? ' — overdue' : '') + '</span>' : '')
+        : '<span class="cb-dim">None set</span>', live ? '<button type="button" class="cb-recbtn cb-act" data-edit>Edit</button>' : '') +
+      fact('Portal records', r.total ? _cbE(r.prs.length + ' PR' + (r.prs.length === 1 ? '' : 's') + ' · ' + r.quotes.length + ' quotation' + (r.quotes.length === 1 ? '' : 's') + ' · ' + r.sos.length + ' sales order' + (r.sos.length === 1 ? '' : 's')) +
+        (r.openValue ? ' <span class="cb-fsub">' + _cbE(cbMoney(r.openValue)) + ' open</span>' : '') : '<span class="cb-dim">None yet</span>', goto('records', 'See them')) +
+      fact('Main contact', main ? '<b>' + _cbE(main.name || (main.emails || [])[0] || (main.phones || [])[0] || '') + '</b>' + (main.position ? ' <span class="cb-fsub">' + _cbE(main.position) + '</span>' : '') +
+        ((main.emails || []).length || (main.phones || []).length ? '<span class="cb-flinks">' + (main.emails || []).slice(0, 1).map(mail).concat((main.phones || []).slice(0, 1).map(tel)).join(' · ') + '</span>' : '')
+        : '<span class="cb-dim">No contact yet</span>', goto('contacts', people.length > 1 ? 'All ' + people.length : 'Contacts')) +
+      (c.notes ? fact('Notes', '<span class="cb-notes">' + _cbE(c.notes) + '</span>') : '') +
+    '</div>' +
+    (!CB.all ? '' : '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
+      (lines.length ? '<ul class="cb-hist">' + lines.map((l, i) => '<li' + (i >= SR_SHOWN ? ' class="cb-more" hidden' : '') + '><span class="tm">' + _cbE(cbDay(l.day)) + '</span><span>' + _cbE(l.type) + ' — ' + _cbE([l.person, l.note].filter(Boolean).join(', ') || l.company) +
+        (l.result ? '<span class="cb-sub">' + _cbE(l.result) + '</span>' : '') + '<span class="cb-sub">' + _cbE(l.user) + '</span></span></li>').join('') + '</ul>' +
+        (lines.length > SR_SHOWN ? '<button type="button" class="cb-link" data-showmore>Show all ' + lines.length + '</button>' : '')
+        : '<p class="cb-sub">No lines about this client in the Sales Daily Report yet.</p>') + '</section>');
+
+  const records = '<div class="cb-sec cb-flat" id="cbRecs">' +
       (r.total ? '<p class="cb-sub">' + (canLink ? 'Linked records stay with this client whatever the company is called on them; the rest are matched by its name. Link one to keep it here.'
-                                                  : 'Records linked on a PR made for this client are marked; the rest are matched by the company name.') + '</p>' +
+                                                : 'Records linked on a PR made for this client are marked; the rest are matched by the company name.') + '</p>' +
         (loose.length > 1 ? '<div class="cb-recsbar"><button type="button" class="btn btn-secondary" data-linkall>Link all ' + loose.length + ' matched by name</button></div>' : '') +
         '<ul class="cb-recs">' + r.sos.map(recRow).join('') + r.quotes.map(recRow).join('') + r.prs.map(recRow).join('') + '</ul>'
-               : '<p class="cb-sub">No purchase requests, quotations or sales orders under this company name yet.</p>') +
+             : '<p class="cb-sub">No purchase requests, quotations or sales orders under this company name yet.</p>') +
       (canLink ? '<p class="cb-msg" role="status"></p><div class="cb-find"><h5>Connect a past purchase request or quotation</h5>' +
         (sugg.items.length ? '<p class="cb-sub">Similar company names' + (CB.all ? '' : ' among yours') + ':</p><ul class="cb-recs">' + sugg.items.map(findRow).join('') + '</ul>' +
           (sugg.more ? '<p class="cb-sub">' + sugg.more + ' more with a similar name — find them by number or name below.</p>' : '') : '') +
         '<label>Find by number or company<input type="search" class="cb-in" data-find maxlength="80" autocomplete="off" placeholder="PR-202603-014, a quotation number or part of the name"></label>' +
-        '<div data-found></div></div>' : '') + '</section>' +
+        '<div data-found></div></div>' : (r.total ? '<p class="cb-sub cb-ro">Read only.</p>' : '')) + '</div>';
 
-    (!CB.all ? '' : '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
-      (lines.length ? '<ul class="cb-hist">' + lines.map(l => '<li><span class="tm">' + _cbE(cbDay(l.day)) + '</span><span>' + _cbE(l.type) + ' — ' + _cbE([l.person, l.note].filter(Boolean).join(', ') || l.company) +
-        (l.result ? '<span class="cb-sub">' + _cbE(l.result) + '</span>' : '') + '<span class="cb-sub">' + _cbE(l.user) + '</span></span></li>').join('') + '</ul>'
-        : '<p class="cb-sub">No lines about this client in the Sales Daily Report yet.</p>') + '</section>') +
-
-    '<section class="cb-sec"><h4>Contacts and details</h4>' +
-      (live ? '<form class="cb-form" id="cbEdit" autocomplete="off"><div class="cb-grid2"><label>Company<input type="text" class="cb-in" name="company" required maxlength="160" value="' + _cbE(c.company) + '"></label>' +
+  const peopleList = people.length ? '<ul class="cb-peeps">' + people.map(p => '<li><span class="cb-pname">' + _cbE(p.name || (p.emails || [])[0] || (p.phones || [])[0] || 'Contact') +
+      (p.primary ? ' <span class="cb-badge mid">Main</span>' : '') + '</span>' + (p.position ? '<span class="cb-ppos">' + _cbE(p.position) + '</span>' : '') +
+      ((p.emails || []).length || (p.phones || []).length ? '<span class="cb-plinks">' + (p.emails || []).map(mail).concat((p.phones || []).map(tel)).join('') + '</span>' : '') +
+      (p.note ? '<span class="cb-ppos">' + _cbE(p.note) + '</span>' : '') + '</li>').join('') + '</ul>' : '<p class="cb-sub">No contact people yet.</p>';
+  const contacts = '<div class="cb-sec cb-flat"><div class="cb-panelbar"><h4>Contacts and details</h4>' + reveal('cbEdit', 'Edit details and contacts') + '</div>' +
+      '<div id="cbPeople">' + peopleList + '</div>' +
+      (live ? '<form class="cb-form" id="cbEdit" autocomplete="off" hidden><div class="cb-grid2"><label>Company<input type="text" class="cb-in" name="company" required maxlength="160" value="' + _cbE(c.company) + '"></label>' +
           (CB.all ? '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label>' : '') + '</div>' + cbTierPills(c.tier, false) + cbSectorFields(c.sector, false) +
-          '<div class="cb-people">' + ((c.contacts || []).length ? c.contacts.map(cbPersonHtml).join('') : cbPersonHtml({ primary: true }, 0)) + '</div>' +
+          '<div class="cb-people">' + (people.length ? people.map(cbPersonHtml).join('') : cbPersonHtml({ primary: true }, 0)) + '</div>' +
           '<button type="button" class="btn btn-secondary cb-addperson" data-addperson>Add another person</button>' +
           '<div class="cb-grid2"><label>Next step<input type="text" class="cb-in" name="nextStep" maxlength="190" value="' + _cbE(c.nextStep) + '"></label>' +
           '<label>Next step date<input type="date" class="cb-in" name="nextStepDate" value="' + _cbE(c.nextStepDate) + '"></label></div>' +
           '<label>Notes<textarea class="cb-in" name="notes" rows="2" maxlength="2000">' + _cbE(c.notes) + '</textarea></label>' +
-          '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save contacts and details</button></div></form>'
-        : '<ul class="cb-hist">' + (c.contacts || []).map(p => '<li><span>' + _cbE(p.name) + (p.position ? ', ' + _cbE(p.position) : '') + '<span class="cb-sub">' + _cbE((p.emails || []).concat(p.phones || []).join(' · ')) + '</span></span></li>').join('') + '</ul>') + '</section>' +
+          '<div class="cb-formfoot"><button type="button" class="btn btn-secondary" data-cancel="cbEdit">Cancel</button><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save contacts and details</button></div></form>' : '') + '</div>';
 
-    '<section class="cb-sec"><h4>Timeline</h4><ul class="cb-hist">' + log.map(cbLogLi).join('') + '</ul></section>' +
-
-    (CB.ok ? '<section class="cb-sec"><form class="cb-form" id="cbArchive">' + (c.archivedAt
+  const timeline = '<div class="cb-sec cb-flat"><h4>Timeline</h4><ul class="cb-hist">' + log.map(cbLogLi).join('') + '</ul></div>' +
+    (CB.ok ? '<div class="cb-sec"><form class="cb-form" id="cbArchive">' + (c.archivedAt
         ? '<div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-secondary">Restore this client</button></div>'
         : '<label>Archive this client — why?<input type="text" class="cb-in" name="reason" maxlength="190" placeholder="Plant closed"></label><div class="cb-formfoot"><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-secondary">Archive</button></div>') +
-      '</form></section>' : ''), back);
+      '</form></div>' : '');
+
+  const box = cbShow(head + panel('overview', overview) + panel('records', records) + panel('contacts', contacts) + panel('timeline', timeline), back, { pane: true });
+  cbMarkOpen();
   cbWirePeople(box);
   if (box.querySelector('#cbEdit')) cbWireSector(box.querySelector('#cbEdit'), c.siteAddress);
+  cbWireTabs(box);
   const recs = box.querySelector('#cbRecs');
   if (recs && canLink) {
     const send = async (btn, action, params, done) => {
       btn.disabled = true;
       const res = await cbPost(recs, action, params);
       if (!(res && res.success)) { btn.disabled = false; return; }
-      const again = cbOverlay().querySelector('#cbRecs');   // the detail was drawn again from the new book
+      const again = cbHost().querySelector('#cbRecs');   // the detail was drawn again from the new book
       if (again) cbMsg(again, done(res));
     };
     recs.addEventListener('click', (e) => {
@@ -501,6 +617,46 @@ function cbDetail(no, back) {
       if (!reason) { arch.elements.reason.focus(); cbMsg(arch, 'Say why first.', true); return; }
       cbPost(arch, 'archiveClientBookClient', { clientNo: no, reason });
     }
+  });
+}
+
+/** A362 — the tabs (arrow keys move between them, as a tab list should), the Update / Edit buttons that open a form
+ *  in place, "See them" / "All 5" that jump to a tab, and "Show all" under the daily report lines. */
+function cbWireTabs(box) {
+  const tabs = Array.prototype.slice.call(box.querySelectorAll('[role="tab"]'));
+  const pick = (id, focus) => {
+    CB.tab = id;
+    tabs.forEach(t => { const on = t.getAttribute('data-tab') === id; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+    box.querySelectorAll('[role="tabpanel"]').forEach(p => { p.hidden = p.id !== 'cbPanel-' + id; });
+    const host = box.parentNode;
+    if (host && host.scrollTop > 0 && box.querySelector('.cb-dhead')) host.scrollTop = 0;
+  };
+  const open = (id, btn) => {
+    const f = box.querySelector('#' + id);
+    if (!f) return;
+    f.hidden = !f.hidden;
+    box.querySelectorAll('[data-reveal="' + id + '"]').forEach(b => b.setAttribute('aria-expanded', String(!f.hidden)));
+    if (id === 'cbEdit') { const list = box.querySelector('#cbPeople'); if (list) list.hidden = !f.hidden; }
+    const first = !f.hidden && f.querySelector('input:not([type="hidden"]):not([type="radio"]), select, textarea');
+    if (first) first.focus(); else if (f.hidden && btn && btn.focus) btn.focus();
+  };
+  box.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab], [data-goto], [data-reveal], [data-edit], [data-cancel], [data-showmore]');
+    if (!t) return;
+    if (t.hasAttribute('data-tab')) pick(t.getAttribute('data-tab'), false);
+    else if (t.hasAttribute('data-goto')) pick(t.getAttribute('data-goto'), true);
+    else if (t.hasAttribute('data-reveal')) open(t.getAttribute('data-reveal'), t);
+    else if (t.hasAttribute('data-cancel')) open(t.getAttribute('data-cancel'), box.querySelector('[data-reveal="' + t.getAttribute('data-cancel') + '"]'));
+    else if (t.hasAttribute('data-edit')) { pick('contacts', false); const f = box.querySelector('#cbEdit'); if (f && f.hidden) open('cbEdit'); }
+    else if (t.hasAttribute('data-showmore')) { box.querySelectorAll('.cb-more').forEach(li => { li.hidden = false; }); t.remove(); }
+  });
+  const list = box.querySelector('[role="tablist"]');
+  if (list) list.addEventListener('keydown', (e) => {
+    const i = tabs.indexOf(document.activeElement), step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (i < 0 || (!step && e.key !== 'Home' && e.key !== 'End')) return;
+    e.preventDefault();
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + step + tabs.length) % tabs.length;
+    pick(tabs[n].getAttribute('data-tab'), true);
   });
 }
 
