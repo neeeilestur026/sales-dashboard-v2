@@ -32,9 +32,8 @@ const TR_ROLES = {
       { key: 'paid', label: 'Transfers paid', acts: { 'Payment Request': ['Paid'] }, money: true },
       { key: 'ap', label: 'Payables updated', acts: { 'AP Aging': ['Updated'] }, distinct: true },
       { key: 'received', label: 'Materials received', acts: { 'Receiving': ['Received'] } },
-      { key: 'expenses', label: 'Expenses recorded', acts: { 'Expense': ['Added', 'Imported'] } },
-      { key: 'books', label: 'Books work', acts: { 'Books': '*' } },
-      { key: 'travel', label: 'Travel reports signed', acts: { 'Travel Allowance': ['Approved'] } }
+      { key: 'expenses', label: 'Expenses recorded', acts: { 'Expense': ['Added', 'Imported'] } }
+      // A353 (Neil, 22 Oct): books work is no longer a tile, and travel reports are a typed line below
     ],
     week: ['invoices', 'collections', 'paid'],
     /* A352 — Neil, 22 Oct: "it has emails, for follow up collections". Counted from the person's sent mail. */
@@ -46,9 +45,10 @@ const TR_ROLES = {
       { type: 'Billing', results: ['Payment slip', 'Cash voucher', 'Marked paid', 'Sales payment request paid'], what: 'Reference no.' },
       { type: 'Bank reconciliation', results: ['Balanced', 'Differences found'], what: 'Account and period' },
       { type: 'Month check', results: ['Done, no issues', 'Issues found'], what: 'Month' },
+      { type: 'Travel report', results: ['Signed', 'Sent back to the rep', 'Waiting for receipts'], what: 'Rep and week' },
       { type: 'Other task', results: [], what: 'What' }
     ],
-    typedNote: 'Billing, sales payment requests and bank work run outside the portal\'s log, so they are typed here. A collection email is counted from the mailbox; type one only when it went from another mailbox.'
+    typedNote: 'Billing, sales payment requests, bank work and travel reports are typed here. A collection email is counted from the mailbox; type one only when it went from another mailbox.'
   },
   leadgen: {
     title: 'Lead Gen Daily Report', role: 'leadgen', noun: 'Lead gen',
