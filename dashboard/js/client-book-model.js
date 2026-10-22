@@ -259,7 +259,7 @@ function cbFilter(clients, log, ix, f) {
   const rows = (clients || []).filter(c => {
     if (!!c.archivedAt !== !!o.archived) return false;
     if (o.accreditation && c.accreditation !== o.accreditation) return false;
-    if (o.tier && (c.tier || '') !== o.tier) return false;
+    if (o.tier && (c.tier || '') !== (o.tier === 'none' ? '' : o.tier)) return false;   // A361 — 'none': the clients still without a label
     if (o.sector && cbSectorGroup(c.sector) !== o.sector) return false;
     if (o.status && c.status !== o.status) return false;
     if (o.owner && c.owner !== o.owner) return false;
@@ -282,7 +282,7 @@ function cbFilter(clients, log, ix, f) {
 function cbSummary(clients, log, today) {
   const live = (clients || []).filter(c => !c.archivedAt);
   const fl = live.map(c => cbFlags(c, log, clients, today));
-  return { total: live.length, major: live.filter(c => c.tier === 'Major').length, minor: live.filter(c => c.tier === 'Minor').length,
+  return { total: live.length, major: live.filter(c => c.tier === 'Major').length, minor: live.filter(c => c.tier === 'Minor').length, noLabel: live.filter(c => !c.tier).length,
            accredited: live.filter(c => c.accreditation === 'Accredited').length,
            onProcess: live.filter(c => c.accreditation === 'On process').length, notAccredited: live.filter(c => c.accreditation === 'Not accredited').length,
            needsUpdate: fl.filter(x => x.needsUpdate).length, expiring: fl.filter(x => x.expiring || x.expired).length,
