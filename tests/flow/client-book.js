@@ -26,16 +26,16 @@ const G = 'Gerald Lucena', K = 'Kim Reyes';
 const BOOK = {
   success: true,
   clients: [
-    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
+    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', tier: 'Major', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
       accreditationUpdatedAt: '2026-10-05T02:00:00.000Z', status: 'RFQ received', statusUpdatedAt: '2026-10-10T02:00:00.000Z', statusRef: 'PR-1', nextStep: '', nextStepDate: '',
       contacts: [{ id: 'P1', name: 'Ana Cruz', position: 'Purchasing', emails: ['ana@philcement.ph', 'ana.cruz@gmail.com'], phones: ['0917 123 4567'], primary: true },
                  { id: 'P2', name: 'Ben', position: '', emails: [], phones: ['(02) 8555-1212'], primary: false }],
       notes: '', createdAt: '2026-10-01T01:00:00.000Z', updatedAt: '2026-10-10T02:00:00.000Z', archivedAt: '' },
-    { clientNo: 'CB-0002', company: 'Zeta Mining', key: 'zeta mining', owner: K, accreditation: 'On process', accreditationStep: 'Documents submitted', accreditedUntil: '',
+    { clientNo: 'CB-0002', company: 'Zeta Mining', key: 'zeta mining', tier: 'Minor', owner: K, accreditation: 'On process', accreditationStep: 'Documents submitted', accreditedUntil: '',
       status: '', nextStep: 'Call purchasing about the forms', nextStepDate: '2026-10-20', contacts: [], createdAt: '2026-10-01T01:00:00.000Z', updatedAt: '2026-10-01T01:00:00.000Z', archivedAt: '' },
     { clientNo: 'CB-0003', company: 'PHILCEMENT CORP.', key: 'philcement', owner: '', accreditation: 'Not accredited', status: '', contacts: [],
       createdAt: '2026-10-21T01:00:00.000Z', updatedAt: '2026-10-21T01:00:00.000Z', archivedAt: '' },
-    { clientNo: 'CB-0004', company: 'Gone Co', key: 'gone', owner: G, accreditation: 'Not accredited', status: '', contacts: [],
+    { clientNo: 'CB-0004', company: 'Gone Co', key: 'gone', tier: 'Minor', owner: G, accreditation: 'Not accredited', status: '', contacts: [],
       createdAt: '2026-10-01T01:00:00.000Z', archivedAt: '2026-10-02T01:00:00.000Z', archiveReason: 'Plant closed' }
   ],
   log: [
@@ -125,7 +125,7 @@ ok('an accreditation past its date is expired, not expiring', (f => f.expired &&
 eq('each log row reads in words', ['created', 'accreditation', 'status', 'contacts', 'details', 'archived', 'restored'].map(k => run('cbLogText(' + JSON.stringify({ kind: k, from: k === 'contacts' ? '1' : '', to: k === 'contacts' ? '2' : k === 'status' ? 'Quotation sent' : 'X' }) + ')')),
    ['Added to the Client Book', 'Accreditation: X', 'Status: Quotation sent', 'Contact people: 1 → 2', 'Details changed', 'Archived', 'Restored']);
 eq('an accreditation update shows its own last update', J('cbAccredLast(byNo("CB-0001"), LOG)'), { at: '2026-10-05T02:00:00.000Z', note: 'Vendor number issued' });
-eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
+eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
 const ids = (f) => J('cbFilter(CL, LOG, IX, ' + JSON.stringify(f) + ').map(function (c) { return c.clientNo; })');
 eq('newest update first by default', ids({}), ['CB-0003', 'CB-0001', 'CB-0002']);
 eq('search finds a contact\'s second email', ids({ q: 'ana.cruz@gmail' }), ['CB-0001']);
@@ -135,7 +135,7 @@ eq('accreditation, needs an update, expiring, next step', [ids({ accreditation: 
 eq('archived clients only when asked for', ids({ archived: true }), ['CB-0004']);
 {
   const csv = run('cbCsv(cbFilter(CL, LOG, IX, {}), LOG, IX)').split('\n');
-  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Owner,Accreditation/.test(csv[0]));
+  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Major or minor,Owner,Accreditation/.test(csv[0]) && /^CB-0001,Philcement Corporation,Major,/.test(csv.find(l => /^CB-0001,/.test(l))));
   const row = csv.find(l => /^CB-0001,/.test(l));
   ok('  every contact person kept; a cell with a comma is quoted', /Ana Cruz,Purchasing,ana@philcement\.ph; ana\.cruz@gmail\.com,0917 123 4567,"Ben, \(02\) 8555-1212"/.test(row), row);
   ok('  with its open quotations and their value', /,0,1,186400,/.test(row), row);
@@ -159,7 +159,9 @@ async function boot(o) {
   ['cbQ', 'cbStatus', 'cbOwner', 'cbSort'].forEach(id => { p.els[id] = Object.assign(stubEl(), { id }); });
   p.ctx.__book = o.book || BOOK; p.ctx.__reports = REPORTS; p.ctx.__stub = stubEl;
   p.ctx.__ask = o.ask || null;
+  p.ctx.__v = o.v || 180;
   p.run(`flowToday = function () { return "2026-10-21"; };
+    flowVersionAtLeast = function (n) { return Promise.resolve(n <= __v); };
     URLSearchParams = function () { return { get: function (k) { return k === 'client' ? __ask : null; } }; };
     apiGetUsers = function () { return Promise.resolve({ data: [{ username: 'gerald', fullName: 'Gerald Lucena', role: 'sales' }, { username: 'kim', fullName: 'Kim Reyes', role: 'sales' }, { username: 'neil', fullName: 'Neil Estur', role: 'director' }] }); };
     var __posted = [], __shown = '';
@@ -179,7 +181,7 @@ async function boot(o) {
      [['getClientBook', 'getProofReports'], ['getActivityLog', 'getClients', 'getPricingRequests', 'getQuotations', 'getSalesOrders']]);
   ok('one row per live client, newest update first', (T.match(/data-open="/g) || []).length === 3 && T.indexOf('CB-0003') < T.indexOf('CB-0001') && T.indexOf('CB-0001') < T.indexOf('CB-0002'));
   ok('  a row: company with its main contact, owner, accreditation, status since, records, next step, last update',
-     /Philcement Corporation<\/button><span class="cb-sub">Ana Cruz, Purchasing \+ 1 more<\/span>/.test(T) && /RFQ received<\/span><span class="cb-sub">since 10 Oct 2026/.test(T) &&
+     /Philcement Corporation<\/button><span class="cb-badge tier-major">Major<\/span><span class="cb-sub">Ana Cruz, Purchasing \+ 1 more<\/span>/.test(T) && /RFQ received<\/span><span class="cb-sub">since 10 Oct 2026/.test(T) &&
      /1 PR · 1 quotation<span class="cb-sub">₱186,400 open/.test(T) && /Until 10 Nov 2026/.test(T), T.slice(0, 1200));
   ok('  the records\' suggestion shows on the row', /Records say: Following up/.test(T));
   ok('  not accredited or on process: no sales status, and the accreditation\'s last update', /Documents submitted<\/span><span class="cb-sub">Last update 1 Oct 2026/.test(T));
@@ -230,6 +232,26 @@ async function boot(o) {
   const all = px.els.cbTable.innerHTML + px.run('__shown');
   ok('what is typed is shown as text, never markup', !/<img src=x|<script>alert/.test(all) && /&lt;img src=x onerror=alert\(1\)&gt;/.test(px.els.cbTable.innerHTML));
 
+  sec('5b · A354: Major or Minor');
+  const pt = await boot();
+  const PT = pt.els.cbTable.innerHTML;
+  ok('every row shows its label; a client without one says so', /tier-major">Major</.test(PT) && /tier-minor">Minor</.test(PT) && /tier-none">No label</.test(PT));
+  ok('Major and Minor are chips with their counts', /data-chip="t:Major" aria-pressed="false">Major <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML) &&
+     /data-chip="t:Minor" aria-pressed="false">Minor <span class="n">1<\/span>/.test(pt.els.cbChips.innerHTML));
+  pt.run('cbChip("t:Major")');
+  ok('  a chip shows only those clients', (pt.els.cbTable.innerHTML.match(/data-open="/g) || []).length === 1 && /Philcement Corporation/.test(pt.els.cbTable.innerHTML) &&
+     /data-chip="t:Major" aria-pressed="true"/.test(pt.els.cbChips.innerHTML));
+  eq('  and the model filters the same way', J('cbFilter(CL, LOG, IX, { tier: "Minor" }).map(function (c) { return c.clientNo; })'), ['CB-0002']);
+  pt.run('cbAddDialog(null)');
+  const ta = pt.run('__shown');
+  ok('adding a client asks Major or Minor, and requires it', /<legend>Major or minor client<\/legend>/.test(ta) && /name="tier" value="Major" required>/.test(ta) && /name="tier" value="Minor" required>/.test(ta));
+  pt.run('cbDetail("CB-0001", null)');
+  const td = pt.run('__shown');
+  ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-badge tier-major">Major<\/span>/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
+  const pv = await boot({ v: 179 });
+  pv.run('cbAddDialog(null)');
+  ok('before FlowAPI 180 the choice is shown but switched off, and says why', /name="tier" value="Major" disabled>/.test(pv.run('__shown')) && /saved once the FlowAPI update \(180\)/.test(pv.run('__shown')));
+
   const pd = await boot({ ask: 'CB-0002' });
   ok('a Sales Daily Report link (?client=CB-0002) opens that client', /<h3 id="cbTitle">Zeta Mining<\/h3>/.test(pd.run('__shown')));
 
@@ -250,7 +272,7 @@ async function boot(o) {
     return box.innerHTML;
   };
   const cd = await card(BOOK);
-  ok('the card: clients, accredited, on process, not accredited, needing an update (amber when any)', /<span class="v">3<\/span><span class="l">Clients<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Accredited<\/span>/.test(cd) && /cbc-tile warn"><span class="v">1<\/span><span class="l">Needs an update/.test(cd), cd);
+  ok('the card: clients, Major, accredited, on process, not accredited, needing an update (amber when any)', /<span class="v">3<\/span><span class="l">Clients<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Major<\/span>/.test(cd) && /<span class="v">1<\/span><span class="l">Accredited<\/span>/.test(cd) && /cbc-tile warn"><span class="v">1<\/span><span class="l">Needs an update/.test(cd), cd);
   ok('  an empty book invites the first client; without 178 it says so', /No clients yet/.test(await card({ success: true, clients: [], log: [] })) && /version 178/.test(await card({ success: false, message: 'Unknown action: getClientBook' })));
 
   const AUTH = read('js/auth.js'), NAV = read('js/ledger-nav.js');

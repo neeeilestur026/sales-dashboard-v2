@@ -6,8 +6,8 @@
  * whole timeline. The numbers and matching are js/client-book-model.js (pure, tested). Saving is the trial's own four
  * actions (FlowAPI 178): nothing here writes the real client list, PRs or quotations. */
 
-const CB = { me: null, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false,
-             f: { q: '', accreditation: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
+const CB = { me: null, ix: null, clients: [], log: [], lists: null, reports: [], roster: [], ok: true, okMsg: '', open: '', back: null, built: false, v180: false,
+             f: { q: '', accreditation: '', tier: '', status: '', owner: '', flag: '', archived: false, sort: 'updated' } };
 
 function _cbE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
 function _cbId(id) { return document.getElementById(id); }
@@ -32,6 +32,7 @@ async function cbLoad() {
   _cbId('cbTable').innerHTML = '<tbody><tr><td class="cb-empty">Reading the Client Book…</td></tr></tbody>';
   const today = flowToday(), from = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 120); return d.toISOString().slice(0, 10); })();
   const read = (a, p) => fetchFlow(a, p || {}).then(r => (r && r.success !== false ? r.data : null)).catch(() => null);
+  CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
   const [book, quotations, prs, salesOrders, clients, activity, users, reports] = await Promise.all([
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
@@ -72,7 +73,8 @@ function cbRender() {
   const sum = cbSummary(CB.clients, CB.log, CB.ix.today), f = CB.f;
   const chip = (key, label, count) => '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
     _cbE(label) + ' <span class="n">' + count + '</span></button>';
-  _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
+  _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('t:Major', 'Major', sum.major) + chip('t:Minor', 'Minor', sum.minor) +
+    chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
     chip('a:Not accredited', 'Not accredited', sum.notAccredited) + chip('f:needsUpdate', 'Needs an update', sum.needsUpdate) +
     chip('f:expiring', 'Accreditation expiring', sum.expiring) + chip('f:nextOverdue', 'Next step overdue', sum.nextOverdue) + chip('archived', 'Archived', sum.archived);
   const owners = Array.from(new Set(CB.roster.concat(CB.clients.map(c => c.owner).filter(Boolean)))).sort();
@@ -94,16 +96,18 @@ function cbRender() {
 }
 function cbChipOn(key) {
   const f = CB.f;
-  if (key === 'all') return !f.accreditation && !f.flag && !f.archived;
+  if (key === 'all') return !f.accreditation && !f.tier && !f.flag && !f.archived;
   if (key === 'archived') return f.archived;
   if (key.indexOf('a:') === 0) return !f.archived && f.accreditation === key.slice(2);
+  if (key.indexOf('t:') === 0) return !f.archived && f.tier === key.slice(2);
   return !f.archived && f.flag === key.slice(2);
 }
 function cbChip(key) {
   const f = CB.f;
-  f.accreditation = ''; f.flag = ''; f.archived = false;
+  f.accreditation = ''; f.tier = ''; f.flag = ''; f.archived = false;
   if (key === 'archived') f.archived = true;
   else if (key.indexOf('a:') === 0) f.accreditation = key.slice(2);
+  else if (key.indexOf('t:') === 0) f.tier = key.slice(2);
   else if (key.indexOf('f:') === 0) f.flag = key.slice(2);
   cbRender();
 }
@@ -123,13 +127,21 @@ function cbRenderTable() {
 }
 
 function cbBadge(text, tone) { return '<span class="cb-badge ' + (tone || '') + '">' + _cbE(text) + '</span>'; }
+/* A354 — Major / Minor */
+function cbTierBadge(t) { return t ? '<span class="cb-badge tier-' + _cbE(t.toLowerCase()) + '">' + _cbE(t) + '</span>' : '<span class="cb-badge tier-none">No label</span>'; }
+function cbTierPills(cur, required) {
+  return '<fieldset class="cb-pills cb-tier"><legend>Major or minor client</legend>' + CB_TIERS.map(t => '<label class="cb-pill"><input type="radio" name="tier" value="' + t + '"' +
+      (cur === t ? ' checked' : '') + (required && CB.v180 ? ' required' : '') + (CB.v180 ? '' : ' disabled') + '><span>' + t + '</span></label>').join('') +
+    (CB.v180 ? '' : '<span class="cb-sub">The label is saved once the FlowAPI update (180) is pasted.</span>') + '</fieldset>';
+}
+function cbTierOf(form) { const r = Array.prototype.find.call(form.querySelectorAll('input[name="tier"]'), x => x.checked); return r ? r.value : ''; }
 function cbAccTone(a) { return a === 'Accredited' ? 'ok' : a === 'On process' ? 'mid' : 'off'; }
 function cbStatusTone(s) { return s === 'PO received' ? 'ok' : s === 'Lost' || s === 'No requirement now' ? 'off' : s ? 'mid' : ''; }
 
 function cbRow(c) {
   const p = cbPrimary(c), fl = cbFlags(c, CB.log, CB.clients, CB.ix.today), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c);
   const acc = cbAccredLast(c, CB.log);
-  return '<tr class="' + (c.archivedAt ? 'archived' : '') + '"><td><button type="button" class="cb-open" data-open="' + _cbE(c.clientNo) + '">' + _cbE(c.company) + '</button>' +
+  return '<tr class="' + (c.archivedAt ? 'archived' : '') + '"><td><button type="button" class="cb-open" data-open="' + _cbE(c.clientNo) + '">' + _cbE(c.company) + '</button>' + cbTierBadge(c.tier) +
       (p ? '<span class="cb-sub">' + _cbE([p.name, p.position].filter(Boolean).join(', ')) + ((c.contacts || []).length > 1 ? ' + ' + ((c.contacts || []).length - 1) + ' more' : '') + '</span>' : '<span class="cb-sub">No contact yet</span>') +
       (fl.twins.length ? '<span class="cb-flag">Possible duplicate</span>' : '') + '</td>' +
     '<td>' + _cbE(c.owner || '—') + '</td>' +
@@ -242,7 +254,7 @@ function cbAddDialog(back) {
     '<button type="button" class="btn btn-secondary" data-close>Close</button></header>' +
     '<form class="cb-form" id="cbAddForm" autocomplete="off">' +
       '<label>Company<input type="text" class="cb-in" name="company" list="cbNames" required maxlength="160" placeholder="As the portal names it"><datalist id="cbNames">' + names + '</datalist></label>' +
-      '<p class="cb-warn" id="cbDup" hidden></p>' +
+      '<p class="cb-warn" id="cbDup" hidden></p>' + cbTierPills('', true) +
       '<div class="cb-grid2"><label>Owner (sales rep)<span id="cbOwnerBox">' + cbOwnerSelect('', '') + '</span></label>' +
       '<label>Accreditation<select class="cb-in" name="accreditation">' + _cbLists().accreditation.map(a => '<option' + (a === 'Not accredited' ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label></div>' +
       '<div class="cb-people">' + cbPersonHtml({ primary: true }, 0) + '</div>' +
@@ -271,6 +283,10 @@ function cbAddDialog(back) {
                      contactsJson: JSON.stringify(cbReadPeople(box)), nextStep: form.elements.nextStep.value.trim(), nextStepDate: form.elements.nextStepDate.value,
                      notes: form.elements.notes.value.trim() };
     if (form.dataset.allow === '1') params.allowDuplicate = true;
+    if (CB.v180) {
+      params.tier = cbTierOf(form);
+      if (!params.tier) { cbMsg(box, 'Choose Major or Minor first.', true); return; }
+    }
     btn.disabled = true; cbMsg(box, 'Saving…');
     const r = await postFlow('saveClientBookClient', params).catch(e => ({ success: false, message: String(e && e.message || e) }));
     btn.disabled = false;
@@ -302,7 +318,7 @@ function cbDetail(no, back) {
   const recRow = (x) => '<li><span class="tm">' + _cbE(cbDay(x.date)) + '</span><span>' + link(x.kind, x.ref) + ' <span class="cb-sub">' + _cbE(x.status || '') +
     (x.owner ? ' · ' + _cbE(x.owner) : '') + (x.followUpDue ? ' · day-' + x.followUpDue + ' follow-up due today' : '') + '</span></span><span class="amt">' + (x.value ? _cbE(cbMoney(x.value)) : '') + '</span></li>';
   const box = cbShow(
-    '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') + ' · ' +
+    '<header class="cb-mhead"><div><h3 id="cbTitle">' + _cbE(c.company) + '</h3><p class="cb-sub">' + cbTierBadge(c.tier) + ' ' + _cbE(c.clientNo) + ' · ' + _cbE(c.owner || 'no owner') + ' · ' +
       cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status && c.accreditation === 'Accredited' ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
       (c.archivedAt ? ' ' + cbBadge('Archived', 'off') : '') + '</p></div><button type="button" class="btn btn-secondary" data-close>Close</button></header>' +
     (fl.twins.length ? '<p class="cb-warn">Possible duplicate of ' + _cbE(fl.twins.join(', ')) + ' (the same company).</p>' : '') +
@@ -341,7 +357,7 @@ function cbDetail(no, back) {
 
     '<section class="cb-sec"><h4>Contacts and details</h4>' +
       (live ? '<form class="cb-form" id="cbEdit" autocomplete="off"><div class="cb-grid2"><label>Company<input type="text" class="cb-in" name="company" required maxlength="160" value="' + _cbE(c.company) + '"></label>' +
-          '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label></div>' +
+          '<label>Owner (sales rep)' + cbOwnerSelect(c.owner, '') + '</label></div>' + cbTierPills(c.tier, false) +
           '<div class="cb-people">' + ((c.contacts || []).length ? c.contacts.map(cbPersonHtml).join('') : cbPersonHtml({ primary: true }, 0)) + '</div>' +
           '<button type="button" class="btn btn-secondary cb-addperson" data-addperson>Add another person</button>' +
           '<div class="cb-grid2"><label>Next step<input type="text" class="cb-in" name="nextStep" maxlength="190" value="' + _cbE(c.nextStep) + '"></label>' +
@@ -373,8 +389,10 @@ function cbDetail(no, back) {
   if (edit) edit.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const el = edit.elements;
-    cbPost(edit, 'saveClientBookClient', { clientNo: no, company: el.company.value.trim(), owner: el.owner.value, contactsJson: JSON.stringify(cbReadPeople(edit)),
-      nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() });
+    const params = { clientNo: no, company: el.company.value.trim(), owner: el.owner.value, contactsJson: JSON.stringify(cbReadPeople(edit)),
+      nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() };
+    if (CB.v180 && cbTierOf(edit)) params.tier = cbTierOf(edit);
+    cbPost(edit, 'saveClientBookClient', params);
   });
   const arch = box.querySelector('#cbArchive');
   if (arch) arch.addEventListener('submit', (ev) => {

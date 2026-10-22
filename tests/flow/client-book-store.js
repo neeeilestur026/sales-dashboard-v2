@@ -1,4 +1,4 @@
-/* A350 — the Client Book's private store (FlowAPI 178: getClientBook / saveClientBookClient / setClientBookStatus /
+/* A350 — the Client Book's private store (FlowAPI 178; A354 adds the Major / Minor label in 180: getClientBook / saveClientBookClient / setClientBookStatus /
  * archiveClientBookClient).
  *
  * Run:  node tests/flow/client-book-store.js
@@ -25,7 +25,7 @@ sec('1 · the version, and nothing else is touched');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 179', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 179);
+  ok('getVersion = 180', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 180);
   const g = call(c, 'getClientBook', NEIL);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.clients.length === 0 && g.log.length === 0 && !('ClientBook' in store) && !('ClientBookLog' in store), g);
   ok('  and gives the page the server\'s lists', g.lists.accreditation.join() === 'Accredited,On process,Not accredited' && g.lists.status.length === 9 && g.lists.steps.length === 4);
@@ -35,23 +35,23 @@ sec('2 · adding a client');
 {
   const store = { Clients: [{ Customer: 'Sample Cement Plant A' }] };
   const c = load(GS, store);
-  const r = call(c, 'saveClientBookClient', Object.assign({ company: 'Sample Cement Plant A, Inc.', owner: 'Gerald Lucena', contactsJson: CONTACTS, nextStep: 'Send accreditation forms', nextStepDate: '2026-10-24' }, NEIL));
+  const r = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Sample Cement Plant A, Inc.', owner: 'Gerald Lucena', contactsJson: CONTACTS, nextStep: 'Send accreditation forms', nextStepDate: '2026-10-24' }, NEIL));
   const row = (store.ClientBook || [])[0] || {};
   ok('added, numbered CB-, not accredited to begin with', r.success && /^CB-\d{6}-\d{3}$/.test(r.clientNo) && row['Accreditation'] === 'Not accredited' && !!row['Accreditation Updated At'], r);
   ok('  the canonical key is the server\'s (_canonKey)', row['Key'] === 'sample cement plant a', row['Key']);
-  ok('  every write is the full width', row.__arity === 23 && store.ClientBookLog.every(l => l.__arity === 9));
+  ok('  every write is the full width', row.__arity === 24 && store.ClientBookLog.every(l => l.__arity === 9));
   const people = JSON.parse(row['Contacts JSON']);
   ok('  two people, each with several emails (lower-cased) and phones, the first made primary', people.length === 2 && people[0].emails.join() === 'rcruz@plant-a.ph,r.cruz@gmail.com' &&
      people[0].phones.length === 2 && people[0].primary === true && people[1].primary === false, people);
   ok('  one log row: created', store.ClientBookLog.length === 1 && store.ClientBookLog[0]['Kind'] === 'created' && store.ClientBookLog[0]['By'] === 'Neil Estur');
   ok('  the real Clients sheet is untouched, and nothing goes to the ActivityLog', store.Clients.length === 1 && !(store.ActivityLog || []).length);
-  const dup = call(c, 'saveClientBookClient', Object.assign({ company: 'SAMPLE CEMENT PLANT A CORP.' }, NEIL));
+  const dup = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'SAMPLE CEMENT PLANT A CORP.' }, NEIL));
   ok('the same company under another spelling is refused, naming the one already there', !dup.success && dup.duplicate === r.clientNo && /already in the Client Book/.test(dup.message), dup);
-  const twin = call(c, 'saveClientBookClient', Object.assign({ company: 'SAMPLE CEMENT PLANT A CORP.', allowDuplicate: true }, NEIL));
+  const twin = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'SAMPLE CEMENT PLANT A CORP.', allowDuplicate: true }, NEIL));
   ok('  unless it is confirmed (a second site, say)', twin.success && store.ClientBook.length === 2);
-  const acc = call(c, 'saveClientBookClient', Object.assign({ company: 'Power Plant B', accreditation: 'On process' }, NEIL));
+  const acc = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Power Plant B', accreditation: 'On process' }, NEIL));
   ok('a client can start with its accreditation', acc.success && store.ClientBook[2]['Accreditation'] === 'On process');
-  const bad = call(c, 'saveClientBookClient', Object.assign({ company: 'Mine C', accreditation: 'Approved' }, NEIL));
+  const bad = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Mine C', accreditation: 'Approved' }, NEIL));
   ok('  but only from the list', !bad.success && /Accreditation must be one of/.test(bad.message));
 }
 
@@ -66,7 +66,7 @@ sec('3 · what it refuses');
   no('contacts over 20,000 characters', { company: 'Mine D', contactsJson: JSON.stringify([{ name: 'x'.repeat(100), note: 'y'.repeat(20000) }]) }, /too long/);
   no('a next step date that is not a date', { company: 'Mine D', nextStepDate: '24/10/2026' }, /must be a date/);
   ok('nothing was written by any of them', !(store.ClientBook || []).length);
-  const formula = call(c, 'saveClientBookClient', Object.assign({ company: '=HYPERLINK("x")' }, NEIL));
+  const formula = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: '=HYPERLINK("x")' }, NEIL));
   ok('a company typed as a formula is stored as text', formula.success && /^'=/.test(store.ClientBook[0]['Company']), store.ClientBook && store.ClientBook[0]);
 }
 
@@ -74,7 +74,7 @@ sec('4 · accreditation and the sales status');
 {
   const store = {};
   const c = load(GS, store);
-  const no = call(c, 'saveClientBookClient', Object.assign({ company: 'Nickel Mine E', owner: 'Kimberlyn Blones' }, NEIL)).clientNo;
+  const no = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Nickel Mine E', owner: 'Kimberlyn Blones' }, NEIL)).clientNo;
   const tooSoon = call(c, 'setClientBookStatus', Object.assign({ clientNo: no, kind: 'status', value: 'Quotation sent' }, NEIL));
   ok('a sales status is refused while the client is not accredited', !tooSoon.success && /accredited client/.test(tooSoon.message), tooSoon);
   const step = call(c, 'setClientBookStatus', Object.assign({ clientNo: no, kind: 'accreditation', value: 'On process', step: 'Documents submitted', note: 'Sent the vendor forms' }, NEIL));
@@ -100,7 +100,7 @@ sec('5 · editing, contacts, archive and restore');
 {
   const store = {};
   const c = load(GS, store);
-  const no = call(c, 'saveClientBookClient', Object.assign({ company: 'Power Plant F', contactsJson: CONTACTS }, NEIL)).clientNo;
+  const no = call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Power Plant F', contactsJson: CONTACTS }, NEIL)).clientNo;
   const two = JSON.parse(CONTACTS);
   const ed = call(c, 'saveClientBookClient', Object.assign({ clientNo: no, company: 'Power Plant F', owner: 'Gerald Lucena', contactsJson: JSON.stringify([two[0], { id: 'P3', name: 'L. Reyes', emails: ['lreyes@pp-f.ph'] }]) }, NEIL));
   const kinds = store.ClientBookLog.map(l => l['Kind']);
@@ -113,7 +113,7 @@ sec('5 · editing, contacts, archive and restore');
   ok('archived, not deleted: the row stays, with its reason', ar.success && store.ClientBook.length === 1 && !!store.ClientBook[0]['Archived At'] && store.ClientBook[0]['Archive Reason'] === 'Plant closed');
   ok('  an archived client cannot be edited or updated', !call(c, 'saveClientBookClient', Object.assign({ clientNo: no, company: 'Power Plant F' }, NEIL)).success &&
      !call(c, 'setClientBookStatus', Object.assign({ clientNo: no, kind: 'accreditation', value: 'Accredited' }, NEIL)).success);
-  ok('  an archived client does not block adding the company again', call(c, 'saveClientBookClient', Object.assign({ company: 'Power Plant F' }, NEIL)).success);
+  ok('  an archived client does not block adding the company again', call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Power Plant F' }, NEIL)).success);
   const back = call(c, 'archiveClientBookClient', Object.assign({ clientNo: no, restore: true }, NEIL));
   ok('restored', back.success && !store.ClientBook[0]['Archived At'] && store.ClientBookLog.some(l => l['Kind'] === 'restored'));
   const g = call(c, 'getClientBook', NEIL);
@@ -132,7 +132,31 @@ sec('6 · only the director while it is a trial');
   const direct = JSON.parse(c._dispatch({ action: 'getClientBook', actorName: 'Neil Estur', actorRole: 'director' }).getContent());
   ok('without the app\'s secret even the director\'s read is refused (contact details are private)', !direct.success);
   store.FlowSettings.push({ Key: 'clientBookRoles', Value: 'director, sales', 'Updated By': 'Neil', 'Updated At': '' });
-  ok('when Neil opens it to sales (FlowSettings clientBookRoles), a rep can use it', call(c, 'saveClientBookClient', Object.assign({ company: 'Rep Client' }, sales)).success);
+  ok('when Neil opens it to sales (FlowSettings clientBookRoles), a rep can use it', call(c, 'saveClientBookClient', Object.assign({ tier: 'Minor', company: 'Rep Client' }, sales)).success);
+}
+
+sec('9 · A354: every client is Major or Minor');
+{
+  const store = {};
+  const c = load(GS, store);
+  const none = call(c, 'saveClientBookClient', Object.assign({ company: 'No Label Co' }, NEIL));
+  ok('a new client without a label is refused, and nothing is written', !none.success && /Major or Minor/.test(none.message) && !(store.ClientBook || []).length, none);
+  const odd = call(c, 'saveClientBookClient', Object.assign({ company: 'Odd Label Co', tier: 'Medium' }, NEIL));
+  ok('  only Major or Minor', !odd.success && /Major or Minor/.test(odd.message));
+  const maj = call(c, 'saveClientBookClient', Object.assign({ company: 'Big Plant Co', tier: 'major' }, NEIL));
+  const row = store.ClientBook[0];
+  ok('saved as Major (any case), in the last column, every write 24 wide', maj.success && row['Tier'] === 'Major' && row.__arity === 24 && maj.client.tier === 'Major', row);
+  ok('  the created line names it', /^Major\. Not accredited\.$/.test(store.ClientBookLog[0]['Note']), store.ClientBookLog[0]['Note']);
+  const keep = call(c, 'saveClientBookClient', Object.assign({ clientNo: maj.clientNo, company: 'Big Plant Co', notes: 'x' }, NEIL));
+  ok('an edit that sends no label keeps it', keep.success && store.ClientBook[0]['Tier'] === 'Major');
+  const down = call(c, 'saveClientBookClient', Object.assign({ clientNo: maj.clientNo, company: 'Big Plant Co', notes: 'x', tier: 'Minor' }, NEIL));
+  ok('a change of label is saved and logged', down.success && store.ClientBook[0]['Tier'] === 'Minor' &&
+     store.ClientBookLog.some(l => l['Kind'] === 'details' && /the label Major to Minor/.test(l['Note'])), store.ClientBookLog.map(l => l['Note']));
+  call(c, 'setClientBookStatus', Object.assign({ clientNo: maj.clientNo, kind: 'accreditation', value: 'On process', step: 'Documents submitted' }, NEIL));
+  call(c, 'archiveClientBookClient', Object.assign({ clientNo: maj.clientNo, reason: 'test' }, NEIL));
+  ok('  and an accreditation update or an archive keeps it', store.ClientBook[0]['Tier'] === 'Minor' && store.ClientBook[0].__arity === 24);
+  const g = call(c, 'getClientBook', NEIL);
+  ok('the read returns the label and the list', g.clients[0].tier === 'Minor' && g.lists.tiers.join() === 'Major,Minor');
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);

@@ -15,6 +15,6 @@ async function clientBookCard(id) {
   const s = cbSummary(r.clients || [], r.log || [], flowToday());
   if (!s.total) { el.innerHTML = '<p class="cbc-note">No clients yet. Open the Client Book to add the first one.</p>'; return; }
   const tile = (n, label, warn) => '<div class="cbc-tile' + (warn && n ? ' warn' : '') + '"><span class="v">' + n + '</span><span class="l">' + label + '</span></div>';
-  el.innerHTML = '<div class="cbc-tiles">' + tile(s.total, s.total === 1 ? 'Client' : 'Clients') + tile(s.accredited, 'Accredited') + tile(s.onProcess, 'On process') +
+  el.innerHTML = '<div class="cbc-tiles">' + tile(s.total, s.total === 1 ? 'Client' : 'Clients') + tile(s.major, 'Major') + tile(s.accredited, 'Accredited') + tile(s.onProcess, 'On process') +
     tile(s.notAccredited, 'Not accredited') + tile(s.needsUpdate, s.needsUpdate === 1 ? 'Needs an update' : 'Need an update', true) + '</div>';
 }
