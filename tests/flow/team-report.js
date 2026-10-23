@@ -224,7 +224,7 @@ function fakeSection() {
 const WHO = { accounting: { name: 'Rojan Leo Francisco', username: 'acct2' }, leadgen: { name: 'Lea Gen', username: 'lea' }, admin: { name: 'Ana Admin', username: 'ana' } };
 async function boot(roleKey, o) {
   o = o || {};
-  const P = world(), me = o.own ? Object.assign({ role: roleKey }, WHO[roleKey]) : { name: 'Neil Estur', username: 'neil', role: 'director' };
+  const P = world(), me = o.me || (o.own ? Object.assign({ role: roleKey }, WHO[roleKey]) : { name: 'Neil Estur', username: 'neil', role: 'director' });
   const id = { accounting: 'acctReport', leadgen: 'lgReport', admin: 'adminReport' }[roleKey];
   P.__els[id] = fakeSection();
   Object.assign(P, { __act: ACT, __ar: AR, __prs: PRS, __pos: POS, __sos: SOS, __lgc: LGC, __lgdata: LGDATA, __has179: o.v179 !== false, __mailMode: o.mail || 'ok',
@@ -255,7 +255,7 @@ async function boot(roleKey, o) {
       return Promise.resolve({ success: true, emails: date === '2026-10-22' ? __mailToday : [] }); };
     flowComputeActions = function (s) { __queueFor.push(s); return Promise.resolve([{ icon: 'report', tone: 'info', text: '2 receivable(s) past due — collect', link: 'flow-ar-aging.html', amt: 120000 },
       { icon: 'urgent', tone: 'urgent', text: '1 approved transfer to pay', link: 'flow-payment-requests.html' }]); };`, P);
-  await vm.runInContext('teamReport(' + JSON.stringify(id) + ', ' + JSON.stringify(roleKey) + (o.own ? ', { own: true }' : '') + ')', P);
+  await vm.runInContext('teamReport(' + JSON.stringify(id) + ', ' + JSON.stringify(roleKey) + (o.own ? ', { own: true }' : o.view ? ', { view: ' + JSON.stringify(o.view) + ' }' : '') + ')', P);
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   return { P, el: P.__els[id], run: (c) => vm.runInContext(c, P), part: (sel) => P.__els[id].parts[sel] || { innerHTML: '' } };
 }
@@ -390,6 +390,36 @@ async function boot(roleKey, o) {
   const oldD = await boot('accounting', { v179: false });
   ok('  the director\'s view says the saved reports need 184 to be read', /version 184\) before it can be read here/.test(oldD.run('_trBodyHtml(TR_UI.accounting)')));
   ok('  what was typed is kept on this computer', !!old.P.__store['hx_tr_draft:accounting:2026-10-22']);
+
+  sec('5c · A366: one person\'s report on the team daily reports page (management reads it, read only)');
+  const MGR = { name: 'Mara Manager', username: 'mara', role: 'management' };
+  const v = await boot('accounting', { me: MGR, view: { name: R, username: 'acct2', day: '2026-10-21' } });
+  const V = (x) => v.run('TR_UI.accounting.' + x), S0 = v.run('TR_UI.accounting');
+  ok('fixed to the person and the page\'s day, read only, with no roster read and nothing kept on this computer', V('view') === true && V('ro') === true && V('own') === false && V('person') === R &&
+     JSON.stringify(V('people')) === JSON.stringify([R]) && V('day') === '2026-10-21' && v.run('__usersRead') === 0 && !Object.keys(v.P.__store).length);
+  ok('  their saved days are asked for by name, with the role\'s kind', JSON.stringify(v.run('__posts.filter(function (x) { return x.a === "getProofReports"; }).map(function (x) { return [x.p.kind, x.p.user]; })')) === JSON.stringify([['accounting', R]]));
+  ok('  and their submitted day shows as theirs', !!V('saved')['2026-10-21'] && /Submitted/.test(v.run('_trPmHtml(TR_UI.accounting, TR_UI.accounting.nums, TR_UI.accounting.saved["2026-10-21"])')));
+  const vh = v.run('_trHeadHtml(TR_UI.accounting)');
+  ok('  the head: Read only, their name and the day, no "Whose report" and no day picker (the page owns the date)', /<span class="sr-chip">Read only<\/span>/.test(vh) && /<span class="sr-who">Rojan Leo Francisco · Wednesday 21 Oct<\/span>/.test(vh) &&
+     !/data-person|data-date|data-step/.test(vh), vh);
+  ok('  the banner before 185 names it', /version 185\) before it can be read here/.test(v.run('TR_UI.accounting.backend = false; var __h = _trBodyHtml(TR_UI.accounting); TR_UI.accounting.backend = true; __h')));
+  await v.run('teamReportShow("accounting", { name: "Rina Acct", username: "acct3" }, "2026-10-22")');
+  ok('another person: the same report object (its listeners stay bound), now theirs, their days read by their name', v.run('TR_UI.accounting') === S0 && V('person') === 'Rina Acct' && V('viewUser') === 'acct3' && V('day') === '2026-10-22' &&
+     v.run('__posts[__posts.length - 1].p.user') === 'Rina Acct');
+  ok('  their queue and sent mail are read with their login', v.run('JSON.stringify(__queueFor[__queueFor.length - 1])') === JSON.stringify({ role: 'accounting', name: 'Rina Acct', username: 'acct3' }) &&
+     v.run('__mailReads[__mailReads.length - 1].user') === 'acct3' && /<span class="sr-who">Rina Acct · Thursday 22 Oct<\/span>/.test(v.run('_trHeadHtml(TR_UI.accounting)')));
+  const nPosts = v.run('__posts.length');
+  await v.run('teamReportShow("accounting", { name: "Rina Acct", username: "acct3" }, "2026-10-21")');
+  ok('  the same person on another day: only the day moves, nothing read again from the store', V('day') === '2026-10-21' && V('person') === 'Rina Acct' && v.run('__posts.length') === nPosts);
+  await v.run('teamReport("acctReport", "accounting", { view: { name: "Lea Other", username: "lo", day: "2026-10-22" } })');
+  ok('  mounting again on the same section hands over to it, never a second report object', v.run('TR_UI.accounting') === S0 && V('person') === 'Lea Other');
+  const qBefore = v.run('__queueFor.length');
+  const p1 = v.run('teamReportShow("accounting", { name: "Slow One", username: "s1" }, "2026-10-22")'), p2 = v.run('teamReportShow("accounting", { name: "Fast Two", username: "f2" }, "2026-10-22")');
+  await Promise.all([p1, p2]);
+  ok('  two quick clicks: the earlier person\'s read is dropped, the report is the later one\'s', V('person') === 'Fast Two' && !v.run('__queueFor.slice(' + qBefore + ').some(function (q) { return q.name === "Slow One"; })'));
+  await v.run('_trSave(TR_UI.accounting)');
+  v.run('_trSubmitPm(TR_UI.accounting)');
+  ok('  and nothing is ever saved or submitted from it', !v.run('__posts.some(function (x) { return x.a === "saveProofReport" || x.a === "submitProofReport"; })'));
 
   sec('6 · the site rules');
   const SRC = fs.readFileSync(path.join(DASH, 'team-report.js'), 'utf8') + fs.readFileSync(path.join(DASH, 'team-report-model.js'), 'utf8');

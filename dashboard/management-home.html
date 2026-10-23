@@ -116,6 +116,9 @@
           <div id="isBody"><div class="is-empty">Loading…</div></div>
         </section>
 
+        <!-- A366: where each team's new daily report stands today, and the way in (js/team-daily-reports-card.js) -->
+        <section class="hx-glass hx-tdr" id="teamDailyReports" style="display:none;"></section>
+
         <!-- Team: the daily reports and the weekly report (js/management-flow.js, js/report-render.js) -->
         <section class="hx-glass" id="team">
           <div class="hx-head"><h2>Daily reports</h2><span class="hx-meta is-state" id="mgmtDrMeta"></span></div>
@@ -353,5 +356,7 @@
   <script src="js/so-cost-editor.js"></script>
   <script src="js/management-income.js"></script>
   <script src="js/management-home-page.js"></script>   <!-- A293: the page's own glue — date, the strips, the viewer, the palette, the KPI detail, the rail -->
+  <script src="js/team-daily-reports-model.js"></script>   <!-- A366 -->
+  <script src="js/team-daily-reports-card.js"></script>
 </body>
 </html>

@@ -12,9 +12,12 @@
  *   · salesReport(id) — the director's dashboard: his own trial day, or ("Whose report") a rep's own report, READ ONLY —
  *     what they logged and whether they submitted, their records and sent mail; their received mail stays theirs.
  *   · salesReport(id, { own: true }) — a rep's own page (my-daily-report.html): their day, saved under their name
- *     (FlowAPI 184 lets each person save and read only their own report). */
+ *     (FlowAPI 184 lets each person save and read only their own report).
+ * A366 · salesReport(id, { view: { name, username, day } }) — the team daily reports page (management, the director): one
+ *     person's own report, read only, fixed to them and to the page's date; salesReportShow(person, day) moves it to
+ *     another person or day. No roster read, no person kept on this computer, no picker. */
 
-const SR_UI = { me: null, self: null, own: false, ro: false, people: [], ix: null, day: '', saved: {}, failed: [], backend: true, backendMsg: '', state: null, unsaved: false,
+const SR_UI = { me: null, self: null, selfRole: '', own: false, view: false, seq: 0, ro: false, people: [], ix: null, day: '', saved: {}, failed: [], backend: true, backendMsg: '', state: null, unsaved: false,
                 sent: null, sentState: '', received: null, receivedState: '', weekEmails: {}, weekOffset: 0, feed: 'all',
                 showVisitForm: false, chain: Promise.resolve(), timer: 0, back: null, nums: null };
 
@@ -37,9 +40,17 @@ async function salesReport(id, opts) {
   const s = (typeof getSession === 'function' && getSession()) || {};
   const name = String(s.name || s.username || '').trim();
   SR_UI.self = { name, username: String(s.username || ''), first: name.split(/\s+/)[0] || 'You' };
+  SR_UI.selfRole = String(s.role || '').toLowerCase();
   SR_UI.own = !!(opts && opts.own);
   SR_UI.me = SR_UI.self;
   SR_UI.day = SR_UI.day || flowToday();
+  if (opts && opts.view) {                                 // A366 — one person's own report, read only
+    SR_UI.view = true; SR_UI.people = [];
+    _srViewPerson(opts.view);
+    SR_UI.day = opts.view.day || flowToday();
+    await _srLoad(false);
+    return;
+  }
   if (!SR_UI.own && typeof apiGetUsers === 'function') {   // A363 — the reps whose own report the director can read
     const users = await apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []);
     SR_UI.people = users.filter(u => String(u.role || '').toLowerCase() === 'sales')
@@ -48,6 +59,20 @@ async function salesReport(id, opts) {
     const kept = _srPickGet(), hit = SR_UI.people.find(u => u.name === kept);
     if (hit) _srPick(hit.name, true);
   }
+  await _srLoad(false);
+}
+/* A366 — the team daily reports page moves the one report to another person or day. */
+function _srViewPerson(v) {
+  const n = String(v.name || '').trim();
+  SR_UI.me = { name: n, username: String(v.username || ''), first: n.split(/\s+/)[0] || n };
+  SR_UI.ro = true;
+  SR_UI.weekEmails = {}; SR_UI.weekOffset = 0; SR_UI.feed = 'all';
+}
+async function salesReportShow(person, day) {
+  if (!SR_UI.view || !person) return;
+  if (SR_UI.ix && _srSame(SR_UI.me.name, person.name)) { if (day && day !== SR_UI.day) _srOpenDay(day); return; }
+  _srViewPerson(person);
+  if (day) SR_UI.day = day;
   await _srLoad(false);
 }
 /* A363 — whose report the director is reading: his own trial day ('') or a rep's own report, read only. */
@@ -62,6 +87,7 @@ function _srPick(name, quiet) {
 }
 
 async function _srLoad(fresh) {
+  const seq = ++SR_UI.seq;                                 // A366 — a slower load for an earlier person is dropped
   const body = _srId('srBody');
   if (body) body.innerHTML = '<div class="dh-empty">Reading your day…</div>';
   const today = flowToday(), from = srAddDays(today, -42), opt = fresh ? { fresh: true } : {};
@@ -69,17 +95,19 @@ async function _srLoad(fresh) {
   const get = (label, action, params) => fetchFlow(action, params || {}, opt)
     .then(r => { if (!r || r.success === false) throw new Error('no'); return r.data; })
     .catch(() => { failed.push(label); return null; });
-  const saved = (typeof postFlow === 'function' ? postFlow('getProofReports', { from: srAddDays(today, -42), to: today }) : Promise.reject(new Error('no')))
+  const saved = (typeof postFlow === 'function' ? postFlow('getProofReports', Object.assign({ from: srAddDays(today, -42), to: today }, SR_UI.view ? { user: SR_UI.me.name } : {})) : Promise.reject(new Error('no')))
     .then(r => (r && r.success ? { ok: true, data: r.data || [] } : { ok: false, message: (r && r.message) || '' }))
     .catch(e => ({ ok: false, message: String(e && e.message || '') }));
   /* A350 — the Client Book trial: its clients to link to and the day's changes. Quiet without FlowAPI 178. */
-  const book = (typeof postFlow === 'function' ? postFlow('getClientBook', {}) : Promise.reject(new Error('no'))).then(r => (r && r.success ? r : null)).catch(() => null);
+  const book = SR_UI.view && SR_UI.selfRole !== 'director' ? Promise.resolve(null)   // A366 — the Client Book stays its owner's and the director's
+    : (typeof postFlow === 'function' ? postFlow('getClientBook', {}) : Promise.reject(new Error('no'))).then(r => (r && r.success ? r : null)).catch(() => null);
   const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook] = await Promise.all([
     get('quotations', 'getQuotations'), get('sales orders', 'getSalesOrders'), get('quotation emails', 'getQuotationEmails'),
     get('settings', 'getFlowSettings'), get('purchase requests', 'getPricingRequests'),
     get('activity log', 'getActivityLog', { from, to: today }), get('call log', 'getSalesCalls', { from, to: today }),
     get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book
   ]);
+  if (seq !== SR_UI.seq) return;
   SR_UI.failed = failed;
   SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook });
   SR_UI.saved = {};
@@ -109,12 +137,13 @@ function _srOpenDay(day) {
 
 async function _srMail(day) {
   let sent = null, sentState = 'error', received = null, receivedState = 'error';
+  const who = SR_UI.me.name, same = () => SR_UI.day === day && SR_UI.me.name === who;   // A366 — the same day AND person
   try {
     const r = typeof apiFetchEmailLogToday === 'function' ? await apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, day) : null;
     if (r && r.success !== false && !r.needsSetup) { sent = r.emails || []; sentState = 'ok'; }
     else if (r && r.needsSetup) sentState = 'setup';
   } catch (e) { sentState = 'error'; }
-  if (SR_UI.day !== day) return;
+  if (!same()) return;
   SR_UI.sent = sent; SR_UI.sentState = sentState;
   if (sent) SR_UI.weekEmails[day] = sent;
   _srRefresh();
@@ -129,7 +158,7 @@ async function _srMail(day) {
     } catch (e) { receivedState = 'error'; }
   } else if (back > 60) receivedState = 'old';
   else if (sentState === 'setup') receivedState = 'setup';
-  if (SR_UI.day !== day) return;
+  if (!same()) return;
   SR_UI.received = received; SR_UI.receivedState = receivedState;
   _srRefresh();
 }
@@ -213,20 +242,22 @@ function _srRenderDay() {
   head.innerHTML =
     '<div class="sr-title"><h2>' + (SR_UI.own ? 'My daily report' : 'Sales Daily Report') + '</h2><span class="sr-who">' + _srE(me.name) + '</span>' + (ro ? '<span class="sr-chip">Read only</span>' : '') + '</div>' +
     '<div class="dh-actions sr-tools">' + pick +
-      '<div class="sr-daypick"><button type="button" class="sr-step" data-step="-1" aria-label="Previous day">‹</button>' +
+      (SR_UI.view ? '<span class="sr-who">' + _srE(srDayLong(day)) + '</span>'   // A366 — the page's date stepper owns the day
+        : '<div class="sr-daypick"><button type="button" class="sr-step" data-step="-1" aria-label="Previous day">‹</button>' +
         '<input type="date" class="sr-date" id="srDate" value="' + day + '" min="' + srAddDays(ix.today, -28) + '" max="' + ix.today + '" aria-label="Report date">' +
-        '<button type="button" class="sr-step" data-step="1" aria-label="Next day">›</button></div>' +
+        '<button type="button" class="sr-step" data-step="1" aria-label="Next day">›</button></div>') +
       '<div class="sr-seg" role="group" aria-label="Day type"><button type="button" data-daytype="desk"' + dis + '>Desk day</button><button type="button" data-daytype="visit"' + dis + '>Visit day</button></div>' +
       '<span class="sr-state" id="srState" role="status"></span>' +
       '<button type="button" class="dh-btn" data-print>Print / PDF</button></div>' +
     '<div class="sr-chips" id="srChips"></div>';
   const notes = [];
-  if (!SR_UI.backend) notes.push('<div class="dh-banner warn">' + (ro ? 'Saved reports need the FlowAPI update (version 184) before they can be read here.' : 'Saving needs the FlowAPI update (version ' + (SR_UI.own ? '184' : '177') + '). Until it is pasted, what you log is kept on this computer only.') +
+  if (!SR_UI.backend) notes.push('<div class="dh-banner warn">' + (ro ? 'Saved reports need the FlowAPI update (version ' + (SR_UI.view ? '185' : '184') + ') before they can be read here.' : 'Saving needs the FlowAPI update (version ' + (SR_UI.own ? '184' : '177') + '). Until it is pasted, what you log is kept on this computer only.') +
     (SR_UI.backendMsg && !/Unknown action|not a secured action/i.test(SR_UI.backendMsg) ? ' (' + _srE(SR_UI.backendMsg) + ')' : '') + '</div>');
   if (SR_UI.failed.length) notes.push('<div class="dh-banner warn">Could not read: ' + _srE(SR_UI.failed.join(', ')) + '. The numbers that need them may be short — reload the page.</div>');
   if (SR_UI.state.legacy) notes.push('<p class="dh-meta">This day was first filled in with the earlier trial form; what you typed there is kept with the report.</p>');
   body.innerHTML = notes.join('') +
-    '<p class="sr-trial">' + (ro ? 'Read only — ' + _srE(me.name) + '\'s own report: the lines they logged, their 4:30 report, and the portal\'s count of their records and sent mail. Their received mail stays private to them.'
+    '<p class="sr-trial">' + (ro ? 'Read only — ' + _srE(me.name) + '\'s own report: the lines they logged, their 4:30 report, and the portal\'s count of their records and sent mail. Their received mail' +
+        (SR_UI.view && SR_UI.selfRole !== 'director' ? ' and Client Book stay' : ' stays') + ' private to them.'
       : SR_UI.own ? 'Your new daily report. Only you and the director see it, and your old daily report still works as before. Nothing here changes the real call log, visits or quotations.'
       : 'Trial — only you can see this report. Nothing here changes the real call log, visits or quotations.') + '</p>' +
 
@@ -514,13 +545,15 @@ let _srWeekBusy = false;
 async function _srWeekMail(days) {
   if (_srWeekBusy || !days.length || typeof apiFetchEmailLogToday !== 'function' || SR_UI.sentState === 'setup') return;
   _srWeekBusy = true;
+  const who = SR_UI.me.name, box = SR_UI.weekEmails;      // A366 — a week read for an earlier person lands nowhere
   for (let i = 0; i < days.length; i += 3) {
     await Promise.all(days.slice(i, i + 3).map(d => apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, d)
-      .then(r => { SR_UI.weekEmails[d] = r && r.success !== false && !r.needsSetup ? (r.emails || []) : null; })
-      .catch(() => { SR_UI.weekEmails[d] = null; })));
+      .then(r => { box[d] = r && r.success !== false && !r.needsSetup ? (r.emails || []) : null; })
+      .catch(() => { box[d] = null; })));
+    if (SR_UI.me.name !== who) break;
   }
   _srWeekBusy = false;
-  _srRenderWeek();
+  if (SR_UI.ix && _srId('srWeek')) _srRenderWeek();       // the current person's week (an earlier person's reads went to their own box)
 }
 
 /* ── what the person does ─────────────────────────────────────────────────────────────────────── */

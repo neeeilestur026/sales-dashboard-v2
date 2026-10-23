@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New daily reports</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/director.css">
+  <link rel="stylesheet" href="css/daily-report.css">
+  <link rel="stylesheet" href="css/team-daily-reports.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="dh tdr">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content dh-main">
+    <!-- A366 — the new daily reports of the whole team (Neil, 23 Oct 2026): management opens any person's new daily report and reads it
+         exactly as that person sees their own "My daily report", read only. The people on the left, grouped by team,
+         each with where their report stands; the chosen person's report on the right, drawn by the same engine as their
+         own page. One of the four sections below is shown at a time; js/team-daily-reports.js decides which. -->
+    <div class="dh-col tdr-col">
+      <header class="tdr-head">
+        <div class="tdr-titles"><h1>New daily reports</h1><p>Each person's new daily report, exactly as they see it. Read only.</p></div>
+        <div class="tdr-day" role="group" aria-label="Day">
+          <button type="button" class="sr-step" id="tdrPrev" aria-label="Day before">‹</button>
+          <input type="date" class="sr-date" id="tdrDate" aria-label="Day">
+          <button type="button" class="sr-step" id="tdrNext" aria-label="Day after">›</button>
+        </div>
+      </header>
+      <div id="tdrNotice"></div>
+      <div class="tdr-split" id="tdrSplit">
+        <aside class="tdr-listcol" aria-label="Team">
+          <div class="tdr-tools">
+            <input type="search" class="tdr-q" id="tdrQ" placeholder="Search people" aria-label="Search people" autocomplete="off">
+            <div class="tdr-chips" id="tdrChips" role="group" aria-label="Show"></div>
+          </div>
+          <div class="tdr-list" id="tdrList"><p class="tdr-empty">Reading the team…</p></div>
+        </aside>
+        <div class="tdr-pane" id="tdrPane">
+          <button type="button" class="tdr-back" id="tdrBack">‹ Team</button>
+          <p class="tdr-empty tdr-pick" id="tdrEmpty">Choose a person to read their report.</p>
+          <section class="dh-glass dh-sr" id="proof" hidden>
+            <div class="dh-head sr-head" id="srHead"></div>
+            <div class="sr-body" id="srBody"><div class="dh-empty">Reading the report…</div></div>
+          </section>
+          <section class="dh-glass dh-sr dh-tr" id="tdrAccounting" hidden>
+            <div class="dh-head sr-head" data-tr="head"></div>
+            <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the report…</div></div>
+          </section>
+          <section class="dh-glass dh-sr dh-tr" id="tdrLeadgen" hidden>
+            <div class="dh-head sr-head" data-tr="head"></div>
+            <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the report…</div></div>
+          </section>
+          <section class="dh-glass dh-sr dh-tr" id="tdrAdmin" hidden>
+            <div class="dh-head sr-head" data-tr="head"></div>
+            <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the report…</div></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/itinerary-week.js"></script>
+  <script src="js/sales-report-model.js"></script>
+  <script src="js/sales-report.js"></script>
+  <script src="js/team-report-model.js"></script>
+  <script src="js/team-report.js"></script>
+  <script src="js/team-daily-reports-model.js"></script>
+  <script src="js/team-daily-reports.js"></script>
+</body>
+</html>
