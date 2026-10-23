@@ -228,7 +228,7 @@ function _trSetState(S) {
 
 function _trNums(S) {
   const t = trTiles(S.role, S.ix, S.person, S.day, _trNowMin());
-  const mail = S.cfg.mail ? trMail(S.role, S.ix, S.mail.emails, S.state.mailMarks) : [];
+  const mail = S.cfg.mail ? trMail(S.role, S.ix, S.mail.emails, S.state.mailMarks, S.state.mailPrs) : [];
   return { portal: (S.cfg.mail ? trMailTiles(S.role, mail, S.mail.state) : []).concat(t.portal), weekly: t.weekly, mail,
            mine: trMineTiles(S.role, S.state, S.day), linked: trLinked(S.role, S.state, S.day) };
 }
@@ -334,10 +334,15 @@ function _trMailHtml(S, rows) {
   if (st === 'none') return '<p class="dh-empty">There is no login to read a mailbox for.</p>';
   if (st === 'error') return '<p class="dh-empty">Could not read ' + _trE(who) + '\'s sent mail just now.</p>';
   if (!rows.length) return '<p class="dh-empty">No emails sent on this day.</p>';
+  /* A365 — the PR an email is linked to (from its subject, or picked); a price request without one waits for it */
+  const prLine = (r) => !cfg.pr ? '' : r.pr ? '<span class="sr-sub">PR <a href="flow-pricing-request.html?pr=' + encodeURIComponent(r.pr) + '">' + _trE(r.pr) + '</a>' + (r.prHow === 'subject' ? ' — from the subject' : '') + '</span>'
+    : r.needsPr ? '<span class="sr-sub"><span class="sr-chip watch">Needs its PR to count</span></span>' : '';
+  const btns = (r) => !r.id || S.ro ? '<span></span>' : '<span class="tr-mailbtns"><button type="button" class="sr-mini' + (r.price ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.price ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' +
+    (cfg.pr ? '<button type="button" class="sr-mini" data-mailpr="' + _trE(r.id) + '">' + (r.pr ? 'Change PR' : 'Link a PR') + '</button>' : '') + '</span>';
   return '<ul class="sr-feed tr-mail">' + rows.map(r => '<li class="' + (r.counted ? 'on' : '') + '"><span class="tm">' + _trE(r.time || '—') + '</span>' +
-    '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref ? ' · ' + _trE(r.ref) : '') + '</span>' +
-      '<span class="sr-sub">' + (r.counted ? '<span class="sr-chip ok">' + _trE(cfg.tag) + '</span> ' : '') + _trE(r.marked ? (r.counted ? 'counted by you' : 'not counted, by you') : r.why) + '</span></span>' +
-    (r.id && !S.ro ? '<button type="button" class="sr-mini' + (r.counted ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.counted ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' : '<span></span>') + '</li>').join('') + '</ul>';
+    '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref && !cfg.pr ? ' · ' + _trE(r.ref) : '') + '</span>' + prLine(r) +
+      '<span class="sr-sub">' + (r.counted ? '<span class="sr-chip ok">' + _trE(cfg.tag) + '</span> ' : '') + _trE(r.marked ? (r.price ? 'counted by you' : 'not counted, by you') : r.why) + '</span></span>' +
+    btns(r) + '</li>').join('') + '</ul>';
 }
 
 /** A line's link: the record's own page when it has one. */
@@ -418,6 +423,7 @@ function _trWire(S) {
     else if (b.hasAttribute('data-feed')) { S.feed = b.getAttribute('data-feed'); _trRenderFeed(S); }
     else if (b.hasAttribute('data-submitpm')) _trSubmitPm(S);
     else if (b.hasAttribute('data-mailmark')) _trMailMark(S, b.getAttribute('data-mailmark'));
+    else if (b.hasAttribute('data-mailpr')) _trMailPrDialog(S, b.getAttribute('data-mailpr'), b);   // A365
   });
   S.el.addEventListener('change', ev => {
     const t = ev.target;
@@ -438,9 +444,30 @@ function _trMailMark(S, id) {
   const row = ((S.nums && S.nums.mail) || []).find(r => r.id === id);
   if (!row) return;
   S.state.mailMarks = S.state.mailMarks || {};
-  S.state.mailMarks[id] = !row.counted;
+  S.state.mailMarks[id] = !row.price;   // A365 — whether it IS a price request; whether it counts also needs its PR
   _trRefresh(S);
   _trSave(S);
+}
+/** A365 — link a sent email to a PR: the ones being sourced or priced first, then the last 90 days'. Choosing the PR its
+ *  subject already names keeps nothing extra; "No PR" takes even the subject's off. */
+function _trMailPrDialog(S, id, back) {
+  const row = ((S.nums && S.nums.mail) || []).find(r => r.id === id);
+  if (!row) return;
+  const ch = trPrChoices(S.ix), cur = row.pr, all = ch.open.concat(ch.recent);
+  const opt = (o) => '<option value="' + _trE(o.id) + '"' + (o.id === cur ? ' selected' : '') + '>' + _trE(o.label) + '</option>';
+  _trDialog(S, row.pr ? 'Change the PR' : 'Link a PR', '"' + (row.subject || '(no subject)') + '" — to ' + row.to,
+    '<form class="sr-form"><label>Purchase request<select class="sr-in" name="pr"><option value=""' + (cur ? '' : ' selected') + '>No PR</option>' +
+      (cur && !all.some(o => o.id === cur) ? '<option value="' + _trE(cur) + '" selected>' + _trE(cur + (row.prHow === 'subject' ? ' (from the subject)' : '')) + '</option>' : '') +
+      (ch.open.length ? '<optgroup label="Being sourced or priced">' + ch.open.map(opt).join('') + '</optgroup>' : '') +
+      (ch.recent.length ? '<optgroup label="Other PRs, last 90 days">' + ch.recent.map(opt).join('') + '</optgroup>' : '') + '</select></label>' +
+    '<p class="sr-help">' + (row.price ? 'A price request to a supplier counts only once it is linked to its PR.' : 'Linking this email to a PR keeps it with that PR; it changes no count.') + '</p>' +
+    '<div class="sr-formfoot"><span></span><button type="submit" class="btn-sm primary">Save</button></div></form>', back,
+    (form) => {
+      const v = String(form.elements.pr.value || '').trim().toUpperCase();
+      S.state.mailPrs = S.state.mailPrs || {};
+      if (v === row.subjPr) delete S.state.mailPrs[id]; else S.state.mailPrs[id] = v;
+      _trClose(); _trRefresh(S); _trSave(S);
+    });
 }
 function _trStep(S, dir) {
   const d = srAddDays(S.day, dir);
@@ -519,7 +546,7 @@ function _trLineFields(S, x, v) {
 }
 function _trLineDialog(S, type, editId, back) {
   const line = editId ? S.state.lines.find(l => l.id === editId) : null;
-  const t = line ? line.type : type, x = S.cfg.lines.find(y => y.type === t);
+  const t = line ? line.type : type, x = S.cfg.lines.find(y => y.type === t) || (line && (S.cfg.retired || []).find(y => y.type === t));   // A365 — a retired type's old line stays editable
   if (!x) return;
   const v = line || {};
   let fields = _trLineFields(S, x, v);
