@@ -284,6 +284,15 @@ body.mg .hx-facts dd.mg-tick, body.mg .hx-slab .v.mg-tick { animation: mgFade .5
   body.mg .kpi-grid { grid-template-columns: 1fr 1fr; }
 }
 
+/* A366 — the new daily reports card (js/team-daily-reports-card.js): one line per team, then the way in */
+body.mg .hx-tdr .hx-tdr-teams { list-style: none; margin: 0; padding: 0; }
+body.mg .hx-tdr .hx-tdr-teams li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--hx-hair-2); font: 400 13px/1.4 var(--hx-text); color: var(--hx-ink-2); }
+body.mg .hx-tdr .hx-tdr-teams li:last-child { border-bottom: 0; }
+body.mg .hx-tdr .hx-tdr-teams b { font-weight: 600; color: var(--hx-ink); }
+body.mg .hx-tdr .hx-tdr-teams .ok { color: var(--hx-ok); font-weight: 600; }
+body.mg .hx-tdr .hx-tdr-teams .due { color: var(--hx-warn); font-weight: 600; }
+body.mg .hx-tdr .hx-tdr-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+
 /* ── 14 · reduced motion ─────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   body.mg *, body.mg *::before, body.mg *::after { animation: none !important; transition: none !important; }

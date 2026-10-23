@@ -310,5 +310,61 @@ sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own')
   ok('no location is asked for', !/geolocation|latitude|longitude/i.test(SRC));
 }
 
-console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
-process.exit(FAIL ? 1 : 0);
+(async () => {
+  sec('8c · A366: one person\'s report on the team daily reports page (management reads it, read only)');
+  run(`var __loads = [], __opens = [], __usersReads = 0, __posts = [], __reads = [], __mailUsers = [];
+    var __realLoad = _srLoad, __realOpen = _srOpenDay;
+    _srLoad = function () { __loads.push(SR_UI.me.name + '@' + SR_UI.day); return Promise.resolve(); };
+    _srOpenDay = function (d) { __opens.push(SR_UI.me.name + '@' + d); SR_UI.day = d; };
+    apiGetUsers = function () { __usersReads++; return Promise.resolve({ data: [{ fullName: 'Kim Reyes', username: 'kim', role: 'sales' }] }); };
+    getSession = function () { return { name: 'Mara Manager', username: 'mara', role: 'management' }; };
+    localStorage.setItem = function () { throw new Error('nothing is kept on this computer'); };
+    localStorage.getItem = function (k) { return k === 'hx_sr_person' ? 'Kim Reyes' : null; };
+    var __els = { proof: {} }, __gid = document.getElementById; document.getElementById = function (id) { return __els[id] || null; };`);
+  await run('salesReport("proof", { view: { name: "Gerald Lucena", username: "gerald", day: "2026-10-20" } })');
+  ok('fixed to the person and the page\'s day, read only: no roster read, no person kept or recalled, no picker', run('SR_UI.view') === true && run('SR_UI.ro') === true && run('SR_UI.own') === false &&
+     run('SR_UI.me.name') === 'Gerald Lucena' && run('SR_UI.me.username') === 'gerald' && run('SR_UI.day') === '2026-10-20' && run('SR_UI.selfRole') === 'management' &&
+     run('SR_UI.people.length') === 0 && run('__usersReads') === 0 && run('__loads.join()') === 'Gerald Lucena@2026-10-20');
+  run('SR_UI.ix = IX; SR_UI.weekEmails = { "2026-10-19": [] }; SR_UI.weekOffset = -1;');
+  await run('salesReportShow({ name: "Gerald Lucena", username: "gerald" }, "2026-10-19")');
+  ok('the same person on another day: only the day moves, nothing read again', run('__opens.join()') === 'Gerald Lucena@2026-10-19' && run('__loads.length') === 1);
+  await run('salesReportShow({ name: "Kim Reyes", username: "kim" }, "2026-10-21")');
+  ok('another person: theirs, on that day, with the week\'s mail and the week cleared', run('SR_UI.me.name') === 'Kim Reyes' && run('SR_UI.me.username') === 'kim' && run('SR_UI.day') === '2026-10-21' &&
+     run('Object.keys(SR_UI.weekEmails).length') === 0 && run('SR_UI.weekOffset') === 0 && run('SR_UI.ro') === true && run('__loads.join()') === 'Gerald Lucena@2026-10-20,Kim Reyes@2026-10-21');
+  run(`_srLoad = __realLoad;
+    fetchFlow = function (a, p) { __reads.push(a); return Promise.resolve({ success: true, data: [] }); };
+    postFlow = function (a, p) { __posts.push({ a: a, p: p }); return Promise.resolve({ success: true, data: [{ date: '2026-10-21', user: 'Kim Reyes', report: { v: 2, lines: [] } }, { date: '2026-10-21', user: 'Gerald Lucena', report: { v: 2, lines: [] } }] }); };`);
+  await run('_srLoad(false)');
+  ok('its saved days are asked for by the person\'s name, and only theirs are kept', JSON.stringify(run('__posts.filter(function (x) { return x.a === "getProofReports"; }).map(function (x) { return x.p.user; })')) === JSON.stringify(['Kim Reyes']) &&
+     run('Object.keys(SR_UI.saved).join()') === '2026-10-21' && run('SR_UI.saved["2026-10-21"].user') === 'Kim Reyes');
+  ok('  management does not read the Client Book (it stays its owner\'s and the director\'s)', !run('__posts.some(function (x) { return x.a === "getClientBook"; })'));
+  run('getSession = function () { return { name: "Neil Estur", username: "neil", role: "director" }; }; SR_UI.selfRole = "director"; __posts = [];');
+  await run('_srLoad(false)');
+  ok('  the director, reading the same page, still sees their Client Book items', run('__posts.some(function (x) { return x.a === "getClientBook"; })'));
+  run('SR_UI.selfRole = "management"; __posts = []; __opens = [];');
+  const l1 = run('_srLoad(false)');
+  run('SR_UI.me = { name: "Gerald Lucena", username: "gerald", first: "Gerald" };');
+  const l2 = run('_srLoad(false)');
+  await Promise.all([l1, l2]);
+  ok('  two quick clicks: the earlier load is dropped, only the later person\'s day opens', run('__opens.join()') === 'Gerald Lucena@2026-10-21');
+  run('SR_UI.ix = IX; SR_UI.state = srBlank(); SR_UI.nums = _srNums(); SR_UI.sent = []; SR_UI.received = []; SR_UI.saved = {}; SR_UI.failed = []; SR_UI.backend = true;');
+  const head = { innerHTML: '' }, body = { innerHTML: '' };
+  C.__els.srHead = head; C.__els.srBody = body;
+  try { run('_srRenderDay()'); } catch (e) { /* the parts after the head need a real page */ }
+  ok('  the head: Read only, their name and the day, no "Whose report" and no day picker (the page owns the date)', /<span class="sr-chip">Read only<\/span>/.test(head.innerHTML) && /<span class="sr-who">Wednesday 21 Oct<\/span>/.test(head.innerHTML) &&
+     !/srWho|id="srDate"|data-step/.test(head.innerHTML), head.innerHTML.slice(0, 600));
+  ok('  the note: their received mail and their Client Book stay private', /received mail and Client Book stay private to them/.test(body.innerHTML), body.innerHTML.slice(0, 400));
+  run('SR_UI.backend = false;');
+  try { run('_srRenderDay()'); } catch (e) { /* as above */ }
+  ok('  before FlowAPI 185 it says so', /version 185\) before they can be read here/.test(body.innerHTML));
+  run('document.getElementById = __gid; _srOpenDay = __realOpen; SR_UI.unsaved = false; _srSave();');
+  ok('  and saving does nothing at all', !run('__posts.some(function (x) { return x.a === "saveProofReport" || x.a === "submitProofReport"; })'));
+  {
+    const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+    ok('  sent mail is read with the person\'s login, and a late answer for another person or day is dropped', /apiFetchEmailLogToday\(SR_UI\.ro \? SR_UI\.me\.username : undefined, day\)/.test(SRC) &&
+       /same = \(\) => SR_UI\.day === day && SR_UI\.me\.name === who/.test(SRC) && /if \(SR_UI\.me\.name !== who\) break;/.test(SRC));
+  }
+
+  console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
+  process.exit(FAIL ? 1 : 0);
+})().catch(e => { console.log('  FAIL threw: ' + (e && e.stack || e)); process.exit(1); });

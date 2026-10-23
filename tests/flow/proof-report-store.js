@@ -26,7 +26,7 @@ const PORTAL = JSON.stringify({ followDue: '3', openQuotes: '₱3.8M' });
 sec('1 · the version');
 {
   const c = load(GS, {});
-  ok('getVersion = 184', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 184);
+  ok('getVersion = 185', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 185);
 }
 
 sec('2 · the director saves and reads back');
@@ -69,16 +69,28 @@ sec('3 · A363: each person their own report; the director reads them all');
      !acctSales.success && /Your daily report is the accounting one/.test(acctSales.message), [acct, acctSales]);
   const all = call(c, 'getProofReports', NEIL), one = call(c, 'getProofReports', Object.assign({ user: 'gerald lucena' }, NEIL));
   ok('the director reads every report of a kind, and can narrow it to one person', all.data.length === 2 && one.data.length === 1 && one.data[0].user === 'Gerald Lucena', [all.data.length, one.data.length]);
-  ['management', 'hr', 'marketing', ''].forEach(role => {
+  ['hr', 'marketing', ''].forEach(role => {
     const g = call(c, 'getProofReports', { actorName: 'X', actorRole: role }), w = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, { actorName: 'X', actorRole: role }));
-    ok('  ' + (role || 'no role') + ' has no report: no read, no save (no summary for management)', !g.success && !g.data && !w.success);
+    ok('  ' + (role || 'no role') + ' has no report: no read, no save', !g.success && !g.data && !w.success);
   });
+  const MG = { actorName: 'Mara Manager', actorRole: 'management' };
+  const mgSales = call(c, 'getProofReports', MG), mgAcct = call(c, 'getProofReports', Object.assign({ kind: 'accounting' }, MG));
+  const mgAll = call(c, 'getProofReports', Object.assign({ kind: 'all' }, MG)), mgOne = call(c, 'getProofReports', Object.assign({ kind: 'all', user: 'rojan leo francisco' }, MG));
+  ok('A366: management reads every person\'s report of any kind (read only)', mgSales.success && mgSales.data.length === 2 && mgAcct.success && mgAcct.data.length === 1 && mgAcct.data[0].user === 'Rojan Leo Francisco', [mgSales, mgAcct]);
+  ok('  kind "all" reads every kind at once, each row with its kind; user narrows it', mgAll.data.length === 3 && mgAll.data.some(r => r.kind === 'accounting') && mgAll.data.some(r => r.kind === 'sales') &&
+     mgOne.data.length === 1 && mgOne.data[0].user === 'Rojan Leo Francisco', [mgAll.data.length, mgOne.data.length]);
+  const mgSave = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, MG)), mgSub = call(c, 'submitProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT, snapshotJson: '{"calls":1}' }, MG));
+  ok('  but never saves or submits one (it has no report of its own)', !mgSave.success && !mgSub.success && /no daily report for your role/.test(mgSave.message), [mgSave, mgSub]);
+  ok('  "all" is only for the readers: a rep asking for it is refused', !call(c, 'getProofReports', Object.assign({ kind: 'all' }, asSales)).success);
   ok('  nothing was written by them', store.ProofReports.length === 3);
   const direct = c._dispatch({ action: 'getProofReports', actorName: 'Neil Estur', actorRole: 'director' });
   ok('without the app\'s secret even the director\'s read is refused (secured)', !JSON.parse(direct.getContent()).success);
-  store.FlowSettings.push({ Key: 'proofReportRoles', Value: 'director, management', 'Updated By': 'Neil', 'Updated At': '' });
+  store.FlowSettings.push({ Key: 'proofReportRoles', Value: 'director, sales', 'Updated By': 'Neil', 'Updated At': '' });
+  const outMg = call(c, 'getProofReports', { actorName: 'M', actorRole: 'management' });
+  ok('FlowSettings proofReportRoles can still narrow it: a list without management refuses it', !outMg.success && /trial/.test(outMg.message), outMg);
+  store.FlowSettings[store.FlowSettings.length - 1].Value = 'director, management';
   const narrowed = call(c, 'saveProofReport', Object.assign({ date: '2026-10-21', reportJson: REPORT }, asSales)), mg = call(c, 'getProofReports', { actorName: 'M', actorRole: 'management' });
-  ok('FlowSettings proofReportRoles can still narrow it (a rep refused again); naming management gives it no report', !narrowed.success && /trial/.test(narrowed.message) && !mg.success && /no daily report for your role/.test(mg.message), [narrowed, mg]);
+  ok('  and a list naming management lets it read, while a rep left out is refused', !narrowed.success && /trial/.test(narrowed.message) && mg.success, [narrowed, mg]);
 }
 
 sec('4 · what it refuses');

@@ -1,0 +1,95 @@
+/* team-daily-reports.css — A366 · team daily reports (team-daily-reports.html). Tokens only; every rule hangs off body.dh.
+   Laid out like Contacts on a Mac, as the Client Book is (A362): the people and the report side by side from 1180px, each
+   scrolling on its own so the page fits the window (js/team-daily-reports.js sets --tdr-h); narrower, the list comes first
+   and a report opens full height with "‹ Team" to go back. The report itself is css/daily-report.css, unchanged, so it
+   reads exactly as on the person's own page. Translucent chrome over scrolling content, a short settle when another person
+   opens, none of it under reduced motion; solid under reduced transparency; a firmer edge under more contrast. */
+body.dh .tdr-col { max-width:1400px; margin:0 auto; }
+body.dh .tdr-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px 16px; }
+body.dh .tdr-titles { min-width:0; }
+body.dh .tdr-head h1 { margin:0; font:700 26px/1.15 var(--dh-display); letter-spacing:-.02em; color:var(--dh-ink); }
+body.dh .tdr-head p { margin:4px 0 0; max-width:70ch; font:400 13.5px/1.45 var(--dh-text); color:var(--dh-ink-2); }
+body.dh .tdr-day { display:inline-flex; align-items:center; gap:6px; }
+body.dh .tdr-day .sr-date { padding:6px 10px; font-size:13px; }
+body.dh .tdr-day[hidden] { display:none; }
+body.dh #tdrNotice:empty { display:none; }
+body.dh #tdrNotice .dh-banner { margin:0; }
+
+/* the split: on a wide screen the people and the report side by side, each scrolling on its own */
+body.dh .tdr-split[hidden] { display:none; }
+body.dh .tdr-listcol { display:flex; flex-direction:column; min-width:0; border:1px solid var(--dh-hair); border-radius:var(--dh-r-md); background:var(--dh-glass-solid); overflow:hidden; }
+body.dh .tdr-pane { min-width:0; }
+body.dh .tdr-back { display:none; }
+@media (min-width: 1180px) {
+  body.dh .tdr-split { display:grid; grid-template-columns:minmax(320px, 360px) minmax(0, 1fr); gap:16px; height:var(--tdr-h, calc(100dvh - 220px)); min-height:460px; }
+  body.dh .tdr-listcol { min-height:0; }
+  body.dh .tdr-list { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+  body.dh .tdr-pane { min-height:0; overflow-y:auto; overscroll-behavior:contain; border-radius:var(--dh-r-lg); }
+  body.dh .tdr-ghead { position:sticky; top:0; z-index:1; }
+}
+/* narrower: the list, or (once a person is open) their report, full height */
+@media (max-width: 1179.98px) {
+  body.dh .tdr-pane { display:none; }
+  body.dh.tdr-reading .tdr-listcol, body.dh.tdr-reading .tdr-head, body.dh.tdr-reading #tdrNotice { display:none; }
+  body.dh.tdr-reading .tdr-pane { display:block; }
+  body.dh.tdr-reading .tdr-back { position:sticky; top:var(--l-bar, 64px); z-index:3; display:inline-flex; align-items:center; gap:2px; margin:0 0 10px; padding:7px 14px 7px 10px;
+    border:1px solid var(--dh-hair); border-radius:var(--dh-r-pill); color:var(--dh-ink); font:600 13px/1.2 var(--dh-text); cursor:pointer;
+    background:var(--dh-glass-solid); background:color-mix(in srgb, var(--dh-glass-solid) 80%, transparent); -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%); }
+}
+
+/* the toolbar over the list: search, then the chips that filter it */
+body.dh .tdr-tools { display:flex; flex-direction:column; gap:8px; padding:12px 12px 10px; border-bottom:1px solid var(--dh-hair-2); }
+body.dh .tdr-q { width:100%; box-sizing:border-box; padding:8px 11px; border:1px solid var(--dh-hair); border-radius:var(--dh-r-sm); background:var(--dh-inset); color:var(--dh-ink); font:400 13px/1.35 var(--dh-text); }
+body.dh .tdr-q:focus { outline:none; border-color:var(--dh-cyan); box-shadow:0 0 0 3px var(--dh-cyan-ring); }
+body.dh .tdr-chips { display:flex; flex-wrap:wrap; gap:6px; }
+body.dh .tdr-chip { flex:none; display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border:1px solid var(--dh-hair); border-radius:var(--dh-r-pill); background:transparent; color:var(--dh-ink-2); font:600 12px/1.2 var(--dh-text); white-space:nowrap; cursor:pointer; }
+body.dh .tdr-chip .n { color:var(--dh-ink); font-weight:700; font-variant-numeric:tabular-nums; }
+body.dh .tdr-chip.on { background:var(--dh-navy-soft); border-color:var(--dh-navy-line); color:var(--dh-navy-text); }
+body.dh .tdr-chip.on .n { color:var(--dh-navy-text); }
+body.dh .tdr-empty { margin:0; padding:28px 16px; text-align:center; font:400 13px/1.45 var(--dh-text); color:var(--dh-ink-3); }
+
+/* a team: its name and how many are in, held at the top while its people scroll under it */
+body.dh .tdr-ghead { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0; padding:8px 14px; border-bottom:1px solid var(--dh-hair-2);
+  font:700 12.5px/1.3 var(--dh-text); color:var(--dh-ink);
+  background:var(--dh-glass-solid); background:color-mix(in srgb, var(--dh-glass-solid) 82%, transparent); -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%); }
+body.dh .tdr-ghead span { font-weight:500; color:var(--dh-ink-3); font-variant-numeric:tabular-nums; }
+
+/* one person: the name, the lines typed; then where the report stands */
+body.dh .tdr-row { display:flex; flex-direction:column; gap:3px; width:100%; margin:0; padding:10px 14px 11px; border:0; border-bottom:1px solid var(--dh-hair-2); border-radius:0;
+  background:transparent; color:var(--dh-ink); font:inherit; text-align:left; cursor:pointer; }
+body.dh .tdr-group:last-child .tdr-row:last-child { border-bottom:0; }
+body.dh .tdr-row:hover { background:var(--dh-inset); }
+body.dh .tdr-row.on { background:var(--dh-navy-soft); }
+body.dh .tdr-row:focus-visible { outline:2px solid var(--dh-cyan); outline-offset:-2px; }
+body.dh .tdr-r1 { display:flex; align-items:baseline; gap:10px; min-width:0; }
+body.dh .tdr-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 14px/1.3 var(--dh-text); letter-spacing:-.005em; color:var(--dh-ink); }
+body.dh .tdr-lines { flex:none; font:400 12px/1.3 var(--dh-text); color:var(--dh-ink-3); font-variant-numeric:tabular-nums; }
+body.dh .tdr-r2 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:400 12.5px/1.35 var(--dh-text); }
+body.dh .tdr-st { color:var(--dh-ink-2); }
+body.dh .tdr-st.ok { color:var(--dh-green); font-weight:600; }
+body.dh .tdr-st.late { color:var(--dh-red); font-weight:600; }
+body.dh .tdr-st.dim { color:var(--dh-ink-3); }
+
+/* the report: the person's own page, as it is; a short settle when another person opens */
+body.dh .tdr-pick { display:grid; place-items:center; min-height:240px; height:100%; box-sizing:border-box; }
+body.dh .tdr-pick[hidden] { display:none; }
+body.dh .tdr-pane .dh-sr { margin:0; }
+body.dh .tdr-pane.tdr-enter > .dh-sr:not([hidden]) { animation:tdr-in .24s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes tdr-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@keyframes tdr-fade { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { body.dh .tdr-pane.tdr-enter > .dh-sr:not([hidden]) { animation:tdr-fade .15s ease-out both; } }
+html[data-motion="off"] body.dh .tdr-pane.tdr-enter > .dh-sr:not([hidden]) { animation:none; }
+@media (prefers-reduced-transparency: reduce) {
+  body.dh .tdr-ghead, body.dh.tdr-reading .tdr-back { background:var(--dh-glass-solid); -webkit-backdrop-filter:none; backdrop-filter:none; }
+}
+@media (prefers-contrast: more) {
+  body.dh .tdr-row.on { box-shadow:inset 3px 0 0 var(--dh-navy-text); }
+  body.dh .tdr-chip.on { border-color:var(--dh-ink-2); }
+}
+
+/* printing a report (its own Print button): only that report, as on the person's own page */
+@media print {
+  body.dh.tdr.sr-print .dh-col > #tdrSplit { display:block; height:auto; }
+  body.dh.tdr.sr-print .tdr-listcol, body.dh.tdr.sr-print .tdr-back, body.dh.tdr.sr-print .tdr-pick { display:none; }
+  body.dh.tdr.sr-print .tdr-pane { display:block; overflow:visible; height:auto; }
+}

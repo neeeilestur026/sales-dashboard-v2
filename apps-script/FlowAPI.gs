@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 184;   // A363 — each person's own new daily report: they save and read only their own. History: see CHANGELOG.
+var FLOW_VERSION = 185;   // A366 — management reads every person's new daily report (read only). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -15596,7 +15596,7 @@ function _powRoles() {
   var raw = '';
   try { raw = String((getFlowSettings().data || {}).proofReportRoles || ''); } catch (e) { raw = ''; }
   var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  return list.length ? list : ['director', 'sales', 'accounting', 'leadgen', 'admin'];   // A363 — each role its own report
+  return list.length ? list : ['director', 'management', 'sales', 'accounting', 'leadgen', 'admin'];   // A363 each role its own report; A366 management reads
 }
 function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) >= 0; }
 /* A363 — Neil, 22 Oct 2026: the new daily report on each person's own dashboard. The director reads every report (and
@@ -15606,6 +15606,10 @@ function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) |
 var _POW_ROLE_KIND = { sales: 'sales', accounting: 'accounting', leadgen: 'leadgen', admin: 'admin' };
 function _powIsDirector(p) { return String((p && p.actorRole) || '').trim().toLowerCase() === 'director'; }
 function _powOwnKind(p) { return _POW_ROLE_KIND[String((p && p.actorRole) || '').trim().toLowerCase()] || ''; }
+/* A366 — Neil, 23 Oct 2026: management opens any person's new daily report, read only ("team daily reports"). The
+   director and management READ every report of every kind; only the director may still save (his own trial). Management
+   has no report of its own, so _powCheck keeps refusing its saves and submits. */
+function _powReadsAll(p) { var r = String((p && p.actorRole) || '').trim().toLowerCase(); return r === 'director' || r === 'management'; }
 function _powKindDenied(p, kind) {
   if (_powIsDirector(p)) return '';
   var own = _powOwnKind(p);
@@ -15707,19 +15711,21 @@ function submitProofReport(p) {
 
 /** getProofReports({from?, to?, user?, kind?}) — saved reports of one kind (sales when none is named), newest first.
  *  A363: the director reads anyone's (user narrows it); everyone else only their own, of their own kind.
+ *  A366: management reads like the director, and both may ask kind 'all' (every kind at once, each row with its kind).
  *  A read never creates the tab. */
 function getProofReports(p) {
   p = p || {};
   if (!_powAllowed(p)) return { success: false, message: _powDenied() };
-  var kind = _powKind(p.kind);
-  if (_POW_KINDS.indexOf(kind) < 0) return { success: false, message: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
-  var mine = _powKindDenied(p, kind);
+  var all = _powReadsAll(p), every = all && String(p.kind || '').trim().toLowerCase() === 'all';
+  var kind = every ? 'all' : _powKind(p.kind);
+  if (!every && _POW_KINDS.indexOf(kind) < 0) return { success: false, message: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
+  var mine = all ? '' : _powKindDenied(p, kind);
   if (mine) return { success: false, message: mine };
-  var who = _powIsDirector(p) ? String(p.user || '').trim() : String(p.actorName || '').trim();
-  if (!_powIsDirector(p) && !who) return { success: false, message: 'Sign in again — there is no name to read the report under.' };
+  var who = all ? String(p.user || '').trim() : String(p.actorName || '').trim();
+  if (!all && !who) return { success: false, message: 'Sign in again — there is no name to read the report under.' };
   var sh = _ss().getSheetByName('ProofReports');
   if (!sh || sh.getLastRow() < 2) return { success: true, data: [] };
-  var rows = _rows('ProofReports').filter(function (r) { return _powKind(r['Kind']) === kind; });
+  var rows = _rows('ProofReports').filter(function (r) { return every || _powKind(r['Kind']) === kind; });
   if (who) rows = rows.filter(function (r) { return String(r['User']).trim().toLowerCase() === who.toLowerCase(); });
   if (p.from || p.to) rows = _onDays(rows, 'Date', p.from || '0000-01-01', p.to || '9999-12-31');
   return { success: true, data: rows.map(_powOut).sort(function (a, b) { return b.date.localeCompare(a.date) || a.user.localeCompare(b.user); }) };
@@ -19501,6 +19507,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A366 MANAGEMENT READS EVERY PERSON'S NEW DAILY REPORT (185; A327 takes 186 or later). Neil, 23 Oct 2026: a page on the management dashboard that opens any person's new daily report in the same format as their own, read only. proofReportRoles defaults to director, management, sales, accounting, leadgen, admin (FlowSettings can still narrow it — a sheet that names roles must add management). getProofReports: the director and management read every report of any kind, may narrow by user, and may ask kind 'all' (every kind in one read, each row carrying its kind). Writes are unchanged: management has no report of its own, so saveProofReport and submitProofReport still refuse it. No new actions, no new columns.
 A363 EACH PERSON'S OWN NEW DAILY REPORT (184; A327 takes 185 or later). Neil, 22 Oct 2026: "put the daily report on each of the dashboard user, but put it as a new daily report" (the old DailyReports flow is not touched, and there is no summary for management). proofReportRoles now defaults to director, sales, accounting, leadgen, admin (FlowSettings can still narrow it). The director reads every report and may still save any kind under his own name; everyone else saves, submits and reads only their own report (the name Flask stamps), of the one kind their role has (sales -> sales, accounting -> accounting, leadgen -> leadgen, admin -> admin); another kind is refused, and a role with no report of its own gets none. getProofReports ignores `user` for them. No new actions, no new columns.
 A360 OLD PURCHASE REQUESTS AND QUOTATIONS CAN BE CONNECTED TO A CLIENT (183; A327 takes 184 or later). Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" New tab ClientBookLinks (Kind, Record No, Client No, By, At): one row per PR or quotation, the latest decision — a Client No, or blank once taken off a client (then it is no client's, not even by its company name). A row beats the PR's own Client Book No (A358), and a quotation's own row beats its PR's. Two secured actions: linkClientBookRecords({clientNo, records}) connects up to 100 at once, all checked before any write (a rep: their own records — the PR's Salesperson or Requested By, the quotation's owner or creator — to their own live clients; a record with another rep's client is refused; the director anything) and unlinkClientBookRecord({kind, no}) takes one off (the rep must own its client). Each writes ClientBookLog rows ('linked' / 'unlinked', Ref = the record) on every client it touches. getClientBook returns links (a rep: those on their clients, plus the blank ones). PR and quotation rows are never written.
 A358 THE CLIENT BOOK FOR EVERY SALES REP; A PR CAN NAME ITS CLIENT (182; A327 takes 183 or later). Neil, 22 Oct 2026: the client list is for each sales user, and a purchase request should be connected to it — optional for now. clientBookRoles defaults to director, sales. The director sees and changes every client; any other role only the clients it owns (Owner = actorName, any case): getClientBook returns a rep's own clients and their log, a rep's new client is theirs and stays theirs, another rep's client cannot be edited, re-statused, archived or added again (even with allowDuplicate). PricingRequests gains Client Book No (appended; 21 wide; createPricingRequest is its only whole-row writer, the import still writes 18): createPricingRequest takes an optional clientNo — a live client the person may use, refused before anything is written — and getPricingRequests returns clientNo. A quotation made from the PR reaches the client through its PR No; nothing on Quotations changes.

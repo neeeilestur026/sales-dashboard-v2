@@ -57,7 +57,7 @@ const LEDGER_NAV = {
     ['Quotes', 'file', [['website-requests.html', 'Website requests'], ['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
     ['Payables', 'card', [['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-payments.html', 'Payment register'], ['director-expenses.html', 'Expenses'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Commissions for payroll'], ['commission-rates.html', 'Commission rates']]],
     ['Reports', 'chart', [['director-sales-orders.html', 'Sales orders'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['month-check.html', 'Month check']]],
-    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['management-itinerary.html', 'Weekly itineraries'], ['team-performance.html', 'Team performance']]],
+    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['management-itinerary.html', 'Weekly itineraries'], ['team-performance.html', 'Team performance']]],   // A366
     ['Tools', 'tool', [['director-emails.html', 'Email'], ['pf-admin.html', 'Product finder data'], ['scan.html', 'Scanner'], ['collect.html', 'Collect']]]
   ],
   accounting: [
@@ -76,7 +76,7 @@ const LEDGER_NAV = {
     ['Money', 'trend', [['flow-invoices.html', 'Invoices'], ['flow-collections.html', 'Collections'], ['flow-ar-aging.html', 'AR aging'], ['month-check.html', 'Month check'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Sales commissions']]],
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet']]],
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['flow-shipments.html', 'Shipments'], ['flow-suppliers.html', 'Suppliers']]],
-    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-performance.html', 'Team performance'], ['management-itinerary.html', 'Weekly itineraries'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
+    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['team-performance.html', 'Team performance'], ['management-itinerary.html', 'Weekly itineraries'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],   // A366
     ['Guide', 'compass', [['flow-home.html', 'Process overview'], ['flow-guide.html', 'Process guide']]]
   ],
   sales: [
