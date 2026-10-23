@@ -159,8 +159,8 @@ sec('4 · typed lines, the snapshot, the queue');
   const snap = J('trSnapshot(' + JSON.stringify(T) + ', trMineTiles("accounting", REP, "2026-10-22"), "2026-10-22", "Rojan Leo Francisco")');
   ok('the snapshot keeps every number, and whose records they were', snap.person === R && snap.invoices.text === '2 · ₱150,000' && snap.m_Collectioncall.value === 1, snap);
   eq('the queue: urgent first, then overdue, to do, ready', J('trQueue([{ text: "a", tone: "ok" }, { text: "b", tone: "urgent" }, { text: "c", tone: "info" }, { text: "d", tone: "warn" }]).map(function (q) { return q.text; })'), ['b', 'd', 'c', 'a']);
-  eq('a saved report is read safely, with its person and only true/false email marks', J('trFill({ person: "X", lines: [{ id: "a" }, null, {}], pm: { blocker: " no blocker " }, mailMarks: { m1: true, m2: false, m3: "yes" } }, "admin", "Y")'),
-     { v: 1, kind: 'admin', person: 'X', lines: [{ id: 'a' }], pm: { blocker: 'no blocker' }, mailMarks: { m1: true, m2: false } });
+  eq('a saved report is read safely, with its person, only true/false email marks, and only PR numbers (or "none") as email links', J('trFill({ person: "X", lines: [{ id: "a" }, null, {}], pm: { blocker: " no blocker " }, mailMarks: { m1: true, m2: false, m3: "yes" }, mailPrs: { m1: "pr-202610-067", m2: "", m3: "nonsense", m4: 7, m5: "PR-2025-014" } }, "admin", "Y")'),
+     { v: 1, kind: 'admin', person: 'X', lines: [{ id: 'a' }], pm: { blocker: 'no blocker' }, mailMarks: { m1: true, m2: false }, mailPrs: { m1: 'PR-202610-067', m2: '', m5: 'PR-2025-014' } });
 }
 
 sec('4b · A352: the sent mail — collection follow-ups (accounting), price requests to suppliers (admin)');
@@ -182,13 +182,24 @@ sec('4b · A352: the sent mail — collection follow-ups (accounting), price req
                  mail('p5', 'Stock availability - flange spreader', 'sg@hytorc.com', '09:40'), mail('p6', 'Request for quotation', 'x@taiheiyo.com.ph', '10:00'),
                  mail('p7', 'Quotation 2026-560-ADM', 'buyer@notonfile.ph', '10:30')];
   const P = J('trMail("admin", IXM, __admMail, {})');
-  eq('admin: an RFQ subject counts, and so does a price or stock question to anyone who is not a customer; never a PO, our own quotation, nor mail to a customer', P.map(r => [r.id, r.counted]),
+  eq('admin: an RFQ subject is a price request, and so is a price or stock question to anyone who is not a customer; never a PO, our own quotation, nor mail to a customer', P.map(r => [r.id, r.price]),
      [['p1', true], ['p2', true], ['p3', false], ['p4', false], ['p5', true], ['p6', false], ['p7', false]]);
+  eq('A365: but it COUNTS only with its PR — the one whose subject names PR-202610-067; the others wait for theirs', P.map(r => [r.id, r.counted, r.needsPr]),
+     [['p1', true, false], ['p2', false, true], ['p3', false, false], ['p4', false, false], ['p5', false, true], ['p6', false, false], ['p7', false, false]]);
+  const Pl = J('trMail("admin", IXM, __admMail, {}, { p2: "PR-202610-070", p1: "", p4: "PR-202610-071" })');
+  eq('  a PR picked by hand links it (and counts it); "none" takes the subject\'s off; any other email can carry a PR without counting', Pl.map(r => [r.id, r.pr, r.prHow, r.counted]).filter(x => ['p1', 'p2', 'p4'].indexOf(x[0]) >= 0),
+     [['p1', '', '', false], ['p2', 'PR-202610-070', 'picked', true], ['p4', 'PR-202610-071', 'picked', false]]);
+  eq('  the subject\'s PR is said so', [P[0].pr, P[0].prHow, P[0].subjPr], ['PR-202610-067', 'subject', 'PR-202610-067']);
+  ok('accounting\'s mail carries no PR (its emails are about receivables)', A.every(r => r.pr === '' && !r.needsPr) && A[1].ref === 'AR-2');
   eq('  a new vendor not on file is said so', P[1].why, 'asks about price or stock, not to a customer');
   eq('  with why, the supplier, and the PR number in the subject', [P[0].why, P[0].org, P[0].ref, P[4].why], ['the subject asks for a price', 'Enerpac', 'PR-202610-067', 'to supplier Hytorc Philippines, about price or stock']);
-  const T = J('trMailTiles("admin", trMail("admin", IXM, __admMail, { p3: true }), "ok")');
-  eq('the tiles: price requests (a missed one counted by hand), then every email sent', T.map(t => [t.key, t.label, t.text]), [['mailPrice', 'Price requests to suppliers', '4'], ['mailSent', 'Emails sent', '7']]);
-  ok('  the records behind it say why each counts', T[0].items.length === 4 && T[0].items.some(i => i.result === 'counted by you'));
+  const T = J('trMailTiles("admin", trMail("admin", IXM, __admMail, { p3: true }, { p3: "PR-202610-072", p2: "PR-202610-070" }), "ok")');
+  eq('the tiles: price requests with their PR (a missed one counted by hand), then every email sent', T.map(t => [t.key, t.label, t.text]), [['mailPrice', 'Price requests to suppliers', '3'], ['mailSent', 'Emails sent', '7']]);
+  ok('  the one still without its PR is said under the count, in the watch colour', T[0].target === '1 more waiting for a PR' && T[0].status === 'watch', T[0]);
+  ok('  the records behind it say why each counts, with its PR', T[0].items.length === 3 && T[0].items.some(i => i.result === 'counted by you') && T[0].items.every(i => /^PR-/.test(i.ref)));
+  ok('  with every price request linked: "each with its PR"', J('trMailTiles("admin", trMail("admin", IXM, __admMail.slice(0, 1)), "ok")')[0].target === 'from the sent mail, each with its PR');
+  ok('the typed "Price request email" line is gone (the mailbox counts them, with their PR); an old one stays editable', !J('TR_ROLES.admin.lines.map(function (l) { return l.type; })').includes('Price request email') &&
+     J('TR_ROLES.admin.retired.map(function (l) { return l.type; })').includes('Price request email') && !J('trMineTiles("admin", trBlank("admin", "X"), "2026-10-22").map(function (t) { return t.label; })').includes('Price request email'));
   const T0 = J('trMailTiles("accounting", [], "setup")');
   ok('a mailbox that is not connected shows "—" and says so, instead of a zero', T0.every(t => t.text === '—' && t.status === 'nr' && t.target === 'the mailbox is not connected'));
   ok('lead gen has no mail tiles', J('trMailTiles("leadgen", [], "ok")').length === 0);
@@ -197,6 +208,10 @@ sec('4b · A352: the sent mail — collection follow-ups (accounting), price req
   eq('the week gains a collection-email column: counted, unreadable, and still being read', [W.heads[3], W.rows.slice(0, 4).map(r => r.vals[3]), W.totals[3]], ['Collection emails', [0, null, 1, 'loading'], 1]);
   const W2 = J('trWeek("accounting", IXM, "Rojan Leo Francisco", "2026-10-22", { "2026-10-21": { report: { mailMarks: { w1: false } } } }, __wm)');
   ok('  and a day\'s own corrections count in it', W2.rows[2].vals[3] === 0);
+  C.__wa = { '2026-10-19': [], '2026-10-20': [mail('w2', 'RFQ - torque wrench', 'sales@enerpac.com')], '2026-10-21': [] };
+  const Wa = J('trWeek("admin", IXM, "Ana Admin", "2026-10-22", { "2026-10-20": { report: { mailPrs: { w2: "PR-202610-067" } } } }, __wa)');
+  const Wb = J('trWeek("admin", IXM, "Ana Admin", "2026-10-22", {}, __wa)');
+  eq('A365: the week\'s price-request column counts a day\'s request only with the PR linked that day', [Wa.rows[1].vals[Wa.heads.length - 1], Wb.rows[1].vals[Wb.heads.length - 1]], [1, 0]);
 }
 
 sec('5 · the page');
@@ -338,8 +353,18 @@ async function boot(roleKey, o) {
   ok('a mailbox that is not connected says so, and the tiles show "—"', /mailbox is not connected/.test(ms2.part('[data-mail]').innerHTML) && /Collection follow-up emails<\/span><span class="v">—<\/span>/.test(ms2.part('[data-tiles="portal"]').innerHTML));
   const ma = await boot('admin', { own: true, mailToday: [{ messageId: 'q1', subject: 'RFQ: torque wrench', recipient: 'sales@enerpac.com', name: 'Enerpac', sentAt: '2026-10-22T09:00:00+08:00' }] });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
-  ok('admin: reads the supplier list, and counts the price request to a supplier', ma.run('__reads.map(function (r) { return r.a; })').indexOf('getSuppliers') >= 0 &&
-     /Price requests to suppliers<\/span><span class="v">1<\/span>/.test(ma.part('[data-tiles="portal"]').innerHTML) && /data-new="Price request email"/.test(ma.run('_trBodyHtml(TR_UI.admin)')));
+  ok('admin: reads the supplier list; a price request without its PR does not count yet, and nothing offers to type one', ma.run('__reads.map(function (r) { return r.a; })').indexOf('getSuppliers') >= 0 &&
+     /Price requests to suppliers<\/span><span class="v">0<\/span>/.test(ma.part('[data-tiles="portal"]').innerHTML) && /1 more waiting for a PR/.test(ma.part('[data-tiles="portal"]').innerHTML) &&
+     !/data-new="Price request email"/.test(ma.run('_trBodyHtml(TR_UI.admin)')), ma.part('[data-tiles="portal"]').innerHTML.slice(0, 400));
+  const mlA = ma.part('[data-mail]').innerHTML;
+  ok('  the email says it needs its PR, and offers Link a PR beside the count button', /Needs its PR to count/.test(mlA) && /data-mailpr="q1">Link a PR</.test(mlA) && /data-mailmark="q1"/.test(mlA), mlA.slice(0, 600));
+  const dlgPr = ma.run(`(function () { var h = '', f = null; _trDialog = function (S, t, s, inner, back, onSubmit) { h = inner; f = onSubmit; }; _trMailPrDialog(TR_UI.admin, 'q1', null);
+    f({ elements: { pr: { value: 'PR-20' } } }); return h; })()`);
+  ok('  Link a PR: the PRs being sourced or priced first, then the last 90 days\'; "No PR" first', /<option value="" selected>No PR<\/option>/.test(dlgPr) && /<optgroup label="Being sourced or priced">/.test(dlgPr), dlgPr.slice(0, 500));
+  await ma.run('TR_UI.admin.chain');
+  const svPr = ma.run('__posts.filter(function (x) { return x.a === "saveProofReport"; }).pop()');
+  ok('  picking one saves it with the report, and the request counts', svPr && JSON.parse(svPr.p.reportJson).mailPrs.q1 === 'PR-20' &&
+     /Price requests to suppliers<\/span><span class="v">1<\/span>/.test(ma.part('[data-tiles="portal"]').innerHTML) && /PR <a href="flow-pricing-request\.html\?pr=PR-20">PR-20<\/a>/.test(ma.part('[data-mail]').innerHTML), svPr && svPr.p.reportJson);
 
   const l = await boot('leadgen');
   const lc = l.run('__reads.filter(function (r) { return r.a === "getLeadgenCounts"; })[0]');

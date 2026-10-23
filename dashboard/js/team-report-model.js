@@ -83,10 +83,13 @@ const TR_ROLES = {
     stuck: true,
     week: ['sourced', 'quotesSent', 'pos'],
     /* A352 — Neil, 22 Oct: "it has emails for request of price to supplier". Counted from the person's sent mail. */
-    mail: { key: 'mailPrice', label: 'Price requests to suppliers', short: 'Price requests', tag: 'Price request', on: 'price',
-            none: 'Not a price request', help: 'An email counts when it asks for a quotation, price or stock and did not go to a customer; our own quotations and order emails do not count.' },
+    /* A365 — Neil, 23 Oct: "connect the PR to that Price requests to suppliers strictly, but in this Emails sent can be
+       connect also PR". A price request counts only once it is linked to its PR (a PR number in the subject links it;
+       otherwise the person picks one); any other sent email may be linked to a PR too, which changes no count. */
+    mail: { key: 'mailPrice', label: 'Price requests to suppliers', short: 'Price requests', tag: 'Price request', on: 'price', pr: 'strict',
+            none: 'Not a price request',
+            help: 'A price request counts when it asks a supplier for a quotation, price or stock and is linked to its PR — a PR number in the subject links it by itself, otherwise pick the PR. Our own quotations and order emails never count. Any other email can be linked to a PR as well.' },
     lines: [
-      { type: 'Price request email', results: ['Sent', 'Quote received', 'No reply yet'], link: 'pr', what: 'Supplier' },
       { type: 'Supplier follow-up', results: ['Quote received', 'Waiting', 'No stock', 'Declined'], link: 'pr', what: 'Supplier' },
       { type: 'PO status', results: ['On schedule', 'Delayed', 'Shipped'], link: 'po', what: 'Supplier', fill: true },
       { type: 'Shipment', results: ['In transit', 'Arrived', 'Cleared', 'Delayed'], link: 'po', what: 'International or local', whatChoices: ['International', 'Local'] },
@@ -94,7 +97,10 @@ const TR_ROLES = {
       { type: 'Inquiry', results: ['Answered', 'Forwarded to a rep', 'Waiting'], what: 'Company' },
       { type: 'Other task', results: [], what: 'What' }
     ],
-    typedNote: 'Supplier, PO, shipment and delivery follow-ups happen by phone and email, so they are typed here. A price request email is counted from the mailbox; type one only when it went from another mailbox.'
+    /* A365 — a price request is counted from the mailbox, with its PR, so it is no longer typed; a line typed before stays
+       readable and can still be edited or voided. */
+    retired: [{ type: 'Price request email', results: ['Sent', 'Quote received', 'No reply yet'], link: 'pr', what: 'Supplier' }],
+    typedNote: 'Supplier, PO, shipment and delivery follow-ups happen by phone and email, so they are typed here. Price requests are counted from the mailbox, each with its PR.'
   }
 };
 const TR_LINE_FIELDS = ['type', 'what', 'result', 'note', 'nextDate', 'linkType', 'linkId', 'linkLabel'];
@@ -190,13 +196,15 @@ function trTiles(roleKey, ix, person, day, nowMin) {
 
 /* ── the report the person keeps ───────────────────────────────────────────────────────────── */
 
-function trBlank(roleKey, person) { return { v: 1, kind: roleKey, person: _srS(person), lines: [], pm: { blocker: '' }, mailMarks: {} }; }
+function trBlank(roleKey, person) { return { v: 1, kind: roleKey, person: _srS(person), lines: [], pm: { blocker: '' }, mailMarks: {}, mailPrs: {} }; }
 /** A saved report made safe to read. */
 function trFill(saved, roleKey, person) {
   const o = saved && typeof saved === 'object' ? saved : {}, b = trBlank(roleKey, o.person || person);
   b.lines = Array.isArray(o.lines) ? o.lines.filter(l => l && l.id) : [];
   b.pm = { blocker: _srS(o.pm && o.pm.blocker) };
   if (o.mailMarks && typeof o.mailMarks === 'object') Object.keys(o.mailMarks).forEach(k => { if (o.mailMarks[k] === true || o.mailMarks[k] === false) b.mailMarks[k] = o.mailMarks[k]; });
+  // A365 — the PR each email was linked to by hand ('' = none, even when the subject names one)
+  if (o.mailPrs && typeof o.mailPrs === 'object') Object.keys(o.mailPrs).forEach(k => { const v = _srS(o.mailPrs[k]).toUpperCase(); if (v === '' || TR_PR_NO_RE.test(v)) b.mailPrs[k] = v; });
   return b;
 }
 /** A new typed line, stamped now. The type must be one of the role's. */
@@ -260,6 +268,7 @@ const TR_COLLECT_RE = /\b(SOA|statements? of accounts?|collections?|payments?|ov
 const TR_RFQ_RE = /\b(RFQ|request(ing)? (a |for )?(quotation|quote|price|pricing|offer|proposal)|quotation request|price request|pricing request|price (inquiry|enquiry))\b/i;
 const TR_PRICE_RE = /\b(quot(e|es|ation|ations)|prices?|pricing|inquiry|enquiry|availability|lead ?time|offer|stocks?)\b/i;
 const TR_ORDER_RE = /\b(purchase order|P\.?O\.? ?(no|#|\d)|order confirmation|invoices?|payments?|deliver(y|ies))\b/i;
+const TR_PR_NO_RE = /^PR-[A-Z0-9][A-Z0-9-]{1,30}$/;                                   // A365 — a purchase request number (any era's)
 const TR_OUR_QUOTE_RE = /\b(\d{4}-\d{3,}-[A-Z]{2,}|quotation\s*(no\.?|#)\s*\d)/i;   // our own quotation going out (2026-560-ADM), not a request
 const TR_PUBLIC_MAIL = { 'gmail.com': 1, 'yahoo.com': 1, 'outlook.com': 1, 'hotmail.com': 1, 'icloud.com': 1, 'live.com': 1, 'ymail.com': 1 };
 const TR_SUFFIX_RE = /\b(corporation|corp|incorporated|inc|company|co|ltd|limited|enterprises|enterprise|ent|philippines|phils|phil|international|intl|group|holdings|resources|pte|sdn|bhd|llc|gmbh)\b/g;
@@ -293,12 +302,15 @@ function _trOrgOf(orgs, addr) {
   return orgs.find(o => o.compact === d) || orgs.find(o => o.compact.indexOf(d) === 0 || (o.compact.length >= 4 && d.indexOf(o.compact) === 0)) || null;
 }
 
-/** The day's sent mail, each email marked when it counts, and why. marks = { messageId: true | false } — the director's
- *  own correction, which always wins over the guess. */
-function trMail(roleKey, ix, emails, marks) {
+/** The day's sent mail, each email marked when it counts, and why. marks = { messageId: true | false } — the person's
+ *  own correction, which always wins over the guess. A365: prs = { messageId: 'PR-…' | '' } — the PR linked by hand
+ *  ('' takes the subject's off); without one, a PR number in the subject links it. Where the role's mail is `pr:
+ *  'strict'` (admin), a price request counts only with its PR; every row carries pr, prHow ('subject' | 'picked'),
+ *  price (it reads as a price request) and needsPr. */
+function trMail(roleKey, ix, emails, marks, prs) {
   const cfg = TR_ROLES[roleKey].mail;
   if (!cfg) return [];
-  const m = marks || {};
+  const m = marks || {}, p = prs || {}, strict = cfg.pr === 'strict';
   const customers = _trOrgs(ix.clients.map(c => ({ name: c.customer, email: c.email })).concat(ix.ar.map(a => ({ name: a.customer }))).concat(ix.sos.map(x => ({ name: x.customer }))));
   const suppliers = _trOrgs(ix.suppliers.map(x => ({ name: x.supplier })).concat(ix.pos.map(p => ({ name: p.supplier }))));
   const pastDue = {};
@@ -321,9 +333,12 @@ function trMail(roleKey, ix, emails, marks) {
       else if (!cust && TR_PRICE_RE.test(subj) && !TR_ORDER_RE.test(subj) && !TR_OUR_QUOTE_RE.test(subj)) why = sup ? 'to supplier ' + sup.name + ', about price or stock' : 'asks about price or stock, not to a customer';
       ref = (subj.match(/PR-\d{6}-\d{3}/i) || [''])[0].toUpperCase();
     }
-    const id = _srS(e.messageId), mark = m[id], counted = mark === true ? true : mark === false ? false : !!why;
+    const id = _srS(e.messageId), mark = m[id], judged = mark === true ? true : mark === false ? false : !!why;
+    const subjPr = cfg.pr ? (subj.match(/PR-\d{6}-\d{3}/i) || [''])[0].toUpperCase() : '';
+    const chose = !!cfg.pr && !!id && Object.prototype.hasOwnProperty.call(p, id), pr = chose ? _srS(p[id]).toUpperCase() : subjPr;
     return { id, time: srClock(e.sentAt), sort: srMinutes(e.sentAt), to: _srS(e.name || e.recipient), recipient: _srS(e.recipient), subject: subj,
-             org: (cust || sup || {}).name || '', why, counted, marked: mark === true || mark === false, ref };
+             org: (cust || sup || {}).name || '', why, price: judged, counted: strict ? judged && !!pr : judged, needsPr: strict && judged && !pr,
+             marked: mark === true || mark === false, pr, subjPr, prHow: chose ? (pr ? 'picked' : '') : (pr ? 'subject' : ''), ref: cfg.pr ? pr : ref };
   }).sort((a, b) => a.sort - b.sort);
 }
 
@@ -333,10 +348,11 @@ function trMailTiles(roleKey, rows, state) {
   const cfg = TR_ROLES[roleKey].mail;
   if (!cfg) return [];
   const ok = state === 'ok', why = { loading: 'reading the mailbox…', setup: 'the mailbox is not connected', error: 'the mailbox could not be read', none: 'no login to read' }[state] || '';
-  const counted = (rows || []).filter(r => r.counted);
-  const item = (r) => ({ time: r.time, ref: r.ref, what: r.subject + ' — to ' + r.to + (r.org ? ' (' + r.org + ')' : ''), result: r.marked ? (r.counted ? 'counted by you' : 'not counted, by you') : r.why });
+  const counted = (rows || []).filter(r => r.counted), waiting = (rows || []).filter(r => r.needsPr);
+  const item = (r) => ({ time: r.time, ref: r.ref, what: r.subject + ' — to ' + r.to + (r.org ? ' (' + r.org + ')' : ''), result: r.marked ? (r.price ? 'counted by you' : 'not counted, by you') : r.why });
+  const target = !ok ? why : waiting.length ? waiting.length + ' more waiting for a PR' : cfg.pr === 'strict' ? 'from the sent mail, each with its PR' : 'from the sent mail';
   return [
-    { key: cfg.key, label: cfg.label, value: ok ? counted.length : null, text: ok ? String(counted.length) : '—', target: ok ? 'from the sent mail' : why, bar: null, status: ok ? 'none' : 'nr', items: ok ? counted.map(item) : [] },
+    { key: cfg.key, label: cfg.label, value: ok ? counted.length : null, text: ok ? String(counted.length) : '—', target, bar: null, status: !ok ? 'nr' : waiting.length ? 'watch' : 'none', items: ok ? counted.map(item) : [] },
     { key: 'mailSent', label: 'Emails sent', value: ok ? rows.length : null, text: ok ? String(rows.length) : '—', target: ok ? 'from the sent mail' : why, bar: null, status: ok ? 'none' : 'nr', items: ok ? rows.map(item) : [] }
   ];
 }
@@ -372,6 +388,18 @@ function trLinkOptions(roleKey, ix) {
   return out;
 }
 
+/** A365 — the PRs an email can be linked to: the ones still being sourced or priced, then every other PR of the last
+ *  90 days, newest first. { open: [{id, label}], recent: [{id, label}] } */
+function trPrChoices(ix) {
+  const open = trLinkOptions('admin', ix).pr, seen = {};
+  open.forEach(o => { seen[o.id] = 1; });
+  const from = srAddDays(ix.today, -90);
+  const recent = ix.prs.filter(p => _srS(p.prNo) && !seen[_srS(p.prNo)] && (_srDate(p.date) || '') >= from)
+    .sort((a, b) => _srS(b.prNo).localeCompare(_srS(a.prNo)))
+    .map(p => ({ id: _srS(p.prNo), label: _srS(p.prNo) + ' — ' + _srS(p.customer) + ', ' + _srS(p.status) }));
+  return { open, recent };
+}
+
 /** The home-page queue (flowComputeActions) as plain rows: urgent first. */
 function trQueue(items) {
   const rank = { urgent: 0, warn: 1, info: 2, ok: 3 };
@@ -394,7 +422,7 @@ function trWeek(roleKey, ix, person, day, saved, mailByDay) {
     const s = (saved || {})[d], weekend = srDow(d) === 'Sat' || srDow(d) === 'Sun';
     if (cfg.mail) {
       const em = (mailByDay || {})[d];
-      vals.push(Array.isArray(em) ? trMail(roleKey, ix, em, s && s.report && s.report.mailMarks).filter(r => r.counted).length : em === null ? null : 'loading');
+      vals.push(Array.isArray(em) ? trMail(roleKey, ix, em, s && s.report && s.report.mailMarks, s && s.report && s.report.mailPrs).filter(r => r.counted).length : em === null ? null : 'loading');
     }
     return { day: d, vals, report: s && s.submittedAt ? { state: 'done', time: srClock(s.submittedAt) } : weekend ? { state: 'none' } : { state: 'due' } };
   });
@@ -406,6 +434,6 @@ function trWeek(roleKey, ix, person, day, saved, mailByDay) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TR_ROLES, TR_LINE_FIELDS, trIndex, trRows, trTiles, trStuckPrs, trEnded, trBlank, trFill, trNewLine, trEditLine, trVoidLine, trMail, trMailTiles,
+  module.exports = { TR_ROLES, TR_LINE_FIELDS, trIndex, trRows, trTiles, trStuckPrs, trEnded, trBlank, trFill, trNewLine, trEditLine, trVoidLine, trMail, trMailTiles, trPrChoices,
                      trDayLines, trMineTiles, trLinked, trSnapshot, trFeed, trLinkOptions, trQueue, trWeek };
 }
