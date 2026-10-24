@@ -226,7 +226,7 @@ function _srNums() {
   const ix = SR_UI.ix, me = SR_UI.me, day = SR_UI.day, now = _srNowMin(), st = SR_UI.state;
   const dt = srDayType(ix, me, day, st);
   return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now), mine: srMineTiles(ix, me, day, st, now, dt),
-           fu: srFollowUps(ix, me, day, st), linked: srLinked(st, day) };
+           fu: srFollowUps(ix, me, day, st), other: srOtherFollowUps(ix, me, day, st), linked: srLinked(st, day) };
 }
 function _srLiveNumbers() { const n = SR_UI.nums || _srNums(); return srSnapshot(n.portal, n.mine, SR_UI.day, SR_UI.state); }
 
@@ -266,7 +266,8 @@ function _srRenderDay() {
       '<p class="sr-rowlab mine">From my log lines</p><div class="sr-tiles" id="srTilesB"></div></section>' +
 
     (ro ? '<section class="sr-block"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div></section>'
-        : '<section class="sr-block sr-two"><div class="sr-col"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div></div>' +
+        : '<section class="sr-block sr-two"><div class="sr-col"><h3>Follow-ups due today <span class="sr-count" id="srFuCount"></span></h3><div id="srFu"></div>' +
+          '<label class="sr-fupick">Follow up another quotation<select class="sr-in" id="srFuPick"></select></label></div>' +   // A367
       '<div class="sr-col"><h3>Log a call — one line, right after</h3>' + _srCallForm() + '</div></section>') +
 
     '<section class="sr-block"><div class="sr-bar"><h3>' + (ro ? _srE(me.first) + '\'s log today' : 'My log today') + '</h3>' + (ro ? '' : '<div class="sr-quick">' +
@@ -319,9 +320,11 @@ function _srRefresh() {
   _srId('srTilesB').innerHTML = n.mine.map(_srTileHtml).join('');
   document.querySelectorAll('#srBody .sr-bar-track > i[data-w]').forEach(i => { if (i.style && i.style.setProperty) i.style.setProperty('--sr-w', i.getAttribute('data-w')); });
   const fuDone = n.fu.filter(x => x.done).length;
-  _srId('srFuCount').textContent = fuDone + ' of ' + n.fu.length + ' done';
-  _srId('srFu').innerHTML = n.fu.length ? '<ul class="sr-fu">' + n.fu.map(_srFuHtml).join('') + '</ul>'
-    : '<p class="dh-empty">No follow-ups fall due today. A quotation is due on day 3, 7 and 14 after it was sent.</p>';
+  _srId('srFuCount').textContent = fuDone + ' of ' + n.fu.length + ' done' + (n.other.length ? ' · +' + n.other.length + ' more' : '');
+  _srId('srFu').innerHTML = (n.fu.length ? '<ul class="sr-fu">' + n.fu.map(_srFuHtml).join('') + '</ul>'
+    : '<p class="dh-empty">No follow-ups fall due today. A quotation is due on day 3, 7 and 14 after it was sent.</p>') +
+    (n.other.length ? '<p class="sr-fuh">Also followed up today</p><ul class="sr-fu">' + n.other.map(_srFuHtml).join('') + '</ul>' : '');   // A367
+  _srRefreshFuPick();
   _srRefreshLinkSelect();
   _srId('srLog').innerHTML = _srLogRows();
   /* What holds a form is redrawn only when its shape changes, and never under the person's cursor. */
@@ -345,9 +348,23 @@ function _srTileHtml(t) {
 
 function _srFuHtml(x) {
   return '<li class="' + (x.done ? 'done' : '') + '"><span class="who"><b>' + _srE(x.client) + '</b><span class="sr-sub">' + _srRef(x.ref) + ' · ' + _srE(srMoney(x.value)) + '</span></span>' +
-    '<span class="sr-daytag">Day ' + x.step + '</span>' +
+    (x.extra ? '<span class="sr-daytag other">' + (x.age === null ? 'Older' : 'Day ' + x.age) + '</span>'   // A367 — an older or not-yet-due quotation
+             : '<span class="sr-daytag">Day ' + x.step + '</span>') +
     (x.done ? '<span class="sr-called">' + (x.by.kind === 'Call' ? 'Called ✓' : 'Emailed ✓') + (x.by.result ? ' — ' + _srE(x.by.result) : '') + '</span>'
             : SR_UI.ro ? '<span class="sr-dim">Not yet</span>' : '<button type="button" class="btn-sm primary" data-logcall="' + _srE(x.ref) + '">Log call</button>') + '</li>';
+}
+
+/* A367 — any other open quotation can be followed up: picking one fills the call form, as "Log call" does. Redrawn only
+   when its list changes, and never while it is open under the person's cursor. */
+function _srRefreshFuPick() {
+  const sel = _srId('srFuPick');
+  if (!sel || document.activeElement === sel) return;
+  const list = srFollowUpChoices(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.state), key = list.map(x => x.ref).join('|');
+  if (sel.dataset.key === key) return;
+  sel.dataset.key = key;
+  sel.innerHTML = '<option value="">' + (list.length ? 'Choose one of your ' + list.length + ' other open quotations' : 'No other open quotations') + '</option>' +
+    list.map(x => '<option value="' + _srE(x.ref) + '">' + _srE(x.label) + '</option>').join('');
+  sel.disabled = !list.length;
 }
 
 /* the call form: one line, right after the call. A356 — the company and the person can be picked from the Client Book. */
@@ -532,11 +549,11 @@ function _srRenderWeek() {
     const lab = '<th scope="row"' + (r.day === SR_UI.day ? ' class="cur"' : '') + '>' + srDow(r.day) + ' ' + Number(r.day.slice(8)) + '</th>';
     if (r.future) return '<tr class="future">' + lab + '<td colspan="6">—</td></tr>';
     return '<tr>' + lab + td(mailCell(r), r.emailTone) + td(r.calls, r.callTone) +
-      td(r.fuDue ? r.fuDone + ' of ' + r.fuDue : '—', r.fuDue ? (r.fuDone === r.fuDue ? 'ok' : 'red') : '') + td(r.quotes) + td(r.booked) +
+      td((r.fuDue ? r.fuDone + ' of ' + r.fuDue : r.fuOther ? '' : '—') + (r.fuOther ? (r.fuDue ? ' ' : '') + '+' + r.fuOther : ''), r.fuDue ? (r.fuDone === r.fuDue ? 'ok' : 'red') : '') + td(r.quotes) + td(r.booked) +
       td(r.report.state === 'done' ? '✓ ' + _srE(r.report.time) : r.report.state === 'due' ? 'due' : '—', r.report.state === 'done' ? 'ok' : r.report.state === 'due' ? 'watch' : '') + '</tr>';
   }).join('') + '<tr class="total"><th scope="row">Week</th>' +
     td(w.totals.emails === null ? (noMail ? '—' : '…') : w.totals.emails + ' / ' + w.totals.emailsTarget) + td(w.totals.calls + ' / ' + w.totals.callsTarget) +
-    td(w.totals.fuDue ? w.totals.fuDone + ' of ' + w.totals.fuDue : '—') + td(w.totals.quotes + ' / ' + w.totals.quotesTarget) + td(w.totals.booked) +
+    td((w.totals.fuDue ? w.totals.fuDone + ' of ' + w.totals.fuDue : w.totals.fuOther ? '' : '—') + (w.totals.fuOther ? (w.totals.fuDue ? ' ' : '') + '+' + w.totals.fuOther : '')) + td(w.totals.quotes + ' / ' + w.totals.quotesTarget) + td(w.totals.booked) +
     td(w.totals.reports + ' of ' + w.totals.reportDays) + '</tr>';
   _srWeekMail(w.days.filter(d => d <= SR_UI.ix.today && SR_UI.weekEmails[d] === undefined));
 }
@@ -606,6 +623,7 @@ function _srWire() {
     const t = ev.target;
     if (t && t.id === 'srBlocker') _srOneLine(t);
     if (t && t.id === 'srCallLink' && t.form) delete t.form.dataset.autolink;   // A356 — a link chosen by hand stays
+    if (t && t.id === 'srFuPick' && t.value && !SR_UI.ro) { const no = t.value; t.value = ''; t.blur(); _srPrefillCall(no); }   // A367
   });
   body.addEventListener('input', ev => {           // the one-line answers live in the report as they are typed; saved on change
     const t = ev.target;
@@ -836,7 +854,8 @@ function _srRecordsOpen(key, back) {
       : it.grey ? '<span class="sr-tag">in the portal\'s log</span>' : '';
     return '<li><span class="tm">' + _srE(when) + '</span><span class="x">' + (it.ref ? _srRef(it.ref) + ' ' : '') + _srE([it.client, it.person].filter(Boolean).join(', ')) +
       (it.what ? '<span class="sr-sub">' + _srE(it.what) + '</span>' : '') + (it.result ? '<span class="sr-sub">' + _srE(it.result) + '</span>' : '') +
-      (it.step ? '<span class="sr-sub">Day ' + it.step + ' after ' + _srE(it.sent) + '</span>' : '') + '</span>' +
+      (it.step ? '<span class="sr-sub">Day ' + it.step + ' after ' + _srE(it.sent) + '</span>' : '') +
+      (it.extra ? '<span class="sr-sub">' + (it.age === null ? 'Another open quotation' : 'Day ' + it.age + ' after ' + _srE(it.sent) + ', not due today') + '</span>' : '') + '</span>' +
       '<span class="amt">' + (it.value ? _srE(srMoney(it.value)) : '') + '</span>' + (tail || '<span></span>') + '</li>';
   }).join('');
   _srDialog(t.label, srDayLong(SR_UI.day) + ' — ' + SR_UI.me.name,
