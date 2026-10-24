@@ -61,6 +61,11 @@ body.dh .sr-fu li { display:grid; grid-template-columns:minmax(0, 1fr) auto auto
 body.dh .sr-fu li.done .who b { color:var(--dh-ink-2); }
 body.dh .sr-daytag { padding:1px 8px; border-radius:var(--dh-r-pill); background:var(--dh-blue-soft); color:var(--dh-blue); font:700 11px/1.6 var(--dh-text); white-space:nowrap; }
 body.dh .sr-called { font:600 12px/1.35 var(--dh-text); color:var(--dh-green); }
+/* A367 — follow-ups on other open quotations (older ones included): a grey day tag, their own heading, and the picker */
+body.dh .sr-daytag.other { background:var(--dh-inset); color:var(--dh-ink-2); }
+body.dh .sr-fuh { margin:12px 0 2px; font:600 12px/1.4 var(--dh-text); color:var(--dh-ink-2); }
+body.dh .sr-fupick { display:flex; flex-direction:column; gap:5px; margin-top:12px; font:600 12px/1.3 var(--dh-text); color:var(--dh-ink-2); }
+body.dh .sr-fupick .sr-in { width:100%; font-weight:400; }
 body.dh .sr-sub { display:block; margin-top:1px; font:400 12px/1.45 var(--dh-text); color:var(--dh-ink-3); }
 body.dh .sr-sub a, body.dh .sr-items a, body.dh .sr-feed a, body.dh .sr-link a { color:var(--dh-navy-text); font-weight:600; }
 body.dh .sr-form { display:flex; flex-direction:column; gap:9px; }

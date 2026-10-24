@@ -242,6 +242,42 @@ function srFollowUps(ix, me, day, report) {
   return out.sort((a, b) => (a.done - b.done) || b.value - a.value);
 }
 
+/* A367 — Neil, 24 Oct 2026: "allow to select even older quotations". A follow-up on any other open quotation (one
+   past day 14, or simply not due today) is picked from the follow-ups list and counts on top of the ones due. */
+/** Whole days from `a` to `b` (YYYY-MM-DD). */
+function srDaysBetween(a, b) { return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5); }
+/** The person's open quotations that are NOT due a follow-up on `day`: the ones that can still be followed up. */
+function _srNotDue(ix, me, day) {
+  const due = {};
+  srFollowUps(ix, me, day, null).forEach(x => { due[x.ref] = true; });
+  return srOpenQuotes(ix, me, day).filter(q => !due[_srS(q.quotationNo)]);
+}
+/** Follow-ups done on `day` on those other open quotations: a Call line linked to one, or a follow-up email linked to it. */
+function srOtherFollowUps(ix, me, day, report) {
+  const lines = _srLive(report).filter(_srOn(day));
+  const out = [];
+  _srNotDue(ix, me, day).forEach(q => {
+    const no = _srS(q.quotationNo), sent = _srDate(q.sentAt);
+    const call = lines.find(l => l.type === 'Call' && l.linkType === 'quotation' && l.linkId === no);
+    const mail = call ? null : (ix.links[no] || []).find(l => _srS(l.status || 'Active') === 'Active' && _srS(l.kind) !== 'Initial' && _srDate(l.sentAt) === day);
+    if (!call && !mail) return;
+    out.push({ ref: no, client: _srS(q.customer), value: _srNet(q), sent, age: sent ? srDaysBetween(sent, day) : null, extra: true, done: true,
+               by: call ? { kind: 'Call', result: call.result, time: srClock(call.loggedAt), id: call.id } : { kind: 'Email', result: _srS(mail.subject), time: srClock(mail.sentAt) } });
+  });
+  return out.sort((a, b) => b.value - a.value);
+}
+/** What can be picked to follow up on `day`: the other open quotations not yet followed up that day, oldest sent
+ *  first (no sent date last). */
+function srFollowUpChoices(ix, me, day, report) {
+  const done = {};
+  srOtherFollowUps(ix, me, day, report).forEach(x => { done[x.ref] = true; });
+  return _srNotDue(ix, me, day).filter(q => !done[_srS(q.quotationNo)]).map(q => {
+    const sent = _srDate(q.sentAt), age = sent ? srDaysBetween(sent, day) : null;
+    return { ref: _srS(q.quotationNo), client: _srS(q.customer), value: _srNet(q), sent, age,
+             label: _srS(q.quotationNo) + ' — ' + _srS(q.customer) + ', ' + srMoney(_srNet(q)) + (age === null ? '' : age === 0 ? ' · sent today' : ' · sent ' + age + (age === 1 ? ' day' : ' days') + ' ago') };
+  }).sort((a, b) => (a.sent ? 0 : 1) - (b.sent ? 0 : 1) || _srS(a.sent).localeCompare(_srS(b.sent)) || a.ref.localeCompare(b.ref));
+}
+
 /* ── the portal's own records ──────────────────────────────────────────────────────────────── */
 
 function _srPrsOn(ix, me, day, by) {
@@ -354,7 +390,7 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
   const c = ix.cfg, lines = _srLive(report).filter(_srOn(day));
   const calls = lines.filter(l => l.type === 'Call'), oldCalls = srCallLog(ix, me, day);
   const nCalls = calls.length + oldCalls.length;
-  const fu = srFollowUps(ix, me, day, report), done = fu.filter(x => x.done).length;
+  const fu = srFollowUps(ix, me, day, report), done = fu.filter(x => x.done).length, other = srOtherFollowUps(ix, me, day, report);
   const ended = day < ix.today || (day === ix.today && (nowMin == null ? SR_DAY_END : nowMin) >= SR_REPORT_END);
   const booked = calls.filter(l => l.result === 'Booked').length + ((report && report.bookings) || []).length;
   const visits = lines.filter(l => l.type === 'Visit'), oldVisits = srVisitLog(ix, me, day), nVisits = visits.length + oldVisits.length;
@@ -368,9 +404,10 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
       note: oldCalls.length ? oldCalls.length + ' of them are in the portal\'s call log (logged on the old page).' : ''
     }),
     _srTile('followUps', 'Follow-ups done', {
-      value: done, text: done + ' of ' + fu.length, bar: fu.length ? done / fu.length : null, target: 'all due today, the same day',
-      status: !fu.length || done === fu.length ? 'ok' : ended ? 'red' : 'watch', items: fu,
-      note: 'Quotations due on day 3, 7 or 14 after they were sent (a weekend moves to Monday). Done by a call linked to the quotation, or a follow-up email linked to it, that day.'
+      value: done + other.length, text: done + ' of ' + fu.length + (other.length ? ' +' + other.length : ''), bar: fu.length ? done / fu.length : null,
+      target: 'all due today, the same day' + (other.length ? '; +' + other.length + ' on other quotations' : ''),
+      status: !fu.length || done === fu.length ? 'ok' : ended ? 'red' : 'watch', items: fu.concat(other),
+      note: 'Quotations due on day 3, 7 or 14 after they were sent (a weekend moves to Monday). Done by a call linked to the quotation, or a follow-up email linked to it, that day. A follow-up on any other open quotation, older ones included, counts on top (+).'
     }),
     _srTile('booked', 'Presentations booked', {
       value: booked, text: String(booked), target: 'target set after the 20 Nov pilot', status: 'none',
@@ -499,11 +536,11 @@ function srWeek(ix, me, day, reports, emailsByDay) {
     const saved = (reports || {})[d] || null, rep = saved ? srFill(saved.report) : srBlank();
     const calls = _srLive(rep).filter(_srOn(d)).filter(l => l.type === 'Call');
     const nCalls = calls.length + srCallLog(ix, me, d).length;
-    const fu = srFollowUps(ix, me, d, rep);
+    const fu = srFollowUps(ix, me, d, rep), fuOther = srOtherFollowUps(ix, me, d, rep).length;
     const em = emailsByDay && Array.isArray(emailsByDay[d]) ? emailsByDay[d].length : null;
     const weekend = srDow(d) === 'Sat' || srDow(d) === 'Sun';
     return {
-      day: d, emails: em, calls: nCalls, fuDone: fu.filter(x => x.done).length, fuDue: fu.length,
+      day: d, emails: em, calls: nCalls, fuDone: fu.filter(x => x.done).length, fuDue: fu.length, fuOther,
       quotes: srQuotesSent(ix, me, d).length, booked: calls.filter(l => l.result === 'Booked').length + rep.bookings.length,
       report: saved && saved.submittedAt ? { state: 'done', time: srClock(saved.submittedAt) } : weekend ? { state: 'none' } : { state: 'due' },
       emailTone: em === null || weekend ? '' : em < c.srEmailsDayRed ? 'watch' : em >= c.srEmailsDay ? 'ok' : '',
@@ -514,7 +551,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
   const workDays = rows.filter(r => !r.future && srDow(r.day) !== 'Sat' && srDow(r.day) !== 'Sun');
   return { days, rows, totals: {
     emails: past.some(r => r.emails !== null) ? sum('emails') : null, emailsTarget: c.srEmailsWeek,
-    calls: sum('calls'), callsTarget: c.srCallsWeek, fuDone: sum('fuDone'), fuDue: sum('fuDue'),
+    calls: sum('calls'), callsTarget: c.srCallsWeek, fuDone: sum('fuDone'), fuDue: sum('fuDue'), fuOther: sum('fuOther'),
     quotes: sum('quotes'), quotesTarget: c.srQuotesWeek, booked: sum('booked'),
     reports: workDays.filter(r => r.report.state === 'done').length, reportDays: workDays.length
   } };
@@ -522,7 +559,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
-                     srPlanned, srDayType, srOpenQuotes, srFollowUps, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
+                     srPlanned, srDayType, srOpenQuotes, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };
 }

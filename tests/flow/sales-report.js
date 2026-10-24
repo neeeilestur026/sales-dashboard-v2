@@ -114,6 +114,37 @@ ok('a follow-up email linked to Q-D14 that day also counts', by('Q-D14').done &&
 ok('Q-D3 is still to do', !by('Q-D3').done);
 ok('a call with no link to the quotation does not count', run('(function(){ var r = srBlank(); r.lines.push(srNewLine({ type: "Call", company: "Mine D", result: "Reached" }, "G", "2026-10-20T05:00:00.000Z")); return !srFollowUps(IX, ME, "2026-10-20", r).find(x => x.ref === "Q-D3").done; })()'));
 
+sec('3b · A367: follow-ups on older quotations');
+const ch = JSON.parse(run('JSON.stringify(srFollowUpChoices(IX, ME, "2026-10-20"))'));
+eq('the picker offers his other open quotations, oldest sent first', ch.map(x => [x.ref, x.age]), [['Q-SAT', 10], ['Q-NOT', 6], ['Q-SUN', 5], ['Q-NEW', 0]]);
+ok('  never the ones due today, won, lost, another rep\'s or demo', !ch.some(x => /Q-D3|Q-D7|Q-D14|Q-WON|Q-LOST|Q-KIM|DEMO/.test(x.ref)));
+eq('  each with its client, value and age', [ch[0].label, ch[3].label], ['Q-SAT — Nickel F, ' + run('srMoney(60000)') + ' · sent 10 days ago', 'Q-NEW — Fresh Co, ' + run('srMoney(250000)') + ' · sent today']);
+run('var REP2 = JSON.parse(JSON.stringify(REP)); REP2.lines.push(srNewLine({ type: "Call", company: "Nickel F", result: "Reached", linkType: "quotation", linkId: "Q-SAT", linkLabel: "Q-SAT" }, "Gerald Lucena", "2026-10-20T06:00:00.000Z"));' +
+    'REP2.lines.push(srNewLine({ type: "Call", company: "Cement E", result: "Reached", linkType: "quotation", linkId: "Q-SUN", linkLabel: "Q-SUN" }, "Gerald Lucena", "2026-10-19T06:00:00.000Z"));');
+const other = JSON.parse(run('JSON.stringify(srOtherFollowUps(IX, ME, "2026-10-20", REP2))'));
+eq('a call linked to an older quotation that day is a follow-up on top: Q-SAT, day 10, called', other.map(x => [x.ref, x.age, x.by.kind, x.done, x.extra]), [['Q-SAT', 10, 'Call', true, true]]);
+ok('  one logged on another day is not (Q-SUN, called on the 19th)', !other.some(x => x.ref === 'Q-SUN'));
+ok('  it leaves the picker once followed up that day', !JSON.parse(run('JSON.stringify(srFollowUpChoices(IX, ME, "2026-10-20", REP2))')).some(x => x.ref === 'Q-SAT') &&
+   JSON.parse(run('JSON.stringify(srFollowUpChoices(IX, ME, "2026-10-20", REP2))')).some(x => x.ref === 'Q-SUN'));
+ok('  and the day\'s due list is unchanged', run('srFollowUps(IX, ME, "2026-10-20", REP2).map(function (x) { return x.ref; }).sort().join()') === 'Q-D14,Q-D3,Q-D7');
+{
+  const ft = JSON.parse(run('JSON.stringify(srMineTiles(IX, ME, "2026-10-20", REP2, 17*60).find(function (t) { return t.key === "followUps"; }))'));
+  eq('the tile: done of due, plus the ones on top; its colour still from the ones due', [ft.text, ft.status, ft.value, ft.items.length], ['2 of 3 +1', 'red', 3, 4]);
+  ok('  and its target line says so', /\+1 on other quotations/.test(ft.target));
+  const wk = JSON.parse(run('JSON.stringify(srWeek(IX, ME, "2026-10-20", { "2026-10-20": { report: REP2 } }, {}).rows.find(function (r) { return r.day === "2026-10-20"; }))'));
+  eq('  the week row counts them too', [wk.fuDone, wk.fuDue, wk.fuOther], [2, 3, 1]);
+}
+{
+  const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+  const li = run('_srFuHtml(' + JSON.stringify(other[0]) + ')');
+  ok('on the page: an older follow-up shows its own grey day tag and "Called"', /sr-daytag other">Day 10</.test(li) && /Called ✓ — Reached/.test(li), li);
+  ok('  the picker sits under the due list, on the person\'s own report only, and fills the call form as Log call does',
+     /<label class="sr-fupick">Follow up another quotation<select class="sr-in" id="srFuPick"><\/select><\/label>/.test(SRC) &&
+     /t\.id === 'srFuPick' && t\.value && !SR_UI\.ro\) \{ const no = t\.value; t\.value = ''; t\.blur\(\); _srPrefillCall\(no\); \}/.test(SRC) &&
+     !/\(ro \? '<section class="sr-block"><h3>Follow-ups due today[^\n]*srFuPick/.test(SRC));
+  ok('  "Also followed up today" lists them, and the count says how many more', /Also followed up today/.test(SRC) && /' · \+' \+ n\.other\.length \+ ' more'/.test(SRC));
+}
+
 sec('4 · the tiles');
 C.__emails45 = Array.from({ length: 45 }, (_, i) => ({ subject: 'Mail ' + i, sentAt: '2026-10-20T0' + (i % 9) + ':00:00+08:00', messageId: 'm' + i }));
 C.__emails38 = C.__emails45.slice(0, 38);
