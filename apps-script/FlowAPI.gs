@@ -16178,11 +16178,13 @@ function _vpCopy(row) { var o = {}; SCHEMA.VisitPlans.forEach(function (h) { o[h
 function _vpLog(no, kind, from, to, note, by) {
   _append('VisitPlanLog', [_nextNumber('VisitPlanLog', 1, 'VPL'), no, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), by, _now()]);
 }
-function _vpOut(r) {
+/* A369 — Neil, 25 Oct 2026: "make sure that the sales has no trace of the estimated travel allowance". A rep's reads
+   and saves never carry the two estimate fields; only the director, accounting and management get them. */
+function _vpOut(r, forSales) {
   var people = [];
   try { people = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { people = []; }
   var est = r['Travel Estimate (PHP)'];
-  return { visitPlanNo: String(r['Visit Plan No']), date: _dateStr(r['Date']), time: _vpTime(r['Time']), user: String(r['User'] || ''),
+  var out = { visitPlanNo: String(r['Visit Plan No']), date: _dateStr(r['Date']), time: _vpTime(r['Time']), user: String(r['User'] || ''),
            clientNo: String(r['Client No'] || ''), company: String(r['Company'] || ''), location: String(r['Location'] || ''),
            address: String(r['Address'] || ''), contacts: Array.isArray(people) ? people : [], someoneElse: String(r['Someone Else'] || ''),
            purpose: String(r['Purpose'] || ''), status: String(r['Status'] || ''), createdBy: String(r['Created By'] || ''),
@@ -16190,8 +16192,12 @@ function _vpOut(r) {
            submittedAt: _webIso(r['Submitted At']), decision: String(r['Decision'] || ''), decidedBy: String(r['Decided By'] || ''),
            decidedAt: _webIso(r['Decided At']), decisionNote: String(r['Decision Note'] || ''), cancelledBy: String(r['Cancelled By'] || ''),
            cancelledAt: _webIso(r['Cancelled At']), cancelReason: String(r['Cancel Reason'] || ''), doneAt: _webIso(r['Done At']),
-           result: String(r['Result'] || ''),
-           travelEstimate: est === '' || est === null || est === undefined ? null : _num(est), travelEstimateBasis: String(r['Travel Estimate Basis'] || '') };
+           result: String(r['Result'] || '') };
+  if (!forSales) {
+    out.travelEstimate = est === '' || est === null || est === undefined ? null : _num(est);
+    out.travelEstimateBasis = String(r['Travel Estimate Basis'] || '');
+  }
+  return out;
 }
 /** What accounting sees: the approved visits, the done ones, and the ones cancelled after they were approved. */
 function _vpForAccounting(r) {
@@ -16221,7 +16227,7 @@ function getVisitPlans(p) {
     var d = _dateStr(r['Date']);
     return (!from || d >= from) && (!to || d <= to);
   });
-  var data = rows.map(_vpOut).sort(function (a, b) { return a.date === b.date ? (a.time < b.time ? -1 : a.time > b.time ? 1 : 0) : (a.date < b.date ? 1 : -1); });
+  var data = rows.map(function (r) { return _vpOut(r, role === 'sales'); }).sort(function (a, b) { return a.date === b.date ? (a.time < b.time ? -1 : a.time > b.time ? 1 : 0) : (a.date < b.date ? 1 : -1); });
   var mine = {}; data.forEach(function (v) { mine[v.visitPlanNo] = 1; });
   var log = role === 'accounting' || !_vpHas('VisitPlanLog') ? [] : _rows('VisitPlanLog').filter(function (r) { return mine[String(r['Visit Plan No'])]; }).map(function (r) {
     return { logNo: String(r['Log No']), visitPlanNo: String(r['Visit Plan No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
@@ -16294,7 +16300,7 @@ function saveVisitPlan(p) {
   if (!row) _vpLog(no, 'created', '', status, '', who);
   else _vpLog(no, reopen ? 'reopened' : 'edited', was, status, reopen ? 'Changed after it was ' + (was === 'Approved' ? 'approved' : 'sent') + '; back with the director.' : '', who);
   if (row && send && !reopen) _vpLog(no, 'sent', was, status, '', who);
-  return { success: true, visitPlanNo: no, refNo: no, status: status, plan: _vpOut(obj),
+  return { success: true, visitPlanNo: no, refNo: no, status: status, plan: _vpOut(obj, true),
            message: status === 'Pending Director' ? 'Sent to the director.' : 'Saved as a draft.' };
 }
 
@@ -19866,7 +19872,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
-A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written. submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
+A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written, and a rep's reads and saves never carry them (Neil: "make sure that the sales has no trace of the estimated travel allowance"). submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
 A366 MANAGEMENT READS EVERY PERSON'S NEW DAILY REPORT (185; A327 takes 186 or later). Neil, 23 Oct 2026: a page on the management dashboard that opens any person's new daily report in the same format as their own, read only. proofReportRoles defaults to director, management, sales, accounting, leadgen, admin (FlowSettings can still narrow it — a sheet that names roles must add management). getProofReports: the director and management read every report of any kind, may narrow by user, and may ask kind 'all' (every kind in one read, each row carrying its kind). Writes are unchanged: management has no report of its own, so saveProofReport and submitProofReport still refuse it. No new actions, no new columns.
 A363 EACH PERSON'S OWN NEW DAILY REPORT (184; A327 takes 185 or later). Neil, 22 Oct 2026: "put the daily report on each of the dashboard user, but put it as a new daily report" (the old DailyReports flow is not touched, and there is no summary for management). proofReportRoles now defaults to director, sales, accounting, leadgen, admin (FlowSettings can still narrow it). The director reads every report and may still save any kind under his own name; everyone else saves, submits and reads only their own report (the name Flask stamps), of the one kind their role has (sales -> sales, accounting -> accounting, leadgen -> leadgen, admin -> admin); another kind is refused, and a role with no report of its own gets none. getProofReports ignores `user` for them. No new actions, no new columns.
 A360 OLD PURCHASE REQUESTS AND QUOTATIONS CAN BE CONNECTED TO A CLIENT (183; A327 takes 184 or later). Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" New tab ClientBookLinks (Kind, Record No, Client No, By, At): one row per PR or quotation, the latest decision — a Client No, or blank once taken off a client (then it is no client's, not even by its company name). A row beats the PR's own Client Book No (A358), and a quotation's own row beats its PR's. Two secured actions: linkClientBookRecords({clientNo, records}) connects up to 100 at once, all checked before any write (a rep: their own records — the PR's Salesperson or Requested By, the quotation's owner or creator — to their own live clients; a record with another rep's client is refused; the director anything) and unlinkClientBookRecord({kind, no}) takes one off (the rep must own its client). Each writes ClientBookLog rows ('linked' / 'unlinked', Ref = the record) on every client it touches. getClientBook returns links (a rep: those on their clients, plus the blank ones). PR and quotation rows are never written.

@@ -71,7 +71,7 @@ sec('2 · a rep plans a visit');
   const people = JSON.parse(row['Contacts JSON']);
   ok('  the people kept as name and position only — no emails, no phones', people.length === 2 && people[0].name === 'R. Cruz' && people[1].position === 'Buyer' &&
      !/@|0917/.test(row['Contacts JSON']), people);
-  ok('  the two estimate columns are blank', row['Travel Estimate (PHP)'] === '' && row['Travel Estimate Basis'] === '' && r.plan.travelEstimate === null);
+  ok('  the two estimate columns are blank, and the rep\'s reply carries neither', row['Travel Estimate (PHP)'] === '' && row['Travel Estimate Basis'] === '' && !('travelEstimate' in r.plan) && !('travelEstimateBasis' in r.plan));
   ok('  one log row, 8 wide: created', store.VisitPlanLog.length === 1 && store.VisitPlanLog[0]['Kind'] === 'created' && store.VisitPlanLog[0].__arity === 8 &&
      /^VPL-/.test(store.VisitPlanLog[0]['Log No']));
   ok('  nothing goes to the ActivityLog, and the Client Book is not written', !(store.ActivityLog || []).length && store.ClientBook.every(x => x.__arity === 27));
@@ -247,6 +247,23 @@ sec('9 · the travel week: approved visits stand for the itinerary');
   ok('only the rep\'s own approved visit in that week counts (not a pending one, not another rep\'s)', found.join() === a, found);
   ok('  any case of the name', c._travVisitsFor('gerald lucena', wk).length === 1);
   ok('  and none in another week', c._travVisitsFor('Gerald Lucena', c._vpAddDays(wk, 14)).length === 0 && c._travVisitsFor('Gerald Lucena', '').length === 0);
+}
+
+sec('10 · a rep never receives the estimated travel allowance');
+{
+  /* Neil, 25 Oct 2026: "make sure that the sales has no trace of the estimated travel allowance". Even once the two
+     columns hold a figure, a rep's reads and saves leave both out; the director, accounting and management get them. */
+  const { c, store, ids, day } = setup();
+  const v = call(c, 'saveVisitPlan', Object.assign({ clientNo: ids.both, date: day(1), location: 'Plant', contactIds: '["P1"]', send: true }, GERALD)).visitPlanNo;
+  call(c, 'decideVisitPlans', Object.assign({ visitPlanNos: JSON.stringify([v]), decision: 'approve' }, NEIL));
+  store.VisitPlans[0]['Travel Estimate (PHP)'] = 850; store.VisitPlans[0]['Travel Estimate Basis'] = 'a test figure';
+  const rep = call(c, 'getVisitPlans', GERALD);
+  ok('the rep\'s read: the visit, without either field, and no word of them anywhere in the reply', rep.success && rep.data.length === 1 && !('travelEstimate' in rep.data[0]) && !('travelEstimateBasis' in rep.data[0]) &&
+     !/estimat|a test figure/i.test(JSON.stringify(rep)), rep.data[0]);
+  const saved = call(c, 'saveVisitPlan', Object.assign({ visitPlanNo: v, clientNo: ids.both, date: day(2), location: 'Plant', contactIds: '["P1"]' }, GERALD));
+  ok('  nor the reply to a save', saved.success && !/estimat|a test figure/i.test(JSON.stringify(saved)), saved);
+  call(c, 'decideVisitPlans', Object.assign({ visitPlanNos: JSON.stringify([v]), decision: 'approve' }, NEIL));
+  ok('the director, accounting and management do get them', [NEIL, ACCT, MGMT].every(who => { const d = call(c, 'getVisitPlans', who).data[0]; return d.travelEstimate === 850 && d.travelEstimateBasis === 'a test figure'; }));
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);

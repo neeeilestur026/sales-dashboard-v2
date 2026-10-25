@@ -1,7 +1,7 @@
 /* client-visits.css — A369 · client visits, the new itinerary (client-visits.html). Tokens only; every rule hangs off body.dh.
    A list of days, each with its visits as rows (time, company, status; where and who under it), the way Calendar's list
    reads; a visit opens in a sheet. The director's waiting visits are grouped by rep with a box to choose each, and a bar
-   that follows the scroll to approve or send back the chosen. Accounting's travel week is a plain table. Translucent
+   that follows the scroll to approve or send back the chosen. The week view is a plain table. Translucent
    chrome over scrolling content, a short settle when the sheet opens, none of it under reduced motion; solid under
    reduced transparency; a firmer edge under more contrast. */
 body.dh .cv-col { max-width:1100px; margin:0 auto; }
@@ -81,7 +81,7 @@ body.dh .cv-bulk { position:sticky; bottom:16px; z-index:5; display:flex; flex-w
 body.dh .cv-bulk[hidden] { display:none; }
 body.dh .cv-bn { flex:1; font:600 13px/1.3 var(--dh-text); color:var(--dh-ink); font-variant-numeric:tabular-nums; }
 
-/* accounting's travel week */
+/* the week view (js/client-visits-week.js) */
 body.dh .cv-tablewrap { overflow-x:auto; border:1px solid var(--dh-hair); border-radius:var(--dh-r-md); background:var(--dh-glass-solid); }
 body.dh .cv-table { width:100%; border-collapse:collapse; font:400 13px/1.45 var(--dh-text); color:var(--dh-ink); }
 body.dh .cv-table th, body.dh .cv-table td { padding:10px 14px; text-align:left; vertical-align:top; border-bottom:1px solid var(--dh-hair-2); }

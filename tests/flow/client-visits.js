@@ -23,7 +23,9 @@ const ok = (l, c, e) => { N++; if (c) console.log('  ok   ' + l); else { FAIL++;
 const eq = (l, got, want) => ok(l + ' = ' + JSON.stringify(want), JSON.stringify(got) === JSON.stringify(want), { got, want });
 const sec = (t) => console.log('\n== ' + t + ' ==');
 
-const M = require(D + 'js/client-visits-model.js');
+/* The model and the week view in one context, as the director's, accounting's and management's pages load them. */
+const M = vm.createContext({ console, Math, JSON, Date });
+['js/client-visits-model.js', 'js/client-visits-week.js'].forEach(f => vm.runInContext(fs.readFileSync(D + f, 'utf8'), M, { filename: f }));
 const TODAY = '2026-10-27';
 const G = 'Gerald Lucena', K = 'Kim Reyes';
 const V = (no, o) => Object.assign({ visitPlanNo: no, date: '2026-10-28', time: '09:30', user: G, clientNo: 'CB-1', company: 'Philcement Corporation', location: 'Plant',
@@ -109,7 +111,8 @@ eq('  a send-back keeps its note', M.cvLogLines(LOG, 'VP-4').map(l => l.text), [
 async function boot(role, o) {
   o = o || {};
   const name = { sales: G, director: 'Neil Estur', accounting: 'Ana Acct', management: 'Mia Mgmt' }[role] || 'X';
-  const p = page(['js/client-visits-model.js', 'js/client-visits.js'], 'client-visits.html', { username: role, name, role });
+  const p = page(role === 'sales' ? ['js/client-visits-model.js', 'js/client-visits.js'] : ['js/client-visits-model.js', 'js/client-visits-week.js', 'js/client-visits.js'], 'client-visits.html', { username: role, name, role });
+  p.run('var __made = [], __ce = document.createElement; document.createElement = function (t) { __made.push(t); return __ce(t); };');
   p.ctx.__plans = o.plans || PLANS; p.ctx.__book = o.book || BOOK; p.ctx.__v = o.v || 186; p.ctx.__fail = o.fail || {};
   p.run(`requireClientVisitsAccess = function () { return __session; };
     flowToday = function () { return "${TODAY}"; };
@@ -300,13 +303,40 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
     ok('tokens only: no hex, no rgb() literal', !/#[0-9a-fA-F]{3,6}\b/.test(CSS) && !/rgba?\(/.test(CSS));
     ok('reduced motion, reduced transparency, more contrast and print are handled', /prefers-reduced-motion: reduce/.test(CSS) && /prefers-reduced-transparency: reduce/.test(CSS) && /prefers-contrast: more/.test(CSS) && /@media print/.test(CSS) && /data-motion="off"/.test(CSS));
     const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u;
-    ['client-visits.html', 'js/client-visits.js', 'js/client-visits-model.js', 'css/client-visits.css'].forEach(f => {
+    ['client-visits.html', 'js/client-visits.js', 'js/client-visits-model.js', 'js/client-visits-week.js', 'css/client-visits.css'].forEach(f => {
       const t = fs.readFileSync(D + f, 'utf8');
       ok(f + ': no emoji, no hex colour, no inline style', !EMOJI.test(t) && !/#[0-9a-fA-F]{6}\b/.test(t) && !/style="/.test(t) && !/\.style\./.test(t));
     });
     const H = fs.readFileSync(D + 'client-visits.html', 'utf8');
     ok('the page: body.dh, theme.js first, ledger.css then apple.css last, ledger-nav.js right after auth.js', /<body class="dh cv">\s*<script src="js\/theme\.js"><\/script>/.test(H) &&
        /css\/ledger\.css">\s*<link rel="stylesheet" href="css\/apple\.css">\s*<\/head>/.test(H) && /js\/auth\.js"><\/script>\s*<script src="js\/ledger-nav\.js">/.test(H));
+  }
+
+  sec('7 · a sales rep has no trace of the estimated travel allowance');
+  {
+    /* Neil, 25 Oct 2026: "make sure that the sales has no trace of the estimated travel allowance". The week view and every
+       word of the estimate live in js/client-visits-week.js, which the page loads for the director, accounting and
+       management only; the server leaves the estimate fields out of a rep's reads (visit-plans-store.js, section 10). */
+    const TRACE = /estimat|to be set|travel allowance|travel week/i;
+    ['client-visits.html', 'js/client-visits.js', 'js/client-visits-model.js', 'css/client-visits.css', 'js/sales-report.js', 'js/sales-report-model.js'].forEach(f => {
+      const t = fs.readFileSync(D + f, 'utf8');
+      ok(f + ' (loaded by a rep) says nothing of it', !TRACE.test(t), (t.match(new RegExp('.{0,60}(' + TRACE.source + ').{0,60}', 'i')) || [])[0]);
+    });
+    ok('  the page does not list the week view among its scripts', !/client-visits-week/.test(fs.readFileSync(D + 'client-visits.html', 'utf8')));
+    ok('  and the week view is where it all lives', /To be set/.test(fs.readFileSync(D + 'js/client-visits-week.js', 'utf8')) && /Estimated travel allowance/.test(fs.readFileSync(D + 'js/client-visits-week.js', 'utf8')));
+    /* a rep's page, even if a server sent the fields anyway */
+    const leaky = PLANS.map(v => Object.assign({}, v, { travelEstimate: 850, travelEstimateBasis: 'a test figure' }));
+    const s = await boot('sales', { plans: leaky });
+    ok('a rep\'s page never loads the week view', s.run('__made.indexOf("script")') < 0 && s.run('typeof cvWeekHtml') === 'undefined' && s.run('typeof cvTravelEstimate') === 'undefined' && s.run('typeof CV_WEEK') === 'undefined');
+    const shown = [];
+    ['needs', 'upcoming', 'past'].forEach(seg => { s.run('CV.seg = "' + seg + '"; cvRender();'); shown.push(s.els.cvSeg.innerHTML, s.els.cvTools.innerHTML, s.els.cvBody.innerHTML, s.els.cvLede.textContent, s.els.cvNotice.innerHTML, s.els.cvActions.innerHTML); });
+    s.run('CV.plans.map(function (v) { return v.visitPlanNo; })').forEach(no => { s.run('cvDetail("' + no + '")'); shown.push(s.els.cvDlg.innerHTML); });
+    s.run('cvPlanDlg(null)'); shown.push(s.els.cvDlg.innerHTML);
+    s.run('CV.seg = "week"; cvRender();'); shown.push(s.els.cvSeg.innerHTML, s.els.cvTools.innerHTML);
+    ok('  and nothing it shows says a word of it: the lists, every visit, the plan form, a forced week view', shown.length > 15 && !shown.some(h => TRACE.test(h) || /850|a test figure/.test(h)), shown.filter(h => TRACE.test(h)).map(h => h.slice(0, 120)));
+    ok('  no Travel week segment for a rep', !/data-seg="week"/.test(s.els.cvSeg.innerHTML));
+    const a = await boot('accounting');
+    ok('accounting\'s page does have it (the week view was already there)', a.run('typeof cvWeekHtml') === 'function' && /Estimated travel allowance/.test(a.els.cvBody.innerHTML) && /estimated travel allowance/.test(a.els.cvLede.textContent));
   }
 
   console.log(FAIL ? `\n${FAIL} of ${N} FAILED\n` : `\nall ${N} passed\n`);

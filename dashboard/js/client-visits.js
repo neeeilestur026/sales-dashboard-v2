@@ -1,14 +1,13 @@
 /* client-visits.js — A369 · client visits, the new itinerary (client-visits.html).
  *
  * Neil, 25 Oct 2026: "create a new client visit page for each sales, they can select their clients and who to visit in
- * their client book"; the director approves first; "in the accounting, the new client visit will be shown so that it
- * will show the estimated travel allowance in the day of the client visit" — how it is worked out set aside for now.
- * One page, a view per role:
+ * their client book"; the director approves first. One page, a view per role:
  *   sales       their own visits — Needs you · Coming up · Past — and Plan a visit (a client from their Client Book, the
  *               day, where: plant / head office / other, who: the client's people or someone else, the purpose)
- *   director    Waiting (grouped by rep, then day; approve or send back one or many) · Approved · All · Travel week
- *   accounting  the travel week: day · rep · the approved visits · the estimated travel allowance ("To be set")
- *   management  the travel week and every visit, read only
+ *   director    Waiting (grouped by rep, then day; approve or send back one or many) · Approved · All · the week
+ *   accounting  the week of approved visits
+ *   management  the week and every visit, read only
+ * The week view is js/client-visits-week.js, loaded only for the director, accounting and management (never a rep).
  * The server (FlowAPI 186) checks every action again; this page only offers what it would allow. The weekly itinerary
  * keeps working beside it. The model is js/client-visits-model.js. */
 const CV = { me: null, role: '', today: '', plans: [], log: [], book: null, ok: true, seg: '', rep: '', week: '', sel: {}, busy: false, seq: 0, flash: null, send: '1' };
@@ -26,12 +25,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   CV.today = flowToday();
   CV.week = cvMonday(CV.today);
   CV.seg = { sales: 'upcoming', director: 'waiting', accounting: 'week', management: 'week' }[CV.role] || 'all';
-  _cvId('cvLede').textContent = {
+  if (CV.role !== 'sales') await cvLoadWeek();
+  _cvId('cvLede').textContent = Object.assign({
     sales: 'Plan visits to your Client Book clients. Each goes to the director to approve.',
-    director: 'Visits the reps plan to their clients. Approve them, or send them back with a note.',
-    accounting: 'The approved client visits of each day, with the estimated travel allowance.',
-    management: 'Every client visit the reps plan, and the approved ones by day. Read only.'
-  }[CV.role] || '';
+    director: 'Visits the reps plan to their clients. Approve them, or send them back with a note.'
+  }, typeof CV_WEEK !== 'undefined' ? CV_WEEK.lede : {})[CV.role] || '';
   const ready = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(186).catch(() => false) : false;
   if (!ready) {
     _cvId('cvNotice').innerHTML = '<div class="dh-banner warn">Client visits open here with the next FlowAPI update (version 186). The weekly itinerary works as before meanwhile.</div>';
@@ -46,6 +44,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ── the reads ────────────────────────────────────────────────────────────────────────────────── */
+
+/** The week view (js/client-visits-week.js), for every role but sales. Resolves either way: without it the page still
+ *  works and says the week could not be opened. */
+function cvLoadWeek() {
+  if (typeof cvWeekHtml === 'function') return Promise.resolve(true);
+  return new Promise(done => {
+    const sc = document.createElement('script');
+    sc.src = 'js/client-visits-week.js';
+    sc.onload = () => done(true);
+    sc.onerror = () => done(false);
+    (document.head || document.body).appendChild(sc);
+  });
+}
 
 /** The visits this person may see (the server scopes them), and for a rep their Client Book to plan from. */
 async function cvLoad() {
@@ -93,22 +104,19 @@ function cvSegments() {
     const b = cvSalesBuckets(p, CV.today);
     return [{ key: 'needs', label: 'Needs you', n: b.needs.length }, { key: 'upcoming', label: 'Coming up', n: b.upcoming.length }, { key: 'past', label: 'Past', n: b.past.length }];
   }
+  const week = typeof CV_WEEK !== 'undefined' ? [CV_WEEK.seg] : [];
   if (CV.role === 'director') {
     return [{ key: 'waiting', label: 'Waiting', n: p.filter(v => v.status === 'Pending Director').length }, { key: 'approved', label: 'Approved', n: p.filter(v => v.status === 'Approved').length },
-            { key: 'all', label: 'All', n: p.length }, { key: 'week', label: 'Travel week' }];
+            { key: 'all', label: 'All', n: p.length }].concat(week);
   }
-  if (CV.role === 'management') return [{ key: 'week', label: 'Travel week' }, { key: 'all', label: 'All visits', n: p.length }];
-  return [{ key: 'week', label: 'Travel week' }];
+  if (CV.role === 'management') return week.concat([{ key: 'all', label: 'All visits', n: p.length }]);
+  return week;
 }
 
-/** Over the list: the rep filter (when there is more than one rep), the week stepper on the travel week. */
+/** Over the list: the rep filter (when there is more than one rep), and the week view's own stepper. */
 function cvToolsHtml() {
   const out = [];
-  if (CV.seg === 'week') {
-    out.push('<div class="cv-week" role="group" aria-label="Week"><button type="button" class="cv-step" data-week="-7" aria-label="Week before">‹</button>' +
-      '<span class="cv-wlabel">' + _cvE(cvWeekLabel(CV.week)) + '</span><button type="button" class="cv-step" data-week="7" aria-label="Week after">›</button>' +
-      (CV.week === cvMonday(CV.today) ? '' : '<button type="button" class="dh-btn sm" data-week="now">This week</button>') + '</div>');
-  }
+  if (CV.seg === 'week' && typeof cvWeekToolsHtml === 'function') out.push(cvWeekToolsHtml());
   const reps = CV.role === 'sales' ? [] : cvReps(CV.plans);
   if (reps.length > 1) {
     out.push('<label class="cv-rep"><span class="cv-vh">Rep</span><select class="cv-in" data-rep aria-label="Rep"><option value="">Every rep</option>' +
@@ -121,7 +129,7 @@ function _cvMineRep(list) { return CV.rep ? list.filter(v => String(v.user || ''
 
 function cvBodyHtml() {
   if (!CV.ok) return '<p class="cv-empty">Nothing to show yet.</p>';
-  if (CV.seg === 'week') return cvWeekHtml();
+  if (CV.seg === 'week') return typeof cvWeekHtml === 'function' ? cvWeekHtml() : '<p class="cv-empty">This view could not be opened. Reload the page.</p>';
   if (CV.role === 'sales') {
     const b = cvSalesBuckets(CV.plans, CV.today), list = b[CV.seg] || [];
     const empty = { needs: 'Nothing needs you. A visit sent back, a draft, or an approved visit to mark done shows here.',
@@ -165,20 +173,6 @@ function cvRowHtml(v, pick, who) {
     (CV.role === 'sales' && v.status === 'Approved' && v.date <= CV.today ? '<span class="cv-r3 act">Mark it done once you have been, with a line on how it went</span>' : '') + '</button></div>';
 }
 
-/** The travel week: one row per day per rep, the approved visits, and the day's estimated travel allowance. */
-function cvWeekHtml() {
-  const rows = cvWeekRows(CV.plans, CV.week, CV.rep), total = cvWeekTotal(rows);
-  const note = '<p class="cv-note">How the estimated travel allowance is worked out is not decided yet, so each day says To be set. Visits cancelled after approval are struck through and not counted.</p>';
-  if (!rows.length) return '<p class="cv-empty">No approved client visits in this week.</p>' + note;
-  const body = rows.map(r => '<tr><th scope="row" class="cv-wday">' + _cvE(cvDayLabel(r.day, _cvYear())) + '</th><td class="cv-wrep">' + _cvE(r.user) + '</td><td class="cv-wvis"><ul>' +
-    r.visits.map(v => '<li' + (v.status === 'Cancelled' ? ' class="off"' : '') + '><button type="button" class="cv-link" data-open="' + _cvE(v.visitPlanNo) + '">' + _cvE(v.company) + '</button>' +
-      '<span class="cv-sub">' + _cvE([cvClock(v.time), cvTown(v.address)].filter(Boolean).join(' · ')) + (v.status === 'Cancelled' ? ' · cancelled' : v.status === 'Done' ? ' · done' : '') + '</span></li>').join('') +
-    '</ul></td><td class="cv-west' + (r.estimate.set ? '' : ' unset') + '" data-label="Estimated travel allowance">' + _cvE(r.estimate.text) + '</td></tr>').join('');
-  return '<div class="cv-tablewrap"><table class="cv-table"><caption class="cv-vh">Approved client visits, ' + _cvE(cvWeekLabel(CV.week)) + '</caption>' +
-    '<thead><tr><th scope="col">Day</th><th scope="col">Rep</th><th scope="col">Approved visits</th><th scope="col" class="cv-west">Estimated travel allowance</th></tr></thead><tbody>' + body + '</tbody>' +
-    '<tfoot><tr><th scope="row" colspan="3">Week total</th><td class="cv-west' + (total.set ? '' : ' unset') + '">' + _cvE(total.text) + '</td></tr></tfoot></table></div>' + note;
-}
-
 /** The director's bar for the visits chosen: approve them all, or send them back with one note. */
 function cvBulkRender() {
   const bar = _cvId('cvBulk'), nos = Object.keys(CV.sel);
@@ -211,7 +205,7 @@ function cvDetail(no) {
     (v.status === 'Rejected' && v.decisionNote ? '<div class="dh-banner bad">Sent back by ' + _cvE(v.decidedBy || 'the director') + ': ' + _cvE(v.decisionNote) + '</div>' : '') +
     '<dl class="cv-facts">' + fact('Where', _cvE(v.location) + '<span class="cv-sub">' + _cvE(v.address) + '</span>') + fact('Who', people.join('<br>')) + fact('Purpose', _cvE(v.purpose)) +
     fact('How it went', _cvE(v.result)) + fact('Cancelled', v.cancelReason ? _cvE(v.cancelReason) + ' <span class="cv-sub">' + _cvE(v.cancelledBy) + '</span>' : '') +
-    (CV.role === 'accounting' || CV.role === 'management' || CV.role === 'director' ? fact('Estimated travel allowance', '<span class="cv-unset">' + _cvE(cvTravelEstimate([v]).text) + '</span>') : '') + '</dl>' +
+    (CV.role !== 'sales' && typeof cvWeekFact === 'function' ? cvWeekFact(v, fact) : '') + '</dl>' +
     (hist.length ? '<h4 class="cv-h4">History</h4><ol class="cv-hist">' + hist.map(h => '<li><span>' + _cvE(h.text) + '</span><span class="cv-sub">' + _cvE([h.by, typeof flowDate === 'function' ? flowDate(h.at) : h.at.slice(0, 10)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ol>' : '') +
     '<div class="cv-msg" id="cvMsg" role="alert"></div><div class="modal-actions"><button type="button" class="dh-btn" data-act="close">Close</button>' + btns.join('') + '</div>', { no: v.visitPlanNo });
 }
@@ -352,7 +346,7 @@ function _cvWire() {
     const k = b.getAttribute('data-bulk'), nos = Object.keys(CV.sel);
     if (k === 'clear') { CV.sel = {}; return cvRender(); }
     if (k === 'reject') return cvAskDlg('reject', nos);
-    cvOpenDlg('<h3 id="cvDlgTitle">Approve ' + nos.length + ' visit' + (nos.length === 1 ? '' : 's') + '?</h3><p class="cv-sub">They count for the travel allowance once approved.</p>' +
+    cvOpenDlg('<h3 id="cvDlgTitle">Approve ' + nos.length + ' visit' + (nos.length === 1 ? '' : 's') + '?</h3><p class="cv-sub">Accounting sees them once they are approved.</p>' +
       '<div class="cv-msg" id="cvMsg" role="alert"></div><div class="modal-actions"><button type="button" class="dh-btn" data-act="close">Back</button><button type="button" class="dh-btn primary" data-act="approveall">Approve</button></div>');
   });
   const ov = _cvId('cvOverlay'), dlg = _cvId('cvDlg');

@@ -336,7 +336,7 @@ function requireClientBookAccess() {
 }
 
 /* A369 — client visits, the new itinerary (client-visits.html): a rep plans their own, the director approves, accounting
-   sees the approved visits with the day's estimated travel allowance, management reads. */
+   sees the approved visits by day, management reads. */
 function requireClientVisitsAccess() {
   const session = getSession();
   if (!session) {

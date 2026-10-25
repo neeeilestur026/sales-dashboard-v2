@@ -1,10 +1,10 @@
 /* client-visits-model.js — A369 · client visits, the new itinerary (client-visits.html). Pure: no DOM, no reads.
  *
  * Neil, 25 Oct 2026: a client visit page for each sales rep — they pick one of their Client Book clients and who to
- * visit; the director approves first; accounting sees the approved visits with an estimated travel allowance for the
- * day of the visit. The weekly itinerary keeps working beside it. A visit (FlowAPI 186, getVisitPlans) is
- * { visitPlanNo, date, time, user, clientNo, company, location, address, contacts: [{id, name, position}], someoneElse,
- *   purpose, status, decision, decisionNote, cancelReason, result, travelEstimate, travelEstimateBasis, … }. */
+ * visit; the director approves first; accounting sees the approved visits by day. The weekly itinerary keeps working
+ * beside it. A visit (FlowAPI 186, getVisitPlans) is { visitPlanNo, date, time, user, clientNo, company, location,
+ * address, contacts: [{id, name, position}], someoneElse, purpose, status, decision, decisionNote, cancelReason,
+ * result, … }. The week view is js/client-visits-week.js. */
 
 const CV_STATUSES = ['Draft', 'Pending Director', 'Approved', 'Done', 'Rejected', 'Cancelled'];
 const CV_LOCATIONS = ['Plant', 'Head office', 'Other'];
@@ -23,7 +23,7 @@ function cvAddDays(day, n) {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
-/** The Monday of the week a day falls in (the travel allowance's week). */
+/** The Monday of the week a day falls in. */
 function cvMonday(day) {
   const d = new Date(_cvS(day) + 'T00:00:00Z');
   if (isNaN(d)) return '';
@@ -67,7 +67,7 @@ function cvStatus(v) {
   return { text: 'Draft', tone: 'draft' };
 }
 /** What accounting sees: the approved visits, the done ones, and the ones cancelled after they were approved
- *  (struck through, left out of the estimate) — the same rule the server reads by. */
+ *  — the same rule the server reads by. */
 function cvForAccounting(v) {
   const s = _cvS(v && v.status);
   return s === 'Approved' || s === 'Done' || (s === 'Cancelled' && _cvS(v.decision) === 'Approved');
@@ -128,40 +128,6 @@ function cvReps(list) {
   return Object.keys(seen).map(k => seen[k]).sort((a, b) => a.localeCompare(b));
 }
 
-/* ── the estimated travel allowance ───────────────────────────────────────────────────────── */
-
-/* THE ONE PLACE THE ESTIMATE IS WORKED OUT. Neil, 25 Oct 2026: "in this estimated travel allowance in the accounting
-   set aside first on how to be calculated, just put it there". So for now it says "To be set". The server keeps two
-   empty columns for it on every visit (Travel Estimate (PHP) and Travel Estimate Basis); once the rule is decided, and
-   a visit carries an estimate, the day's estimate is the sum of its visits' — a day with any visit still without one
-   stays "To be set". Visits cancelled after approval are never counted. */
-function cvTravelEstimate(dayVisits) {
-  const live = (dayVisits || []).filter(v => _cvS(v && v.status) !== 'Cancelled');
-  if (!live.length) return { amount: 0, text: '—', set: false, count: 0 };
-  const set = live.every(v => v.travelEstimate !== null && v.travelEstimate !== undefined && v.travelEstimate !== '' && isFinite(Number(v.travelEstimate)));
-  if (!set) return { amount: null, text: 'To be set', set: false, count: live.length };
-  const amount = Math.round(live.reduce((t, v) => t + Number(v.travelEstimate), 0) * 100) / 100;
-  return { amount, text: '₱' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), set: true, count: live.length };
-}
-
-/** Accounting's week: one row per day per rep, Monday to Sunday, of the visits accounting sees. Each row carries its
- *  visits (time order, cancelled ones kept, struck through on the page) and the day's estimate. */
-function cvWeekRows(list, monday, rep) {
-  const end = cvAddDays(monday, 6), rows = {}, order = [];
-  (list || []).forEach(v => {
-    const d = _cvS(v.date);
-    if (!cvForAccounting(v) || d < monday || d > end) return;
-    if (rep && !_cvSame(v.user, rep)) return;
-    const key = d + '|' + _cvS(v.user).toLowerCase();
-    if (!rows[key]) { rows[key] = { day: d, user: _cvS(v.user), visits: [] }; order.push(key); }
-    rows[key].visits.push(v);
-  });
-  return order.map(k => rows[k]).sort((a, b) => (a.day === b.day ? a.user.localeCompare(b.user) : (a.day < b.day ? -1 : 1)))
-    .map(r => Object.assign(r, { visits: cvSortUp(r.visits), estimate: cvTravelEstimate(r.visits) }));
-}
-/** The week's total: "To be set" while any day is; the sum once every day has one. */
-function cvWeekTotal(rows) { return cvTravelEstimate((rows || []).reduce((a, r) => a.concat(r.visits), [])); }
-
 /* ── planning a visit ─────────────────────────────────────────────────────────────────────── */
 
 /** The places a client can be visited, with the address and why one cannot be chosen. */
@@ -214,6 +180,6 @@ function cvLogLines(log, no) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { CV_STATUSES, CV_LOCATIONS, CV_AHEAD, cvAddDays, cvMonday, cvDayLabel, cvWeekLabel, cvClock, cvTown, cvPeople, cvStatus,
-                     cvForAccounting, cvSort, cvSortUp, cvCan, cvSalesBuckets, cvByDay, cvByRep, cvReps, cvTravelEstimate, cvWeekRows, cvWeekTotal,
+                     cvForAccounting, cvSort, cvSortUp, cvCan, cvSalesBuckets, cvByDay, cvByRep, cvReps,
                      cvPlaces, cvDefaultPlace, cvClients, cvPlanParams, cvLogLines };
 }
