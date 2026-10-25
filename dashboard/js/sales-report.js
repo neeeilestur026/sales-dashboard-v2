@@ -101,15 +101,18 @@ async function _srLoad(fresh) {
   /* A350 — the Client Book trial: its clients to link to and the day's changes. Quiet without FlowAPI 178. */
   const book = SR_UI.view && SR_UI.selfRole !== 'director' ? Promise.resolve(null)   // A366 — the Client Book stays its owner's and the director's
     : (typeof postFlow === 'function' ? postFlow('getClientBook', {}) : Promise.reject(new Error('no'))).then(r => (r && r.success ? r : null)).catch(() => null);
-  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook] = await Promise.all([
+  /* A369 — client visits, the new itinerary: the day's planned stops beside the weekly plan's. Quiet before FlowAPI 186. */
+  const plans = (typeof postFlow === 'function' ? postFlow('getVisitPlans', { from, to: today }) : Promise.reject(new Error('no')))
+    .then(r => (r && r.success ? r.data || [] : [])).catch(() => []);
+  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook, visitPlans] = await Promise.all([
     get('quotations', 'getQuotations'), get('sales orders', 'getSalesOrders'), get('quotation emails', 'getQuotationEmails'),
     get('settings', 'getFlowSettings'), get('purchase requests', 'getPricingRequests'),
     get('activity log', 'getActivityLog', { from, to: today }), get('call log', 'getSalesCalls', { from, to: today }),
-    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book
+    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book, plans
   ]);
   if (seq !== SR_UI.seq) return;
   SR_UI.failed = failed;
-  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook });
+  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook, visitPlans });
   SR_UI.saved = {};
   SR_UI.backend = mine.ok;
   SR_UI.backendMsg = mine.ok ? '' : mine.message;

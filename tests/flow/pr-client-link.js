@@ -80,7 +80,7 @@ sec('5 · the PR form');
   ok('  "— not linked —" comes first, so leaving it is the default', /'<option value="">— not linked —<\/option>'/.test(JS));
   ok('  the request carries clientNo only when a client was picked', /const bookNo = gv\('prClientBook'\);[\s\S]{0,120}if \(bookNo\) payload\.clientNo = bookNo;/.test(JS));
   ok('  picking one fills the customer as the book spells it, and the book\'s contact before the client master\'s, never over what the rep typed',
-     /if \(cust\) cust\.value = c\.company;/.test(JS) && /if \(!el \|\| \(el\.value && el\.dataset\.cbfill !== '1'\)\) return;/.test(JS) && /fill\('prAddress', c\.siteAddress\);\s*prFillContacts\(\);/.test(JS));
+     /if \(cust\) cust\.value = c\.company;/.test(JS) && /if \(!el \|\| \(el\.value && el\.dataset\.cbfill !== '1'\)\) return;/.test(JS) && /fill\('prAddress', c\.siteAddress \|\| c\.headOfficeAddress\);[^\n]*\n\s*prFillContacts\(\);/.test(JS));
   ok('  and a new form clears it', /'prClientNo', 'prClientBook'\]/.test(JS));
 }
 

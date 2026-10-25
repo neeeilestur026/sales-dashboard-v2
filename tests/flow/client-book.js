@@ -26,7 +26,7 @@ const G = 'Gerald Lucena', K = 'Kim Reyes';
 const BOOK = {
   success: true,
   clients: [
-    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', tier: 'Major', sector: 'Cement', siteAddress: 'Brgy. Bigte, Norzagaray, Bulacan', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
+    { clientNo: 'CB-0001', company: 'Philcement Corporation', key: 'philcement', tier: 'Major', sector: 'Cement', siteAddress: 'Brgy. Bigte, Norzagaray, Bulacan', headOfficeAddress: '12F Philcement Tower, Ortigas, Pasig', owner: G, accreditation: 'Accredited', accreditationStep: '', accreditedUntil: '2026-11-10',
       accreditationUpdatedAt: '2026-10-05T02:00:00.000Z', status: 'RFQ received', statusUpdatedAt: '2026-10-10T02:00:00.000Z', statusRef: 'PR-1', nextStep: '', nextStepDate: '',
       contacts: [{ id: 'P1', name: 'Ana Cruz', position: 'Purchasing', emails: ['ana@philcement.ph', 'ana.cruz@gmail.com'], phones: ['0917 123 4567'], primary: true },
                  { id: 'P2', name: 'Ben', position: '', emails: [], phones: ['(02) 8555-1212'], primary: false }],
@@ -135,7 +135,7 @@ eq('accreditation, needs an update, expiring, next step', [ids({ accreditation: 
 eq('archived clients only when asked for', ids({ archived: true }), ['CB-0004']);
 {
   const csv = run('cbCsv(cbFilter(CL, LOG, IX, {}), LOG, IX)').split('\n');
-  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Major or minor,Sector,Site address,Owner,Accreditation/.test(csv[0]) && /^CB-0001,Philcement Corporation,Major,Cement,"Brgy\. Bigte, Norzagaray, Bulacan",/.test(csv.find(l => /^CB-0001,/.test(l))));
+  ok('CSV: a header and one row per client', csv.length === 4 && /^Client No,Company,Major or minor,Sector,Plant address,Head office address,Owner,Accreditation/.test(csv[0]) && /^CB-0001,Philcement Corporation,Major,Cement,"Brgy\. Bigte, Norzagaray, Bulacan","12F Philcement Tower, Ortigas, Pasig",/.test(csv.find(l => /^CB-0001,/.test(l))));
   const row = csv.find(l => /^CB-0001,/.test(l));
   ok('  every contact person kept; a cell with a comma is quoted', /Ana Cruz,Purchasing,ana@philcement\.ph; ana\.cruz@gmail\.com,0917 123 4567,"Ben, \(02\) 8555-1212"/.test(row), row);
   ok('  with its open quotations and their value', /,0,1,186400,/.test(row), row);
@@ -261,12 +261,19 @@ async function boot(o) {
   ok('adding a client asks Major or Minor, and requires it', /<legend>Major or minor client<\/legend>/.test(ta) && /name="tier" value="Major" required>/.test(ta) && /name="tier" value="Minor" required>/.test(ta));
   pt.run('cbDetail("CB-0001", null)');
   const td = pt.run('__shown');
-  ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span>/.test(td) && /Site: Brgy\. Bigte/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
+  ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span>/.test(td) && /Plant: Norzagaray, Bulacan · Head office: Ortigas, Pasig/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
   ok('every row shows its sector too ("No sector" when missing), and a typed industry as typed', /Major · Cement · /.test(PT) && /Minor · Geothermal drilling · /.test(PT) && /<span class="cb-nolabel">No sector<\/span>/.test(PT));
   eq('the Sector filter: a listed one, and Others for a typed industry', [J('cbFilter(CL, LOG, IX, { sector: "Cement" }).map(function (c) { return c.clientNo; })'), J('cbFilter(CL, LOG, IX, { sector: "Others" }).map(function (c) { return c.clientNo; })')], [['CB-0001'], ['CB-0002']]);
-  ok('  the search finds a site address', J('cbFilter(CL, LOG, IX, { q: "norzagaray" }).map(function (c) { return c.clientNo; })').join() === 'CB-0001');
+  ok('  the search finds a plant address, and a head office address', J('cbFilter(CL, LOG, IX, { q: "norzagaray" }).map(function (c) { return c.clientNo; })').join() === 'CB-0001' &&
+     J('cbFilter(CL, LOG, IX, { q: "ortigas" }).map(function (c) { return c.clientNo; })').join() === 'CB-0001');
+  ok('A369: the Overview shows both addresses in full, and the details form has both fields', /<span class="cb-addr"><b>Plant<\/b> Brgy\. Bigte, Norzagaray, Bulacan<\/span><span class="cb-addr"><b>Head office<\/b> 12F Philcement Tower, Ortigas, Pasig<\/span>/.test(td) &&
+     /<label>Plant address<textarea class="cb-in" name="siteAddress"/.test(td) && /<label>Head office address<textarea class="cb-in" name="headOfficeAddress"[^>]*disabled>/.test(td));
   ok('adding a client asks the industry (required) and the site address', /<select class="cb-in" name="sector" required><option value="">Choose…<\/option><option>Oil and gas<\/option>/.test(ta) && /<option>Others<\/option>/.test(ta) &&
-     /name="sectorOther"/.test(ta) && /name="siteAddress"/.test(ta));
+     /name="sectorOther"/.test(ta) && /name="siteAddress"/.test(ta) && /name="headOfficeAddress"/.test(ta));
+  const p186 = await boot({ v: 186 });
+  p186.run('cbDetail("CB-0001", null)');
+  ok('  from FlowAPI 186 the head office field is open, and a client with only a head office shows its town on the row', !/name="headOfficeAddress"[^>]*disabled/.test(p186.run('__shown')) &&
+     /<span class="cb-r2">Minor · Geothermal drilling · Lanang, Davao City · Kim Reyes<\/span>/.test((await boot({ v: 186, book: Object.assign({}, BOOK, { clients: BOOK.clients.map(c => c.clientNo === 'CB-0002' ? Object.assign({}, c, { headOfficeAddress: 'Lanang, Davao City' }) : c) }) })).els.cbTable.innerHTML));
   pt.run('cbDetail("CB-0002", null)');
   const t2 = pt.run('__shown');
   ok('a typed industry opens as Others with its name filled in', /<option selected>Others<\/option>/.test(t2) && /name="sectorOther" maxlength="60" value="Geothermal drilling"/.test(t2) && !/class="cb-other" hidden/.test(t2));

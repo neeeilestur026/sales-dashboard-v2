@@ -25,7 +25,7 @@ sec('1 · the version, and nothing else is touched');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 185', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 185);
+  ok('getVersion = 186', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 186);
   const g = call(c, 'getClientBook', NEIL);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.clients.length === 0 && g.log.length === 0 && !('ClientBook' in store) && !('ClientBookLog' in store), g);
   ok('  and gives the page the server\'s lists', g.lists.accreditation.join() === 'Accredited,On process,Not accredited' && g.lists.status.length === 9 && g.lists.steps.length === 4);
@@ -39,7 +39,7 @@ sec('2 · adding a client');
   const row = (store.ClientBook || [])[0] || {};
   ok('added, numbered CB-, not accredited to begin with', r.success && /^CB-\d{6}-\d{3}$/.test(r.clientNo) && row['Accreditation'] === 'Not accredited' && !!row['Accreditation Updated At'], r);
   ok('  the canonical key is the server\'s (_canonKey)', row['Key'] === 'sample cement plant a', row['Key']);
-  ok('  every write is the full width', row.__arity === 26 && store.ClientBookLog.every(l => l.__arity === 9));
+  ok('  every write is the full width', row.__arity === 27 && store.ClientBookLog.every(l => l.__arity === 9));
   const people = JSON.parse(row['Contacts JSON']);
   ok('  two people, each with several emails (lower-cased) and phones, the first made primary', people.length === 2 && people[0].emails.join() === 'rcruz@plant-a.ph,r.cruz@gmail.com' &&
      people[0].phones.length === 2 && people[0].primary === true && people[1].primary === false, people);
@@ -180,22 +180,79 @@ sec('9 · A354: every client is Major or Minor, with its industry and site addre
   ok('  only Major or Minor', !odd.success && /Major or Minor/.test(odd.message));
   const maj = call(c, 'saveClientBookClient', Object.assign({ company: 'Big Plant Co', tier: 'major', sector: 'cement', siteAddress: 'Brgy. Bigte, Norzagaray, Bulacan' }, NEIL));
   const row = store.ClientBook[0];
-  ok('saved as Major and Cement (any case), with the site address, every write 26 wide', maj.success && row['Tier'] === 'Major' && row['Sector'] === 'Cement' &&
-     row['Site Address'] === 'Brgy. Bigte, Norzagaray, Bulacan' && row.__arity === 26 && maj.client.tier === 'Major' && maj.client.sector === 'Cement' && maj.client.siteAddress === row['Site Address'], row);
+  ok('saved as Major and Cement (any case), with the site address, every write 27 wide', maj.success && row['Tier'] === 'Major' && row['Sector'] === 'Cement' &&
+     row['Site Address'] === 'Brgy. Bigte, Norzagaray, Bulacan' && row.__arity === 27 && maj.client.tier === 'Major' && maj.client.sector === 'Cement' && maj.client.siteAddress === row['Site Address'], row);
   ok('  the created line names both', /^Major, Cement\. Not accredited\.$/.test(store.ClientBookLog[0]['Note']), store.ClientBookLog[0]['Note']);
   const keep = call(c, 'saveClientBookClient', Object.assign({ clientNo: maj.clientNo, company: 'Big Plant Co', notes: 'x' }, NEIL));
   ok('an edit that sends no label, sector or site keeps them', keep.success && store.ClientBook[0]['Tier'] === 'Major' && store.ClientBook[0]['Sector'] === 'Cement' &&
      store.ClientBook[0]['Site Address'] === 'Brgy. Bigte, Norzagaray, Bulacan');
   const down = call(c, 'saveClientBookClient', Object.assign({ clientNo: maj.clientNo, company: 'Big Plant Co', notes: 'x', tier: 'Minor', sector: 'Geothermal drilling', siteAddress: 'Plant 2, Bataan' }, NEIL));
   ok('a change of label, sector and site is saved and logged', down.success && store.ClientBook[0]['Tier'] === 'Minor' && store.ClientBook[0]['Sector'] === 'Geothermal drilling' &&
-     store.ClientBookLog.some(l => l['Kind'] === 'details' && /the label Major to Minor, the sector Cement to Geothermal drilling, the site address/.test(l['Note'])), store.ClientBookLog.map(l => l['Note']));
+     store.ClientBookLog.some(l => l['Kind'] === 'details' && /the label Major to Minor, the sector Cement to Geothermal drilling, the plant address/.test(l['Note'])), store.ClientBookLog.map(l => l['Note']));
   ok('  a sector not on the list is kept as typed (an "Others" industry)', down.client.sector === 'Geothermal drilling');
   call(c, 'setClientBookStatus', Object.assign({ clientNo: maj.clientNo, kind: 'accreditation', value: 'On process', step: 'Documents submitted' }, NEIL));
   call(c, 'archiveClientBookClient', Object.assign({ clientNo: maj.clientNo, reason: 'test' }, NEIL));
-  ok('  and an accreditation update or an archive keeps them', store.ClientBook[0]['Tier'] === 'Minor' && store.ClientBook[0]['Sector'] === 'Geothermal drilling' && store.ClientBook[0].__arity === 26);
+  ok('  and an accreditation update or an archive keeps them', store.ClientBook[0]['Tier'] === 'Minor' && store.ClientBook[0]['Sector'] === 'Geothermal drilling' && store.ClientBook[0].__arity === 27);
   const g = call(c, 'getClientBook', NEIL);
   ok('the read returns the labels and the lists', g.clients[0].tier === 'Minor' && g.clients[0].siteAddress === 'Plant 2, Bataan' && g.lists.tiers.join() === 'Major,Minor' &&
      g.lists.sectors.join() === 'Oil and gas,Cement,Power,Aviation,Automotive,Construction,Mining,Others' && g.lists.status[0] === 'RFQ pending');
+}
+
+sec('11 · A369: a plant address and a head office address');
+{
+  const store = {};
+  const c = load(GS, store);
+  const a = call(c, 'saveClientBookClient', Object.assign({ company: 'Two Sites Co', tier: 'Major', sector: 'Power', siteAddress: 'Plant, Limay, Bataan', headOfficeAddress: '  12F Tower One,   Makati City ' }, NEIL));
+  const row = store.ClientBook[0];
+  ok('a new client keeps both (trimmed, like the plant address), still one row 27 wide', a.success && row['Site Address'] === 'Plant, Limay, Bataan' && row['Head Office Address'] === '12F Tower One,   Makati City' &&
+     row.__arity === 27 && a.client.headOfficeAddress === '12F Tower One,   Makati City', row);
+  const keep = call(c, 'saveClientBookClient', Object.assign({ clientNo: a.clientNo, company: 'Two Sites Co', notes: 'x' }, NEIL));
+  ok('an edit that sends no head office keeps it', keep.success && store.ClientBook[0]['Head Office Address'] === '12F Tower One,   Makati City');
+  const move = call(c, 'saveClientBookClient', Object.assign({ clientNo: a.clientNo, company: 'Two Sites Co', notes: 'x', headOfficeAddress: 'Ortigas, Pasig' }, NEIL));
+  ok('a change is saved and logged as the head office address', move.success && store.ClientBook[0]['Head Office Address'] === 'Ortigas, Pasig' &&
+     store.ClientBookLog.some(l => l['Kind'] === 'details' && /the head office address/.test(l['Note'])), store.ClientBookLog.map(l => l['Note']));
+  const clear = call(c, 'saveClientBookClient', Object.assign({ clientNo: a.clientNo, company: 'Two Sites Co', notes: 'x', headOfficeAddress: '' }, NEIL));
+  ok('  an empty one clears it, and the plant address stays', clear.success && store.ClientBook[0]['Head Office Address'] === '' && store.ClientBook[0]['Site Address'] === 'Plant, Limay, Bataan');
+  call(c, 'saveClientBookClient', Object.assign({ clientNo: a.clientNo, company: 'Two Sites Co', notes: 'x', headOfficeAddress: 'H'.repeat(400) }, NEIL));
+  ok('  at most 300 characters', store.ClientBook[0]['Head Office Address'].length === 300);
+  const g = call(c, 'getClientBook', NEIL);
+  ok('the read returns it', g.clients[0].headOfficeAddress === 'H'.repeat(300));
+}
+
+sec('12 · A369: the run-once tidy moves "Head office:" lines out of the notes');
+{
+  const store = {};
+  const c = load(GS, store);
+  const mk = (company, notes, ho) => call(c, 'saveClientBookClient', Object.assign({ company, tier: 'Minor', sector: 'Cement', notes, headOfficeAddress: ho }, NEIL)).clientNo;
+  const nMove = mk('Move Co', 'Buys hoses.\nHead office: 5F Alpha Bldg, Ortiz St., Cebu City. From Gerald\'s masterlist (Oct 2026).', '');
+  const nSame = mk('Same Co', 'Head Office Address: Pasig City', 'pasig  city');
+  const nDiff = mk('Diff Co', 'Head office: Quezon City', 'Taguig City');
+  const nTwo = mk('Two Co', 'Head office: A\nHead office: B', '');
+  const nNone = mk('Plain Co', 'Head office is in Manila (no colon), keep me', '');
+  const nArch = mk('Old Co', 'Head office: Davao City', '');
+  call(c, 'archiveClientBookClient', Object.assign({ clientNo: nArch, reason: 'test' }, NEIL));
+  const before = JSON.stringify(store.ClientBook), logs = store.ClientBookLog.length;
+  const by = (no) => store.ClientBook.find(r => r['Client No'] === no);
+
+  const pv = c.previewClientBookHeadOffices();
+  ok('the preview counts and writes nothing', pv.dry && pv.moved === 2 && pv.deduped === 1 && pv.conflicts.length === 1 && pv.several.length === 1 && pv.none === 1 &&
+     JSON.stringify(store.ClientBook) === before && store.ClientBookLog.length === logs, pv);
+  ok('  and names the clients to settle by hand', /Diff Co — notes: "Quezon City", field: "Taguig City"/.test(pv.text) && /Two Co/.test(pv.text) && /^PREVIEW/.test(pv.text), pv.text);
+
+  const r = c.tidyClientBookHeadOffices();
+  ok('the tidy does it', !r.dry && r.moved === 2 && r.deduped === 1 && r.conflicts.length === 1, r);
+  ok('  moved: the address into the field, the import tail kept in the notes', by(nMove)['Head Office Address'] === '5F Alpha Bldg, Ortiz St., Cebu City' &&
+     by(nMove)['Notes'] === 'Buys hoses.\nFrom Gerald\'s masterlist (Oct 2026).', by(nMove));
+  ok('  already in the field: the line is dropped, the field left as it was', by(nSame)['Head Office Address'] === 'pasig  city' && by(nSame)['Notes'] === '', by(nSame));
+  ok('  different, several, or no colon: untouched', by(nDiff)['Notes'] === 'Head office: Quezon City' && by(nDiff)['Head Office Address'] === 'Taguig City' &&
+     by(nTwo)['Notes'] === 'Head office: A\nHead office: B' && by(nNone)['Notes'] === 'Head office is in Manila (no colon), keep me');
+  ok('  an archived client too, and it stays archived', by(nArch)['Head Office Address'] === 'Davao City' && !!by(nArch)['Archived At']);
+  ok('  every row still 27 wide, Updated By left alone, one details log row per client changed', store.ClientBook.every(x => x.__arity === 27) &&
+     store.ClientBookLog.length === logs + 3 && store.ClientBookLog.slice(logs).every(l => l['Kind'] === 'details' && l['By'] === 'Neil Estur') &&
+     by(nMove)['Updated By'] === 'Neil Estur');
+  const after = JSON.stringify(store.ClientBook), logs2 = store.ClientBookLog.length;
+  const again = c.tidyClientBookHeadOffices();
+  ok('a second run changes nothing', again.moved === 0 && again.deduped === 0 && JSON.stringify(store.ClientBook) === after && store.ClientBookLog.length === logs2, again);
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);

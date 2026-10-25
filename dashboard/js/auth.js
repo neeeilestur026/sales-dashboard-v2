@@ -335,6 +335,21 @@ function requireClientBookAccess() {
   return session;
 }
 
+/* A369 — client visits, the new itinerary (client-visits.html): a rep plans their own, the director approves, accounting
+   sees the approved visits with the day's estimated travel allowance, management reads. */
+function requireClientVisitsAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['sales', 'director', 'accounting', 'management'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 function requireProductFinderAccess() {
   const session = getSession();
   if (!session) {
@@ -724,7 +739,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'accounting') {
-    const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders';
+    const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders' || activePage === 'client-visits';   // A369
     const reportsActive = ['accounting-daily-report', 'my-daily-report', 'payment-requests', 'financial-reports'].includes(activePage);
     const acctMenuActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -753,6 +768,7 @@ function renderNavbar(activePage) {
           <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
+          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
           <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Receiving</a>
           <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
           <a href="flow-invoices.html" class="${activePage === 'flow-invoices' ? 'active' : ''}">Invoices</a>
@@ -806,7 +822,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226 · A369
     const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
@@ -842,6 +858,7 @@ function renderNavbar(activePage) {
           <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
           <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
+          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon(session.role)}</a>
         </div>
       </div>
@@ -923,7 +940,7 @@ function renderNavbar(activePage) {
   } else if (session.role === 'director') {
     const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
-    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary'].includes(activePage);   // A216, A366
+    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits'].includes(activePage);   // A216, A366, A369
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
     const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests'].includes(activePage);   // A217 · A338
@@ -999,6 +1016,7 @@ function renderNavbar(activePage) {
           <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">Daily Reports</a>
           <a href="team-daily-reports.html" class="${activePage === 'team-daily-reports' ? 'active' : ''}">New Daily Reports</a>   <!-- A366 -->
           <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
+          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
           <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">Team Performance</a>
         </div>
       </div>
@@ -1164,7 +1182,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
     const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -1187,6 +1205,7 @@ function renderNavbar(activePage) {
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 — the new itinerary -->
           <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests${_soon(session.role)}</a>
@@ -1405,6 +1424,16 @@ async function flowComputeActions(session) {
     jobs.push(fetchFlow('getWeeklyItineraries', { user: session.name }).then(r => {
       const mine = ((r && r.data) || []).filter(x => x.status === 'Rejected').length;
       if (mine) add('report', 'urgent', mine + ' weekly itinerar' + (mine === 1 ? 'y was' : 'ies were') + ' sent back', 'weekly-itinerary.html');
+    }).catch(() => {}));
+  }
+  /* A369 — client visits, the new itinerary: the director sees the visits waiting for them, a rep their own sent back.
+     A secured read (the server scopes a rep to their own); quiet before FlowAPI 186. */
+  if ((isDir || isSales) && typeof postFlow === 'function' && typeof flowVersionAtLeast === 'function') {
+    jobs.push(flowVersionAtLeast(186).then(ready => (ready ? postFlow('getVisitPlans', {}) : null)).then(r => {
+      if (!r || !r.success) return;
+      const n = (r.data || []).filter(v => v.status === (isDir ? 'Pending Director' : 'Rejected')).length;
+      if (n && isDir) add('report', 'warn', n + ' client visit' + (n === 1 ? '' : 's') + ' awaiting your approval', 'client-visits.html');
+      if (n && isSales) add('report', 'urgent', n + ' client visit' + (n === 1 ? ' was' : 's were') + ' sent back', 'client-visits.html');
     }).catch(() => {}));
   }
 
