@@ -129,6 +129,20 @@ async function boot(role, o) {
   return p;
 }
 const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11, -1));
+/** A block of the plan form (one company), as the page reads it: its fields, and the two boxes it fills. */
+function fakeStop(o) {
+  const kids = { '.cv-where': { innerHTML: '' }, '.cv-who': { innerHTML: '' }, '.cv-stoperr': { textContent: '' } };
+  const val = { 'select[name="client"]': o.clientNo, 'input[name="time"]': o.time || '', 'textarea[name="address"]': o.address || '', 'input[name="someoneElse"]': o.someoneElse || '', 'textarea[name="purpose"]': o.purpose || '' };
+  const el = { kids, marked: false, classList: { add: (c) => { if (c === 'bad') el.marked = true; }, remove: (c) => { if (c === 'bad') el.marked = false; }, toggle() {} },
+    getAttribute: (k) => (k === 'data-stop' ? String(o.k || 7) : null), scrollIntoView() {},
+    querySelector: (sel) => (sel in val ? { value: val[sel] } : sel === 'input[type="radio"]:checked' ? (o.location ? { value: o.location } : null) : kids[sel] || null),
+    querySelectorAll: (sel) => (sel === 'input[name="who"]:checked' ? (o.who || []).map(v => ({ value: v })) : []) };
+  return el;
+}
+/** The plan form: its day, its blocks, and the visit being changed (if any). */
+function fakeForm(date, stops, no) {
+  return { getAttribute: (k) => (k === 'data-no' ? no || '' : null), elements: { date: { value: date } }, querySelectorAll: (sel) => (sel === '.cv-stop' ? stops : []) };
+}
 
 (async () => {
   sec('2 · the page per role');
@@ -140,7 +154,7 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
        /Coming up <span class="n">2<\/span>/.test(s.els.cvSeg.innerHTML) && /Past <span class="n">3<\/span>/.test(s.els.cvSeg.innerHTML), s.els.cvSeg.innerHTML);
     const b = s.els.cvBody.innerHTML;
     eq('  needs them: today\'s approved visit to mark done, the one sent back, the draft', opens(b), ['VP-8', 'VP-4', 'VP-3']);
-    ok('  a day heads its visits, with Today', /<h3 class="cv-dhead">Tue 27 Oct <span class="cv-today">Today<\/span><\/h3>/.test(b), b.slice(0, 300));
+    ok('  a day heads its visits, with Today, and a way to add a company to it', /<h3 class="cv-dhead">Tue 27 Oct <span class="cv-today">Today<\/span><button type="button" class="cv-link cv-dact" data-addday="2026-10-27">Add a company to this day<\/button><\/h3>/.test(b), b.slice(0, 300));
     ok('  a row: the time, the company, the status; where and who; the director\'s note when sent back',
        /<span class="cv-time">9:30 AM<\/span><span class="cv-co">Back Co<\/span><span class="cv-badge bad">Sent back<\/span>/.test(b) && /<span class="cv-r2">Plant · Norzagaray, Bulacan · Ana Cruz<\/span>/.test(b) && /Sent back: Go on Thursday/.test(b), b);
     ok('  Plan a visit is on, beside the weekly itinerary; no checkboxes, no rep names', /data-plan>Plan a visit<\/button>/.test(s.els.cvActions.innerHTML) && /href="weekly-itinerary\.html"/.test(s.els.cvActions.innerHTML) && !/data-pick/.test(b) && !/cv-r3">Gerald/.test(b));
@@ -162,17 +176,21 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
     const f = s.els.cvDlg.innerHTML;
     ok('Plan a visit: my live clients only, the day from today to 92 days ahead, an optional time, where, who, the purpose, and two ways to save',
        /<option value="CB-1" selected>Philcement Corporation<\/option><option value="CB-2">Zeta Mining<\/option><\/select>/.test(f) && !/Gone Co|Kim Client/.test(f) &&
-       /name="date" required min="2026-10-27" max="2027-01-27" value="2026-10-28"/.test(f) && /name="time" value=""/.test(f) && /<legend>Where<\/legend><div id="cvWhere">/.test(f) &&
+       /name="date" required min="2026-10-27" max="2027-01-27" value="2026-10-28"/.test(f) && /name="time" value=""/.test(f) && /<legend>Where<\/legend><div class="cv-where">/.test(f) &&
+       /<div class="cv-stops one" id="cvStops"><fieldset class="cv-stop" data-stop="\d+">/.test(f) && !/Add another company/.test(f) && /<h3 id="cvDlgTitle">Plan a visit<\/h3>/.test(f) &&
        /<legend>Who to visit<\/legend>/.test(f) && /name="someoneElse"/.test(f) && /data-send="0">Save as draft/.test(f) && /data-send="1">Send to the director/.test(f), f);
-    s.els.cvPlan = { elements: { client: { value: 'CB-1' } } }; s.els.cvWhere = { innerHTML: '' }; s.els.cvWho = { innerHTML: '' };
-    s.run('cvPlanFill(null)');
-    ok('  where: the plant with its address, the head office off with why, and Other', /<input type="radio" name="location" value="Plant" checked><span class="cv-pl">Plant<\/span><span class="cv-sub">Brgy\. Bigte, Norzagaray, Bulacan<\/span>/.test(s.els.cvWhere.innerHTML) &&
-       /<label class="cv-place off"><input type="radio" name="location" value="Head office" disabled><span class="cv-pl">Head office<\/span><span class="cv-sub">No head office address in the Client Book<\/span>/.test(s.els.cvWhere.innerHTML) &&
-       /value="Other"/.test(s.els.cvWhere.innerHTML) && /<label class="cv-fl cv-other" hidden>Address/.test(s.els.cvWhere.innerHTML), s.els.cvWhere.innerHTML);
-    ok('  who: a box per contact person', /<input type="checkbox" name="who" value="P1"><span>Ana Cruz <span class="cv-sub">Purchasing<\/span>/.test(s.els.cvWho.innerHTML) && /value="P2"><span>Ben<\/span>/.test(s.els.cvWho.innerHTML));
-    s.els.cvPlan.elements.client.value = 'CB-2';
-    s.run('cvPlanFill(null)');
-    ok('  a client with no people says to type someone else; only a head office: it is picked', /No contact people are saved for this client yet/.test(s.els.cvWho.innerHTML) && /value="Head office" checked/.test(s.els.cvWhere.innerHTML) && /value="Plant" disabled/.test(s.els.cvWhere.innerHTML));
+    const st = fakeStop({ k: 9, clientNo: 'CB-1' });
+    s.ctx.__stop = st;
+    s.run('cvPlanFill(__stop, null)');
+    const W = st.kids['.cv-where'].innerHTML, H = st.kids['.cv-who'].innerHTML;
+    ok('  where: the plant with its address, the head office off with why, and Other — the radios named for the block', /<input type="radio" name="location-9" value="Plant" checked><span class="cv-pl">Plant<\/span><span class="cv-sub">Brgy\. Bigte, Norzagaray, Bulacan<\/span>/.test(W) &&
+       /<label class="cv-place off"><input type="radio" name="location-9" value="Head office" disabled><span class="cv-pl">Head office<\/span><span class="cv-sub">No head office address in the Client Book<\/span>/.test(W) &&
+       /value="Other"/.test(W) && /<label class="cv-fl cv-other" hidden>Address/.test(W), W);
+    ok('  who: a box per contact person', /<input type="checkbox" name="who" value="P1"><span>Ana Cruz <span class="cv-sub">Purchasing<\/span>/.test(H) && /value="P2"><span>Ben<\/span>/.test(H));
+    const st2 = fakeStop({ k: 10, clientNo: 'CB-2' });
+    s.ctx.__stop = st2;
+    s.run('cvPlanFill(__stop, null)');
+    ok('  a client with no people says to type someone else; only a head office: it is picked', /No contact people are saved for this client yet/.test(st2.kids['.cv-who'].innerHTML) && /value="Head office" checked/.test(st2.kids['.cv-where'].innerHTML) && /value="Plant" disabled/.test(st2.kids['.cv-where'].innerHTML));
     s.run('cvPlanDlg(CV.plans.filter(function (v) { return v.visitPlanNo === "VP-1"; })[0])');
     ok('changing an approved visit warns it goes back to the director, and saves only by sending', /A change sends the visit back to the director, and it stops counting as approved/.test(s.els.cvDlg.innerHTML) &&
        /data-send="1">Save and send to the director/.test(s.els.cvDlg.innerHTML) && !/Save as draft/.test(s.els.cvDlg.innerHTML));
@@ -210,7 +228,7 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
     eq('accounting: reads only the visits, no Client Book', a.posts(), ['getVisitPlans']);
     ok('  one view, so no segments: the travel week, this week', a.run('CV.seg') === 'week' && a.els.cvSeg.hidden === true && /<span class="cv-wlabel">26 Oct – 1 Nov 2026<\/span>/.test(a.els.cvTools.innerHTML) && !/This week/.test(a.els.cvTools.innerHTML));
     const t = a.els.cvBody.innerHTML;
-    ok('  the table: Day · Rep · Approved visits · Estimated travel allowance', /<th scope="col">Day<\/th><th scope="col">Rep<\/th><th scope="col">Approved visits<\/th><th scope="col" class="cv-west">Estimated travel allowance<\/th>/.test(t), t.slice(0, 400));
+    ok('  the table: Day · Rep · the day\'s itinerary · Estimated travel allowance', /<th scope="col">Day<\/th><th scope="col">Rep<\/th><th scope="col">Itinerary \(approved visits\)<\/th><th scope="col" class="cv-west">Estimated travel allowance<\/th>/.test(t), t.slice(0, 400));
     eq('  a row per day per rep, the visits accounting may see', (t.match(/<th scope="row" class="cv-wday">[^<]+/g) || []).map(x => x.replace(/.*>/, '')), ['Mon 26 Oct', 'Tue 27 Oct', 'Wed 28 Oct']);
     ok('  each day To be set, and the week total too', (t.match(/<td class="cv-west unset" data-label="Estimated travel allowance">To be set<\/td>/g) || []).length === 3 && /<th scope="row" colspan="3">Week total<\/th><td class="cv-west unset">To be set<\/td>/.test(t));
     ok('  a visit cancelled after approval is struck through and said; one never approved is not there', /<li class="off"><button type="button" class="cv-link" data-open="VP-5">Off Co<\/button><span class="cv-sub">2:00 PM · Norzagaray, Bulacan · cancelled<\/span>/.test(t) &&
@@ -243,16 +261,18 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
     await f.run('cvDo("decideVisitPlans", { visitPlanNos: "[\\"VP-2\\"]", decision: "approve" }, "Approved.")');
     ok('  a refusal leaves the page as it was (no flash, no second read)', f.posts().join() === 'getVisitPlans,decideVisitPlans' && !/dh-banner ok/.test(f.els.cvNotice.innerHTML));
     const s = await boot('sales');
-    const form = { getAttribute: () => '', elements: { client: { value: 'CB-1' }, date: { value: '2026-10-29' }, time: { value: '10:00' }, address: { value: '' }, someoneElse: { value: '' }, purpose: { value: 'Audit' } },
-                   querySelector: () => ({ value: 'Plant' }), querySelectorAll: () => [{ value: 'P2' }] };
+    const form = fakeForm('2026-10-31', [fakeStop({ clientNo: 'CB-1', time: '10:00', location: 'Plant', who: ['P2'], purpose: 'Audit' })]);
     s.ctx.__form = form;
     await s.run('cvPlanSubmit(__form, true)');
     eq('a rep\'s plan, sent to the director', s.run('__posts.filter(function (x) { return x.a === "saveVisitPlan"; })[0].p'),
-       { clientNo: 'CB-1', date: '2026-10-29', time: '10:00', location: 'Plant', contactIds: '["P2"]', someoneElse: '', purpose: 'Audit', send: true });
-    form.elements.date.value = '2026-10-20';
+       { clientNo: 'CB-1', date: '2026-10-31', time: '10:00', location: 'Plant', contactIds: '["P2"]', someoneElse: '', purpose: 'Audit', send: true });
+    form.elements.date.value = '2026-10-20';   // a past day
     const before = s.posts().length;
     await s.run('cvPlanSubmit(__form, false)');
     ok('  a past day is caught before anything is posted', s.posts().length === before);
+    form.elements.date.value = '2026-10-29';   // Philcement is already on that day (VP-4, sent back)
+    await s.run('cvPlanSubmit(__form, false)');
+    ok('  and so is a company the rep already visits that day', s.posts().length === before);
     const SRC = fs.readFileSync(D + 'js/client-visits.js', 'utf8');
     const posts = Array.from(new Set((SRC.match(/(?:postFlow|cvDo)\('(\w+)'/g) || []).map(x => x.replace(/.*\('/, '').replace(/'$/, '')))).sort();
     eq('the page posts only its own actions (and reads the Client Book)', posts, ['cancelVisitPlan', 'decideVisitPlans', 'getClientBook', 'getVisitPlans', 'markVisitPlanDone', 'saveVisitPlan', 'submitVisitPlans']);
@@ -337,6 +357,62 @@ const opens = (h) => (h.match(/data-open="([^"]+)"/g) || []).map(x => x.slice(11
     ok('  no Travel week segment for a rep', !/data-seg="week"/.test(s.els.cvSeg.innerHTML));
     const a = await boot('accounting');
     ok('accounting\'s page does have it (the week view was already there)', a.run('typeof cvWeekHtml') === 'function' && /Estimated travel allowance/.test(a.els.cvBody.innerHTML) && /estimated travel allowance/.test(a.els.cvLede.textContent));
+  }
+
+  sec('8 · A370: several companies in one day');
+  {
+    /* Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day, then with this itinerary for
+       this day, it will show the estimated travel allowance in the accounting". */
+    const byNo = { 'CB-1': BOOK.clients[0], 'CB-2': BOOK.clients[1] }, mine = PLANS.filter(v => v.user === G);
+    const A = { clientNo: 'CB-1', time: '09:00', location: 'Plant', contactIds: ['P1'] }, B = { clientNo: 'CB-2', time: '14:00', location: 'Head office', someoneElse: 'The buyer' };
+    eq('the day\'s companies go as one list, each as the server takes it', M.cvDayParams('2026-10-31', [A, B], byNo, TODAY, mine),
+       { params: { date: '2026-10-31', stops: JSON.stringify([{ clientNo: 'CB-1', time: '09:00', location: 'Plant', contactIds: ['P1'], someoneElse: '', purpose: '' },
+         { clientNo: 'CB-2', time: '14:00', location: 'Head office', contactIds: [], someoneElse: 'The buyer', purpose: '' }]) } });
+    const E = (date, stops) => { const r = M.cvDayParams(date, stops, byNo, TODAY, mine); return [r.error, r.stop || 0]; };
+    eq('  and says what is wrong, naming the visit and its company', [E('2026-10-31', [A, Object.assign({}, B, { someoneElse: '' })]), E('2026-10-31', [A, A]), E('2026-10-30', [B, A]),
+       E('2026-10-31', [A, { clientNo: 'CB-9' }]), E('2026-10-31', []), E('2026-10-31', Array.from({ length: 11 }, () => A)), E('2026-10-20', [A])],
+       [['Visit 2 (Zeta Mining): Choose who you will visit, or type someone else.', 2], ['Philcement Corporation is in this day twice (visits 1 and 2).', 2],
+        ['Visit 2 (Philcement Corporation): you already have a visit to Philcement Corporation that day.', 2], ['Visit 2: Choose the client.', 2],
+        ['Add at least one company to visit.', 0], ['Plan up to 10 companies in one day.', 0], ['The day has passed; choose today or a later day.', 0]]);
+    const s = await boot('sales', { v: 187 });
+    s.run('cvPlanDlg(null)');
+    const f = s.els.cvDlg.innerHTML;
+    ok('from FlowAPI 187 the form plans a day: the day first, then the companies, with Add another company', /<h3 id="cvDlgTitle">Plan a day of visits<\/h3><label class="cv-fl cv-dayf">Day<input type="date"/.test(f) &&
+       /<div class="cv-stops one" id="cvStops"><fieldset class="cv-stop" data-stop="\d+"><legend><span class="cv-stopn">Visit 1<\/span><button type="button" class="cv-link cv-rmstop" data-act="rmstop">Remove<\/button><\/legend>/.test(f) &&
+       /<button type="button" class="dh-btn cv-addstop" data-act="addstop">Add another company<\/button>/.test(f), f.slice(0, 600));
+    const k1 = /data-stop="(\d+)"/.exec(s.run('cvStopHtml(null, cvClients(CV.book, CV.me), "CB-1")'))[1], k2 = /data-stop="(\d+)"/.exec(s.run('cvStopHtml(null, cvClients(CV.book, CV.me), "CB-2")'))[1];
+    ok('  each company\'s block has its own number, so its radio buttons are its own', k1 !== k2);
+    s.run('cvPlanDlg(null, "2026-11-02")');
+    ok('  Add a company to this day opens it on that day', /name="date" required min="2026-10-27" max="2027-01-27" value="2026-11-02"/.test(s.els.cvDlg.innerHTML));
+    s.run('cvPlanDlg(CV.plans.filter(function (v) { return v.visitPlanNo === "VP-3"; })[0])');
+    ok('  a change to one visit stays one visit', /Change the visit/.test(s.els.cvDlg.innerHTML) && !/Add another company/.test(s.els.cvDlg.innerHTML));
+    const two = fakeForm('2026-10-31', [fakeStop({ clientNo: 'CB-1', time: '09:00', location: 'Plant', who: ['P1'] }), fakeStop({ clientNo: 'CB-2', time: '14:00', location: 'Head office', someoneElse: 'The buyer' })]);
+    s.ctx.__form = two;
+    await s.run('cvPlanSubmit(__form, true)');
+    eq('two companies are sent in one post', s.run('__posts.filter(function (x) { return x.a === "saveVisitPlan"; })[0].p'), {
+      date: '2026-10-31', stops: JSON.stringify([{ clientNo: 'CB-1', time: '09:00', location: 'Plant', contactIds: ['P1'], someoneElse: '', purpose: '' },
+        { clientNo: 'CB-2', time: '14:00', location: 'Head office', contactIds: [], someoneElse: 'The buyer', purpose: '' }]), send: true });
+    ok('  and the page says so', /2 visits sent to the director\./.test(s.els.cvNotice.innerHTML));
+    const dup = fakeForm('2026-10-31', [fakeStop({ clientNo: 'CB-1', location: 'Plant', who: ['P1'] }), fakeStop({ clientNo: 'CB-1', location: 'Plant', who: ['P2'] })]);
+    s.ctx.__form = dup;
+    const before = s.posts().length;
+    await s.run('cvPlanSubmit(__form, true)');
+    const dupB = dup.querySelectorAll('.cv-stop');
+    ok('the same company twice is caught before anything is posted, and its block is marked with the reason', s.posts().length === before && dupB[1].marked === true && !dupB[0].marked &&
+       dupB[1].kids['.cv-stoperr'].textContent === 'Philcement Corporation is in this day twice (visits 1 and 2).' && dupB[0].kids['.cv-stoperr'].textContent === '');
+    const old = await boot('sales');
+    old.run('cvPlanDlg(null)');
+    ok('before FlowAPI 187: one company at a time, as before', /<h3 id="cvDlgTitle">Plan a visit<\/h3>/.test(old.els.cvDlg.innerHTML) && !/Add another company/.test(old.els.cvDlg.innerHTML));
+    old.run('CV.seg = "past"; cvRender();');
+    ok('the Past list has no Add a company, even for a day still to come whose visits were cancelled', !/data-addday/.test(old.els.cvBody.innerHTML) && /Wed 28 Oct/.test(old.els.cvBody.innerHTML));
+    const day2 = PLANS.concat([V('VP-11', { user: K, status: 'Pending Director', decision: '', date: '2026-10-28', time: '15:00', company: 'Kim Second Co', clientNo: 'CB-8' })]);
+    const d = await boot('director', { plans: day2 });
+    ok('the director can choose a rep\'s whole day at once', /<h3 class="cv-dhead">Wed 28 Oct <span class="cv-today soft">Tomorrow<\/span><button type="button" class="cv-link cv-dact" data-pickall="VP-6,VP-11">Choose the day<\/button>/.test(d.els.cvBody.innerHTML), d.els.cvBody.innerHTML.slice(0, 900));
+    d.run('cvDetail("VP-6")');
+    ok('  and a visit\'s sheet lists the rest of that day', /<dt>Same day<\/dt><dd><button type="button" class="cv-link" data-open="VP-11">Kim Second Co<\/button> <span class="cv-sub cv-in-line">3:00 PM · With the director<\/span>/.test(d.els.cvDlg.innerHTML), d.els.cvDlg.innerHTML.slice(0, 800));
+    const a = await boot('accounting', { plans: PLANS.concat([V('VP-12', { date: '2026-10-28', time: '15:00', company: 'Second Co', clientNo: 'CB-2' })]) });
+    ok('accounting: a rep\'s day of several companies is one row — its itinerary, how many stops, and the day\'s estimate', /<td class="cv-wrep">Gerald Lucena<span class="cv-sub">2 stops<\/span><\/td><td class="cv-wvis"><ul><li><button type="button" class="cv-link" data-open="VP-1">Philcement Corporation<\/button>.*?data-open="VP-5".*?data-open="VP-12">Second Co<\/button>.*?<\/ul><\/td><td class="cv-west unset" data-label="Estimated travel allowance">To be set<\/td>/.test(a.els.cvBody.innerHTML), a.els.cvBody.innerHTML.slice(0, 200));
+    ok('  a day of one company (with a cancelled one beside it) does not say "1 stops"', !/1 stops/.test(a.els.cvBody.innerHTML));
   }
 
   console.log(FAIL ? `\n${FAIL} of ${N} FAILED\n` : `\nall ${N} passed\n`);
