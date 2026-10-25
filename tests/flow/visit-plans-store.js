@@ -47,7 +47,7 @@ function setup() {
 sec('1 · the version, the roles, and a read of nothing');
 {
   const { c, store } = setup();
-  ok('getVersion = 186', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 186);
+  ok('getVersion = 187', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 187);
   const g = call(c, 'getVisitPlans', GERALD);
   ok('a read of no visits answers empty, creates no tab, and gives the lists', g.success && g.data.length === 0 && !('VisitPlans' in store) && !('VisitPlanLog' in store) &&
      g.lists.statuses.join() === 'Draft,Pending Director,Approved,Done,Rejected,Cancelled' && g.lists.locations.join() === 'Plant,Head office,Other' && g.lists.ahead === 92 && !!g.today, g);
@@ -264,6 +264,51 @@ sec('10 · a rep never receives the estimated travel allowance');
   ok('  nor the reply to a save', saved.success && !/estimat|a test figure/i.test(JSON.stringify(saved)), saved);
   call(c, 'decideVisitPlans', Object.assign({ visitPlanNos: JSON.stringify([v]), decision: 'approve' }, NEIL));
   ok('the director, accounting and management do get them', [NEIL, ACCT, MGMT].every(who => { const d = call(c, 'getVisitPlans', who).data[0]; return d.travelEstimate === 850 && d.travelEstimateBasis === 'a test figure'; }));
+}
+
+sec('11 · A370: several companies on one day, all or none');
+{
+  /* Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day". */
+  const { c, store, ids, day, snap } = setup();
+  const S = (o) => Object.assign({ clientNo: ids.both, time: '', location: 'Plant', contactIds: '["P1"]', someoneElse: '', purpose: '' }, o);
+  const three = call(c, 'saveVisitPlan', Object.assign({ date: day(2), stops: JSON.stringify([S({ time: '09:00' }), S({ clientNo: ids.plant, time: '13:30', contactIds: '[]', someoneElse: 'The shift engineer' }),
+    S({ clientNo: ids.both, location: 'Head office', time: '' })]), send: true }, GERALD));
+  ok('the same company twice in one day is refused, naming both visits, and nothing is written',
+     !three.success && /Both Plant Co is in this day twice \(visits 1 and 3\)/.test(three.message) && !(store.VisitPlans || []).length && !(store.VisitPlanLog || []).length, three);
+  const two = call(c, 'saveVisitPlan', Object.assign({ date: day(2), stops: JSON.stringify([S({ time: '09:00' }), S({ clientNo: ids.plant, time: '13:30', contactIds: '[]', someoneElse: 'The shift engineer' })]), send: true }, GERALD));
+  ok('two companies on one day: two rows, numbered in order, both with the director', two.success && two.visitPlanNos.length === 2 && two.visitPlanNo === two.visitPlanNos[0] &&
+     store.VisitPlans.map(v => v['Visit Plan No']).join() === two.visitPlanNos.join() && store.VisitPlans.every(v => v['Status'] === 'Pending Director' && v['Date'] === day(2) && v.__arity === 28) &&
+     /2 visits sent to the director\./.test(two.message), two);
+  ok('  each stop its own client, time, place and people', store.VisitPlans[0]['Company'] === 'Both Plant Co' && store.VisitPlans[0]['Time'] === '09:00' &&
+     store.VisitPlans[1]['Company'] === 'Plant Only Co' && store.VisitPlans[1]['Address'] === 'Limay, Bataan' && store.VisitPlans[1]['Someone Else'] === 'The shift engineer');
+  ok('  one created log row per stop, saying it is one of the day\'s', store.VisitPlanLog.length === 2 && store.VisitPlanLog.every(l => l['Kind'] === 'created' && /One of 2 visits planned for the day/.test(l['Note']) && l.__arity === 8));
+  ok('  the reply carries the rep\'s view of both, without the estimate', two.plans.length === 2 && two.plans.every(v => !('travelEstimate' in v)));
+  const before = snap();
+  const again = call(c, 'saveVisitPlan', Object.assign({ date: day(2), stops: JSON.stringify([S({ clientNo: ids.plant })]) }, GERALD));
+  ok('a company already visited that day is refused, naming the visit', !again.success && /Visit 1 \(Plant Only Co\): you already have a visit to Plant Only Co that day/.test(again.message) && again.duplicate === two.visitPlanNos[1] && snap() === before, again);
+  const bad = [
+    [[S({}), S({ clientNo: ids.kim })], /^Visit 2 \(Kim Client Co\): Client CB-\d{6}-\d{3} is not in your Client Book\.$/],
+    [[S({}), S({ clientNo: ids.gone })], /^Visit 2: Choose a live client from your Client Book\.$/],
+    [[S({ time: '9am' })], /^Visit 1 \(Both Plant Co\): The time must be like 09:30\.$/],
+    [[S({ clientNo: ids.plant, location: 'Head office' })], /^Visit 1 \(Plant Only Co\): This client has no head office address/],
+    [[S({ contactIds: '[]' })], /^Visit 1 \(Both Plant Co\): Choose who you will visit, or type someone else\.$/],
+  ];
+  bad.forEach(([stops, re]) => {
+    const r = call(c, 'saveVisitPlan', Object.assign({ date: day(4), stops: JSON.stringify(stops) }, GERALD));
+    ok('  refused, naming the stop: ' + re.source.slice(1, 60), !r.success && re.test(r.message) && snap() === before, r);
+  });
+  ok('  a day that has passed, no stops, more than 10, or stops that cannot be read', [
+      [{ date: day(-1), stops: JSON.stringify([S({})]) }, /has passed/], [{ date: day(4), stops: '[]' }, /at least one company/],
+      [{ date: day(4), stops: JSON.stringify(Array.from({ length: 11 }, () => S({}))) }, /up to 10 companies/], [{ date: day(4), stops: '{bad' }, /could not be read/]]
+    .every(([o, re]) => { const r = call(c, 'saveVisitPlan', Object.assign(o, GERALD)); return !r.success && re.test(r.message); }) && snap() === before);
+  ok('  the director cannot plan a day either', !call(c, 'saveVisitPlan', Object.assign({ date: day(4), stops: JSON.stringify([S({})]) }, NEIL)).success && snap() === before);
+  const drafts = call(c, 'saveVisitPlan', Object.assign({ date: day(5), stops: JSON.stringify([S({}), S({ clientNo: ids.plant })]) }, GERALD));
+  ok('without send, the day is saved as drafts', drafts.success && /2 visits saved as drafts\./.test(drafts.message) && store.VisitPlans.slice(-2).every(v => v['Status'] === 'Draft'));
+  call(c, 'decideVisitPlans', Object.assign({ visitPlanNos: JSON.stringify(two.visitPlanNos), decision: 'approve' }, NEIL));
+  const week = call(c, 'getVisitPlans', ACCT).data.filter(v => v.date === day(2));
+  ok('once approved, accounting reads the day\'s two visits (its row of the week)', week.length === 2 && week.every(v => v.user === 'Gerald Lucena' && v.travelEstimate === null));
+  const one = call(c, 'saveVisitPlan', Object.assign({ visitPlanNo: two.visitPlanNos[0], clientNo: ids.both, date: day(2), time: '10:00', location: 'Plant', contactIds: '["P1"]' }, GERALD));
+  ok('a stop of the day is still changed on its own, and goes back to the director alone', one.success && store.VisitPlans[0]['Status'] === 'Pending Director' && store.VisitPlans[1]['Status'] === 'Approved');
 }
 
 console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);

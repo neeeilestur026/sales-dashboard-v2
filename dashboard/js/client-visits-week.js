@@ -52,17 +52,18 @@ function cvWeekToolsHtml() {
     (CV.week === cvMonday(CV.today) ? '' : '<button type="button" class="dh-btn sm" data-week="now">This week</button>') + '</div>';
 }
 
-/** The travel week: one row per day per rep, the approved visits, and the day's estimated travel allowance. */
+/** The travel week: one row per day per rep — that day's itinerary, its approved visits in time order (A370: a rep's
+ *  day of several companies is one row) — and the day's estimated travel allowance. */
 function cvWeekHtml() {
   const rows = cvWeekRows(CV.plans, CV.week, CV.rep), total = cvWeekTotal(rows);
   const note = '<p class="cv-note">How the estimated travel allowance is worked out is not decided yet, so each day says To be set. Visits cancelled after approval are struck through and not counted.</p>';
   if (!rows.length) return '<p class="cv-empty">No approved client visits in this week.</p>' + note;
-  const body = rows.map(r => '<tr><th scope="row" class="cv-wday">' + _cvE(cvDayLabel(r.day, _cvYear())) + '</th><td class="cv-wrep">' + _cvE(r.user) + '</td><td class="cv-wvis"><ul>' +
+  const body = rows.map(r => '<tr><th scope="row" class="cv-wday">' + _cvE(cvDayLabel(r.day, _cvYear())) + '</th><td class="cv-wrep">' + _cvE(r.user) + (r.estimate.count > 1 ? '<span class="cv-sub">' + r.estimate.count + ' stops</span>' : '') + '</td><td class="cv-wvis"><ul>' +
     r.visits.map(v => '<li' + (v.status === 'Cancelled' ? ' class="off"' : '') + '><button type="button" class="cv-link" data-open="' + _cvE(v.visitPlanNo) + '">' + _cvE(v.company) + '</button>' +
       '<span class="cv-sub">' + _cvE([cvClock(v.time), cvTown(v.address)].filter(Boolean).join(' · ')) + (v.status === 'Cancelled' ? ' · cancelled' : v.status === 'Done' ? ' · done' : '') + '</span></li>').join('') +
     '</ul></td><td class="cv-west' + (r.estimate.set ? '' : ' unset') + '" data-label="Estimated travel allowance">' + _cvE(r.estimate.text) + '</td></tr>').join('');
-  return '<div class="cv-tablewrap"><table class="cv-table"><caption class="cv-vh">Approved client visits, ' + _cvE(cvWeekLabel(CV.week)) + '</caption>' +
-    '<thead><tr><th scope="col">Day</th><th scope="col">Rep</th><th scope="col">Approved visits</th><th scope="col" class="cv-west">Estimated travel allowance</th></tr></thead><tbody>' + body + '</tbody>' +
+  return '<div class="cv-tablewrap"><table class="cv-table"><caption class="cv-vh">Each rep\'s itinerary by day, ' + _cvE(cvWeekLabel(CV.week)) + '</caption>' +
+    '<thead><tr><th scope="col">Day</th><th scope="col">Rep</th><th scope="col">Itinerary (approved visits)</th><th scope="col" class="cv-west">Estimated travel allowance</th></tr></thead><tbody>' + body + '</tbody>' +
     '<tfoot><tr><th scope="row" colspan="3">Week total</th><td class="cv-west' + (total.set ? '' : ' unset') + '">' + _cvE(total.text) + '</td></tr></tfoot></table></div>' + note;
 }
 

@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 186;   // A369 — client visits (the new itinerary) and the Client Book's two addresses. History: see CHANGELOG.
+var FLOW_VERSION = 187;   // A370 — several companies in one day of client visits, saved all or none. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -16236,13 +16236,69 @@ function getVisitPlans(p) {
   return { success: true, data: data, log: log, today: _fieldToday(), lists: { statuses: VP_STATUSES, locations: VP_LOCATIONS, ahead: _VP_AHEAD } };
 }
 
+/** The day of a visit: today to _VP_AHEAD days ahead. { date } or { error }. */
+function _vpDay(v) {
+  var today = _fieldToday(), date = _cbDate(v);
+  if (!date) return { error: 'Choose the day of the visit.' };
+  if (date < today) return { error: 'The day of the visit has passed; choose today or a later day.' };
+  if (date > _vpAddDays(today, _VP_AHEAD)) return { error: 'A visit can be planned up to ' + _VP_AHEAD + ' days ahead.' };
+  return { date: date };
+}
+/** One stop, checked: one of the rep's own live clients (from `book`, the ClientBook rows by Client No), an optional
+ *  HH:MM time, where (the plant or head office copied from the client, or Other typed), who (that client's contact ids,
+ *  kept as name and position, or someone else), the purpose. { error, company? } or the fields to write. */
+function _vpStop(s, who, book) {
+  var cbNo = String(s.clientNo || '').trim(), client = cbNo ? book[cbNo] : null;
+  if (!client || client['Archived At']) return { error: 'Choose a live client from your Client Book.' };
+  var company = String(client['Company'] || cbNo);
+  if (!_cbSame(client['Owner'], who)) return { error: 'Client ' + cbNo + ' is not in your Client Book.', company: company };
+  var time = String(s.time == null ? '' : s.time).trim();
+  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { error: 'The time must be like 09:30.', company: company };
+  var loc = VP_LOCATIONS.filter(function (x) { return x.toLowerCase() === String(s.location || '').trim().toLowerCase(); })[0];
+  if (!loc) return { error: 'Say where: ' + VP_LOCATIONS.join(', ') + '.', company: company };
+  var addr = loc === 'Plant' ? String(client['Site Address'] || '').trim() : loc === 'Head office' ? String(client['Head Office Address'] || '').trim()
+           : _webCell(s.address, true).slice(0, 300);
+  if (!addr) return { error: loc === 'Other' ? 'Type the address of the visit.' : 'This client has no ' + loc.toLowerCase() + ' address in the Client Book; add it there, or choose Other and type the address.', company: company };
+  var ids = [];
+  try { ids = typeof s.contactIds === 'string' ? JSON.parse(s.contactIds || '[]') : (s.contactIds || []); } catch (e) { return { error: 'The people to visit could not be read.', company: company }; }
+  if (!Array.isArray(ids)) return { error: 'The people to visit could not be read.', company: company };
+  var contacts = [];
+  try { contacts = JSON.parse(String(client['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  var people = [], missing = '';
+  ids.forEach(function (id) {
+    var hit = (Array.isArray(contacts) ? contacts : []).filter(function (c) { return c && String(c.id) === String(id); })[0];
+    if (!hit) { missing = missing || String(id); return; }
+    if (people.some(function (x) { return x.id === String(hit.id); })) return;
+    people.push({ id: String(hit.id), name: String(hit.name || ''), position: String(hit.position || '') });
+  });
+  if (missing) return { error: 'One of the people chosen is no longer among this client\'s contacts; open the form again.', company: company };
+  var other = _webCell(s.someoneElse).slice(0, 120);
+  if (!people.length && !other) return { error: 'Choose who you will visit, or type someone else.', company: company };
+  return { cbNo: cbNo, company: company, time: time, loc: loc, addr: addr, people: people, other: other, purpose: _webCell(s.purpose, true).slice(0, 500) };
+}
+/** The rep's live visit (anything not cancelled) to a client on a day, other than `except`. */
+function _vpTwin(rows, who, cbNo, date, except) {
+  return rows.filter(function (r) {
+    return String(r['Visit Plan No']) !== String(except || '') && _cbSame(r['User'], who) && String(r['Client No']) === cbNo &&
+           _dateStr(r['Date']) === date && String(r['Status']) !== 'Cancelled';
+  })[0] || null;
+}
+function _vpBook() { var m = {}; _rows('ClientBook').forEach(function (r) { m[String(r['Client No'])] = r; }); return m; }
+
 /** saveVisitPlan({visitPlanNo?, clientNo, date, time?, location, address?, contactIds, someoneElse?, purpose?, send?})
- *  A rep plans a visit to one of their own live clients. `send` puts it straight to the director. */
+ *  A rep plans a visit to one of their own live clients. `send` puts it straight to the director.
+ *  A370 (FlowAPI 187) — a day of visits: saveVisitPlan({date, stops: '[{clientNo, time, location, address, contactIds,
+ *  someoneElse, purpose}, …]', send?}) plans up to _VP_DAY_MAX companies on one day in one go, all or none: every stop is
+ *  checked first (a refusal names the visit and company), a client twice in the list or already visited that day is
+ *  refused, and only then is anything written — one row and one 'created' log row per stop. */
+var _VP_DAY_MAX = 10;
 function saveVisitPlan(p) {
   p = p || {};
   if (_vpRole(p) !== 'sales') return { success: false, message: 'Only a sales rep plans client visits.' };
   var who = _vpWho(p);
   if (!who) return { success: false, message: 'Sign in again — there is no name to save the visit under.' };
+  var send = p.send === true || p.send === 'true' || p.send === 1;
+  if (p.stops !== undefined && p.stops !== null && !p.visitPlanNo) return _vpSaveDay(p, who, send);
   var row = null;
   if (p.visitPlanNo) {
     row = _vpRow(p.visitPlanNo);
@@ -16251,57 +16307,63 @@ function saveVisitPlan(p) {
     var st = String(row['Status'] || '');
     if (st === 'Done' || st === 'Cancelled') return { success: false, message: 'Visit ' + p.visitPlanNo + ' is ' + st.toLowerCase() + ' and can no longer be changed.' };
   }
-  var cbNo = String(p.clientNo || '').trim(), client = cbNo ? _cbRow(cbNo) : null;
-  if (!client || client['Archived At']) return { success: false, message: 'Choose a live client from your Client Book.' };
-  if (!_cbSame(client['Owner'], who)) return { success: false, message: 'Client ' + cbNo + ' is not in your Client Book.' };
-  var today = _fieldToday(), date = _cbDate(p.date);
-  if (!date) return { success: false, message: 'Choose the day of the visit.' };
-  if (date < today) return { success: false, message: 'The day of the visit has passed; choose today or a later day.' };
-  if (date > _vpAddDays(today, _VP_AHEAD)) return { success: false, message: 'A visit can be planned up to ' + _VP_AHEAD + ' days ahead.' };
-  var time = String(p.time == null ? '' : p.time).trim();
-  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { success: false, message: 'The time must be like 09:30.' };
-  var loc = VP_LOCATIONS.filter(function (x) { return x.toLowerCase() === String(p.location || '').trim().toLowerCase(); })[0];
-  if (!loc) return { success: false, message: 'Say where: ' + VP_LOCATIONS.join(', ') + '.' };
-  var addr = loc === 'Plant' ? String(client['Site Address'] || '').trim() : loc === 'Head office' ? String(client['Head Office Address'] || '').trim()
-           : _webCell(p.address, true).slice(0, 300);
-  if (!addr) return { success: false, message: loc === 'Other' ? 'Type the address of the visit.' : 'This client has no ' + loc.toLowerCase() + ' address in the Client Book; add it there, or choose Other and type the address.' };
-  var ids = [];
-  try { ids = typeof p.contactIds === 'string' ? JSON.parse(p.contactIds || '[]') : (p.contactIds || []); } catch (e) { return { success: false, message: 'The people to visit could not be read.' }; }
-  if (!Array.isArray(ids)) return { success: false, message: 'The people to visit could not be read.' };
-  var book = [];
-  try { book = JSON.parse(String(client['Contacts JSON'] || '[]')); } catch (e) { book = []; }
-  var people = [], missing = '';
-  ids.forEach(function (id) {
-    var hit = (Array.isArray(book) ? book : []).filter(function (c) { return c && String(c.id) === String(id); })[0];
-    if (!hit) { missing = missing || String(id); return; }
-    if (people.some(function (x) { return x.id === String(hit.id); })) return;
-    people.push({ id: String(hit.id), name: String(hit.name || ''), position: String(hit.position || '') });
-  });
-  if (missing) return { success: false, message: 'One of the people chosen is no longer among this client\'s contacts; open the form again.' };
-  var other = _webCell(p.someoneElse).slice(0, 120);
-  if (!people.length && !other) return { success: false, message: 'Choose who you will visit, or type someone else.' };
-  var twin = _vpRows().filter(function (r) {
-    return String(r['Visit Plan No']) !== String(p.visitPlanNo || '') && _cbSame(r['User'], who) && String(r['Client No']) === cbNo &&
-           _dateStr(r['Date']) === date && String(r['Status']) !== 'Cancelled';
-  })[0];
-  if (twin) return { success: false, duplicate: String(twin['Visit Plan No']), message: 'You already have a visit to ' + String(client['Company'] || cbNo) + ' that day (' + twin['Visit Plan No'] + ').' };
+  var stop = _vpStop(p, who, _vpBook());
+  if (stop.error) return { success: false, message: stop.error };
+  var day = _vpDay(p.date);
+  if (day.error) return { success: false, message: day.error };
+  var date = day.date, twin = _vpTwin(_vpRows(), who, stop.cbNo, date, p.visitPlanNo);
+  if (twin) return { success: false, duplicate: String(twin['Visit Plan No']), message: 'You already have a visit to ' + stop.company + ' that day (' + twin['Visit Plan No'] + ').' };
 
-  var now = _now(), was = row ? String(row['Status'] || '') : '', send = p.send === true || p.send === 'true' || p.send === 1;
+  var now = _now(), was = row ? String(row['Status'] || '') : '';
   var reopen = was === 'Pending Director' || was === 'Approved';
   var status = send || reopen ? 'Pending Director' : (was || 'Draft');
   var no = row ? String(row['Visit Plan No']) : _nextNumber('VisitPlans', 1, 'VP');
-  var obj = _vpCopy(row);
-  Object.assign(obj, { 'Visit Plan No': no, 'Date': date, 'Time': time, 'User': row ? row['User'] : who, 'Client No': cbNo,
-    'Company': String(client['Company'] || ''), 'Location': loc, 'Address': addr, 'Contacts JSON': JSON.stringify(people), 'Someone Else': other,
-    'Purpose': _webCell(p.purpose, true).slice(0, 500), 'Status': status, 'Updated By': who, 'Updated At': now });
-  if (!row) Object.assign(obj, { 'Created By': who, 'Created At': now });
-  if (status === 'Pending Director') Object.assign(obj, { 'Submitted At': now, 'Decision': '', 'Decided By': '', 'Decided At': '', 'Decision Note': '' });
+  var obj = _vpStopRow(row, no, date, stop, status, row ? row['User'] : who, who, now);
   _vpPut(row, obj);
   if (!row) _vpLog(no, 'created', '', status, '', who);
   else _vpLog(no, reopen ? 'reopened' : 'edited', was, status, reopen ? 'Changed after it was ' + (was === 'Approved' ? 'approved' : 'sent') + '; back with the director.' : '', who);
   if (row && send && !reopen) _vpLog(no, 'sent', was, status, '', who);
   return { success: true, visitPlanNo: no, refNo: no, status: status, plan: _vpOut(obj, true),
            message: status === 'Pending Director' ? 'Sent to the director.' : 'Saved as a draft.' };
+}
+/** A whole visit row for a checked stop: a copy of `row` (or a new one) with the stop's fields. */
+function _vpStopRow(row, no, date, stop, status, user, who, now) {
+  var obj = _vpCopy(row);
+  Object.assign(obj, { 'Visit Plan No': no, 'Date': date, 'Time': stop.time, 'User': user, 'Client No': stop.cbNo,
+    'Company': stop.company, 'Location': stop.loc, 'Address': stop.addr, 'Contacts JSON': JSON.stringify(stop.people), 'Someone Else': stop.other,
+    'Purpose': stop.purpose, 'Status': status, 'Updated By': who, 'Updated At': now });
+  if (!row) Object.assign(obj, { 'Created By': who, 'Created At': now });
+  if (status === 'Pending Director') Object.assign(obj, { 'Submitted At': now, 'Decision': '', 'Decided By': '', 'Decided At': '', 'Decision Note': '' });
+  return obj;
+}
+/** A370 — a day of visits, all or none (see saveVisitPlan). */
+function _vpSaveDay(p, who, send) {
+  var list = p.stops;
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { return { success: false, message: 'The visits could not be read.' }; } }
+  if (!Array.isArray(list) || !list.length) return { success: false, message: 'Add at least one company to visit.' };
+  if (list.length > _VP_DAY_MAX) return { success: false, message: 'Plan up to ' + _VP_DAY_MAX + ' companies in one day.' };
+  var day = _vpDay(p.date);
+  if (day.error) return { success: false, message: day.error };
+  var book = _vpBook(), rows = _vpRows(), stops = [], seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var st = _vpStop(list[i] || {}, who, book), tag = 'Visit ' + (i + 1) + (st.company ? ' (' + st.company + ')' : '');
+    if (st.error) return { success: false, stop: i + 1, message: tag + ': ' + st.error };
+    if (seen[st.cbNo]) return { success: false, stop: i + 1, message: st.company + ' is in this day twice (visits ' + seen[st.cbNo] + ' and ' + (i + 1) + ').' };
+    seen[st.cbNo] = i + 1;
+    var twin = _vpTwin(rows, who, st.cbNo, day.date, '');
+    if (twin) return { success: false, stop: i + 1, duplicate: String(twin['Visit Plan No']), message: tag + ': you already have a visit to ' + st.company + ' that day (' + twin['Visit Plan No'] + ').' };
+    stops.push(st);
+  }
+  var now = _now(), status = send ? 'Pending Director' : 'Draft', nos = [], plans = [];
+  stops.forEach(function (st) {
+    var no = _nextNumber('VisitPlans', 1, 'VP'), obj = _vpStopRow(null, no, day.date, st, status, who, who, now);
+    _vpPut(null, obj);
+    _vpLog(no, 'created', '', status, stops.length > 1 ? 'One of ' + stops.length + ' visits planned for the day.' : '', who);
+    nos.push(no); plans.push(_vpOut(obj, true));
+  });
+  var n = nos.length, word = n + ' visit' + (n === 1 ? '' : 's');
+  return { success: true, visitPlanNo: nos[0], visitPlanNos: nos, refNo: nos.join(', '), status: status, plans: plans,
+           message: send ? word + ' sent to the director.' : word + ' saved as drafts.' };
 }
 
 /** submitVisitPlans({visitPlanNos}) — a rep sends their own drafts (or visits sent back) to the director; all or none. */
@@ -19872,6 +19934,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A370 A DAY OF CLIENT VISITS (187; A327 takes 188 or later). Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day, then with this itinerary for this day, it will show the estimated travel allowance in the accounting". saveVisitPlan also takes {date, stops: [{clientNo, time, location, address, contactIds, someoneElse, purpose}, …], send}: up to 10 companies on one day, all or none — every stop is checked as a single visit is (a refusal names the visit and its company), a client twice in the list or already visited that day is refused, then one row and one 'created' log row per stop, numbered in order. A single visit and every other action are unchanged; no new columns, no new actions. Accounting's week already reads each rep's day as one row with its estimate.
 A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written, and a rep's reads and saves never carry them (Neil: "make sure that the sales has no trace of the estimated travel allowance"). submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
 A366 MANAGEMENT READS EVERY PERSON'S NEW DAILY REPORT (185; A327 takes 186 or later). Neil, 23 Oct 2026: a page on the management dashboard that opens any person's new daily report in the same format as their own, read only. proofReportRoles defaults to director, management, sales, accounting, leadgen, admin (FlowSettings can still narrow it — a sheet that names roles must add management). getProofReports: the director and management read every report of any kind, may narrow by user, and may ask kind 'all' (every kind in one read, each row carrying its kind). Writes are unchanged: management has no report of its own, so saveProofReport and submitProofReport still refuse it. No new actions, no new columns.
 A363 EACH PERSON'S OWN NEW DAILY REPORT (184; A327 takes 185 or later). Neil, 22 Oct 2026: "put the daily report on each of the dashboard user, but put it as a new daily report" (the old DailyReports flow is not touched, and there is no summary for management). proofReportRoles now defaults to director, sales, accounting, leadgen, admin (FlowSettings can still narrow it). The director reads every report and may still save any kind under his own name; everyone else saves, submits and reads only their own report (the name Flask stamps), of the one kind their role has (sales -> sales, accounting -> accounting, leadgen -> leadgen, admin -> admin); another kind is refused, and a role with no report of its own gets none. getProofReports ignores `user` for them. No new actions, no new columns.

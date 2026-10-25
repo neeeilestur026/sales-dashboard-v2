@@ -146,15 +146,17 @@ function cvClients(book, me) {
   return ((book && book.clients) || []).filter(c => c && !c.archivedAt && _cvSame(c.owner, me && me.name))
     .sort((a, b) => _cvS(a.company).localeCompare(_cvS(b.company)));
 }
-/** What the form sends to saveVisitPlan, or the first thing missing. `f` = {clientNo, date, time, location, address,
- *  contactIds, someoneElse, purpose, visitPlanNo}. The server checks it all again. */
-function cvPlanParams(f, client, today) {
+/** The day of a visit, checked: '' when it will do, else what is wrong. */
+function cvDayCheck(date, today) {
+  const d = _cvS(date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'Choose the day of the visit.';
+  if (d < today) return 'The day has passed; choose today or a later day.';
+  if (d > cvAddDays(today, CV_AHEAD)) return 'A visit can be planned up to ' + CV_AHEAD + ' days ahead.';
+  return '';
+}
+/** One company of a plan, checked against its client: { stop } as the server takes it, or { error }. */
+function cvStopCheck(f, client) {
   const x = f || {}, places = cvPlaces(client);
-  if (!client) return { error: 'Choose the client.' };
-  const date = _cvS(x.date);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Choose the day of the visit.' };
-  if (date < today) return { error: 'The day has passed; choose today or a later day.' };
-  if (date > cvAddDays(today, CV_AHEAD)) return { error: 'A visit can be planned up to ' + CV_AHEAD + ' days ahead.' };
   const time = _cvS(x.time);
   if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { error: 'The time must be like 09:30.' };
   const place = places.filter(p => p.loc === x.location)[0];
@@ -164,10 +166,53 @@ function cvPlanParams(f, client, today) {
   if (!address) return { error: 'Type the address of the visit.' };
   const ids = (x.contactIds || []).map(_cvS).filter(Boolean), other = _cvS(x.someoneElse);
   if (!ids.length && !other) return { error: 'Choose who you will visit, or type someone else.' };
-  const out = { clientNo: _cvS(client.clientNo), date, time, location: place.loc, contactIds: JSON.stringify(ids), someoneElse: other, purpose: _cvS(x.purpose) };
-  if (place.loc === 'Other') out.address = address;
+  const stop = { clientNo: _cvS(client.clientNo), time, location: place.loc, contactIds: ids, someoneElse: other, purpose: _cvS(x.purpose) };
+  if (place.loc === 'Other') stop.address = address;
+  return { stop };
+}
+/** The rep's own live visit (not cancelled) to a client on a day, other than `except`. */
+function cvTwin(mine, clientNo, date, except) {
+  return (mine || []).filter(v => v && _cvS(v.clientNo) === _cvS(clientNo) && _cvS(v.date) === date && _cvS(v.status) !== 'Cancelled' && _cvS(v.visitPlanNo) !== _cvS(except))[0] || null;
+}
+/** What the form sends to saveVisitPlan for ONE visit (a change, or a new one before FlowAPI 187), or the first thing
+ *  missing. `f` = {clientNo, date, time, location, address, contactIds, someoneElse, purpose, visitPlanNo}; `mine` the
+ *  rep's own visits. The server checks it all again. */
+function cvPlanParams(f, client, today, mine) {
+  const x = f || {};
+  if (!client) return { error: 'Choose the client.' };
+  const bad = cvDayCheck(x.date, today);
+  if (bad) return { error: bad };
+  const r = cvStopCheck(x, client), date = _cvS(x.date);
+  if (r.error) return r;
+  if (cvTwin(mine, client.clientNo, date, x.visitPlanNo)) return { error: 'You already have a visit to ' + client.company + ' that day.' };
+  const s = r.stop, out = { clientNo: s.clientNo, date, time: s.time, location: s.location, contactIds: JSON.stringify(s.contactIds), someoneElse: s.someoneElse, purpose: s.purpose };
+  if (s.address) out.address = s.address;
   if (_cvS(x.visitPlanNo)) out.visitPlanNo = _cvS(x.visitPlanNo);
   return { params: out };
+}
+/* A370 — Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day". One day and its
+   companies, sent in one go (FlowAPI 187, saved all or none). */
+const CV_DAY_MAX = 10;
+/** What the form sends for a day of visits, or the first thing missing — naming the visit (and its company) it is in:
+ *  { params: {date, stops} } or { error, stop }. `stops` = the form's companies, `byNo` the rep's clients by number. */
+function cvDayParams(date, stops, byNo, today, mine) {
+  const bad = cvDayCheck(date, today);
+  if (bad) return { error: bad };
+  const list = stops || [];
+  if (!list.length) return { error: 'Add at least one company to visit.' };
+  if (list.length > CV_DAY_MAX) return { error: 'Plan up to ' + CV_DAY_MAX + ' companies in one day.' };
+  const d = _cvS(date), out = [], seen = {};
+  for (let i = 0; i < list.length; i++) {
+    const client = (byNo || {})[_cvS(list[i] && list[i].clientNo)];
+    if (!client) return { error: 'Visit ' + (i + 1) + ': Choose the client.', stop: i + 1 };
+    const tag = 'Visit ' + (i + 1) + ' (' + client.company + ')', r = cvStopCheck(list[i], client);
+    if (r.error) return { error: tag + ': ' + r.error, stop: i + 1 };
+    if (seen[client.clientNo]) return { error: client.company + ' is in this day twice (visits ' + seen[client.clientNo] + ' and ' + (i + 1) + ').', stop: i + 1 };
+    seen[client.clientNo] = i + 1;
+    if (cvTwin(mine, client.clientNo, d)) return { error: tag + ': you already have a visit to ' + client.company + ' that day.', stop: i + 1 };
+    out.push(r.stop);
+  }
+  return { params: { date: d, stops: JSON.stringify(out) } };
 }
 
 /** The history of one visit, in words, oldest first. */
@@ -180,6 +225,6 @@ function cvLogLines(log, no) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { CV_STATUSES, CV_LOCATIONS, CV_AHEAD, cvAddDays, cvMonday, cvDayLabel, cvWeekLabel, cvClock, cvTown, cvPeople, cvStatus,
-                     cvForAccounting, cvSort, cvSortUp, cvCan, cvSalesBuckets, cvByDay, cvByRep, cvReps,
+                     cvForAccounting, cvSort, cvSortUp, cvCan, cvSalesBuckets, cvByDay, cvByRep, cvReps, CV_DAY_MAX, cvDayCheck, cvStopCheck, cvTwin, cvDayParams,
                      cvPlaces, cvDefaultPlace, cvClients, cvPlanParams, cvLogLines };
 }
