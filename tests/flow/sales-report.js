@@ -100,6 +100,22 @@ eq('no plan for the day: a desk day', run('srDayType(IX, ME, "2026-10-20", REP).
 eq('a stop in a submitted plan: a visit day, with what is booked', run('JSON.stringify((d => [d.type, d.planned.map(p => p.company)])(srDayType(IX, ME, "2026-10-22", REP)))'), JSON.stringify(['visit', ['Plant A']]));
 eq('a stop in a draft plan is not a booking', run('srDayType(IX, ME, "2026-10-23", REP).type'), 'desk');
 eq('the person\'s own switch is kept', run('srDayType(IX, ME, "2026-10-20", Object.assign(srBlank(), { dayType: "visit", dayTypeOverridden: true })).type'), 'visit');
+{
+  /* A369 — client visits (FlowAPI 186), the new itinerary: the rep's own visits sent to the director, approved or done
+     are the day's planned stops too; a draft, one sent back, one cancelled, or another rep's are not. */
+  C.__plans = Object.assign({}, C.__raw, { visitPlans: [
+    { visitPlanNo: 'VP-1', date: '2026-10-20', time: '14:00', user: G, company: 'Plant V', address: 'Brgy. Bigte, Norzagaray, Bulacan', contacts: [{ id: 'P1', name: 'R. Cruz', position: 'Planner' }], someoneElse: 'The plant manager', status: 'Approved' },
+    { visitPlanNo: 'VP-2', date: '2026-10-20', time: '', user: G, company: 'Pending Co', contacts: [], someoneElse: 'Buyer', status: 'Pending Director' },
+    { visitPlanNo: 'VP-3', date: '2026-10-20', user: G, company: 'Draft Co', status: 'Draft' },
+    { visitPlanNo: 'VP-4', date: '2026-10-20', user: G, company: 'Back Co', status: 'Rejected' },
+    { visitPlanNo: 'VP-5', date: '2026-10-20', user: G, company: 'Off Co', status: 'Cancelled' },
+    { visitPlanNo: 'VP-6', date: '2026-10-20', user: 'Kim Reyes', company: 'Kim Co', status: 'Approved' },
+    { visitPlanNo: 'VP-7', date: '2026-10-22', user: G, company: 'Plant A2', time: '08:00', status: 'Done' }] });
+  run('var IXV = srIndex(__plans);');
+  eq('A369: a day with client visits is a visit day; only the rep\'s own sent, approved or done visits count', run('JSON.stringify((d => [d.type, d.planned.map(p => p.ref)])(srDayType(IXV, ME, "2026-10-20", REP)))'), JSON.stringify(['visit', ['VP-2', 'VP-1']]));
+  eq('  each with its time, people and town', run('JSON.stringify((p => [p.time, p.person, p.city])(srPlanned(IXV, ME, "2026-10-20").find(x => x.ref === "VP-1")))'), JSON.stringify(['2:00 PM', 'R. Cruz, The plant manager', 'Norzagaray, Bulacan']));
+  eq('  beside the weekly plan\'s stops, in time order', run('JSON.stringify(srPlanned(IXV, ME, "2026-10-22").map(p => p.ref))'), JSON.stringify(['VP-7', 'ITIN-9#1']));
+}
 
 sec('3 · follow-ups due today');
 const due = run('JSON.stringify(srFollowUps(IX, ME, "2026-10-20", REP).map(x => [x.ref, x.step]).sort())');
@@ -335,7 +351,7 @@ sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own')
 {
   const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8') + fs.readFileSync(path.join(DASH, 'sales-report-model.js'), 'utf8');
   const posts = Array.from(new Set((SRC.match(/postFlow\('(\w+)'/g) || []).map(x => x.slice(10, -1)))).sort();
-  eq('the only writes and private reads are the trial\'s own (A350: and the Client Book, read only)', posts, ['getClientBook', 'getProofReports', 'saveProofReport', 'submitProofReport']);
+  eq('the only writes and private reads are the trial\'s own (A350: and the Client Book, A369: the client visits, read only)', posts, ['getClientBook', 'getProofReports', 'getVisitPlans', 'saveProofReport', 'submitProofReport']);
   ok('  nothing touches the real call log, visits or quotations', !/logSalesCall|logClientVisit|closeQuotation|deleteSalesCall/.test(SRC));
   ok('no emoji, no hex colour, no inline style', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u.test(SRC) && !/#[0-9a-fA-F]{6}\b/.test(SRC) && !/style="/.test(SRC));
   ok('no location is asked for', !/geolocation|latitude|longitude/i.test(SRC));

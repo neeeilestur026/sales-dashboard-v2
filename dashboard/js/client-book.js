@@ -44,6 +44,7 @@ async function cbLoad() {
   const read = (a, p) => fetchFlow(a, p || {}).then(r => (r && r.success !== false ? r.data : null)).catch(() => null);
   CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
   CB.v183 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(183).catch(() => false) : false;   // A360 — connecting past records from 183
+  CB.v186 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(186).catch(() => false) : false;   // A369 — the head office address from 186
   const [book, quotations, prs, salesOrders, clients, activity, users, reports] = await Promise.all([
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
@@ -218,7 +219,7 @@ function cbTierPills(cur, required) {
     (CB.v180 ? '' : '<span class="cb-sub">The label is saved once the FlowAPI update (180) is pasted.</span>') + '</fieldset>';
 }
 function cbTierOf(form) { const r = Array.prototype.find.call(form.querySelectorAll('input[name="tier"]'), x => x.checked); return r ? r.value : ''; }
-/* A354 — the industry, and the site's address */
+/* A354 — the industry, and the site's address. A369 — two addresses: the plant (stored as 'Site Address') and the head office. */
 function cbSectorBadge(s) { return s ? '<span class="cb-badge sector">' + _cbE(s) + '</span>' : '<span class="cb-badge tier-none">No sector</span>'; }
 function cbLabels(c) { return '<span class="cb-labels">' + cbTierBadge(c.tier) + cbSectorBadge(c.sector) + '</span>'; }
 function cbSectorFields(cur, required) {
@@ -226,11 +227,15 @@ function cbSectorFields(cur, required) {
   return '<div class="cb-grid2"><label>Industry or sector<select class="cb-in" name="sector"' + (required && CB.v180 ? ' required' : '') + off + '>' +
       (required ? '<option value="">Choose…</option>' : '') + CB_SECTORS.map(x => '<option' + (x === pick ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
     '<label class="cb-other"' + (pick === 'Others' ? '' : ' hidden') + '>Which industry?<input type="text" class="cb-in" name="sectorOther" maxlength="60" value="' + _cbE(listed || cur === 'Others' ? '' : cur) + '" placeholder="Shipbuilding"' + off + '></label></div>' +
-    '<label>Site address<textarea class="cb-in" name="siteAddress" rows="2" maxlength="300" placeholder="Plant / site, barangay, city, province"' + off + '></textarea></label>';
+    '<div class="cb-grid2"><label>Plant address<textarea class="cb-in" name="siteAddress" rows="2" maxlength="300" placeholder="Plant / site, barangay, city, province"' + off + '></textarea></label>' +
+    '<label>Head office address<textarea class="cb-in" name="headOfficeAddress" rows="2" maxlength="300" placeholder="Building, street, city"' + (CB.v186 ? '' : ' disabled') + '></textarea>' +
+      (CB.v186 ? '' : '<span class="cb-sub">Saved once the FlowAPI update (186) is pasted.</span>') + '</label></div>';
 }
-function cbWireSector(form, site) {
+function cbWireSector(form, site, head) {
   const sel = form.querySelector('select[name="sector"]'), other = form.querySelector('.cb-other'), ta = form.querySelector('textarea[name="siteAddress"]');
+  const ho = form.querySelector('textarea[name="headOfficeAddress"]');
   if (ta && site) ta.value = site;
+  if (ho && head) ho.value = head;
   if (sel && other) sel.addEventListener('change', () => { other.hidden = sel.value !== 'Others'; });
 }
 function cbSectorOf(form) {
@@ -251,7 +256,7 @@ function cbPlace(addr) { const parts = String(addr || '').split(',').map(x => x.
 function cbRow(c) {
   const fl = cbFlags(c, CB.log, CB.clients, CB.ix.today), r = cbRecords(CB.ix, c), say = cbRecordsSay(r, c);
   const meta = [c.tier ? _cbE(c.tier) : '<span class="cb-nolabel">No label</span>', c.sector ? _cbE(c.sector) : '<span class="cb-nolabel">No sector</span>',
-    _cbE(cbPlace(c.siteAddress)), CB.all ? _cbE(c.owner || 'No owner') : ''].filter(Boolean).join(' · ');
+    _cbE(cbPlace(c.siteAddress || c.headOfficeAddress)), CB.all ? _cbE(c.owner || 'No owner') : ''].filter(Boolean).join(' · ');
   const acc = cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.accreditation === 'Accredited'
       ? (c.accreditedUntil ? ' <span class="' + (fl.expired || fl.expiring ? 'cb-warnt' : '') + '">' + (fl.expired ? 'expired ' : 'until ') + _cbE(cbDay(c.accreditedUntil)) + '</span>' : '')
       : (c.accreditationStep ? ' ' + _cbE(c.accreditationStep) : ''));
@@ -414,6 +419,7 @@ function cbAddDialog(back) {
       if (!params.sector) { cbMsg(box, 'Choose the industry first.', true); return; }
       params.siteAddress = form.elements.siteAddress.value.trim();
     }
+    if (CB.v186) params.headOfficeAddress = form.elements.headOfficeAddress.value.trim();   // A369
     btn.disabled = true; cbMsg(box, 'Saving…');
     const r = await postFlow('saveClientBookClient', params).catch(e => ({ success: false, message: String(e && e.message || e) }));
     btn.disabled = false;
@@ -475,7 +481,7 @@ function cbDetail(no, back) {
   const head = '<header class="cb-dhead"><div class="cb-dtop"><div class="cb-dtitle"><h3 id="cbTitle">' + _cbE(c.company) + '</h3>' +
       '<p class="cb-sub">' + cbLabels(c) + ' ' + cbBadge(c.accreditation, cbAccTone(c.accreditation)) + (c.status ? ' ' + cbBadge(c.status, cbStatusTone(c.status)) : '') +
       (c.archivedAt ? ' ' + cbBadge('Archived', 'off') : '') + '</p>' +
-      '<p class="cb-dmeta">' + [_cbE(c.clientNo), CB.all ? _cbE(c.owner || 'No owner') : '', c.siteAddress ? 'Site: ' + _cbE(c.siteAddress) : ''].filter(Boolean).join(' · ') + '</p></div>' +
+      '<p class="cb-dmeta">' + [_cbE(c.clientNo), CB.all ? _cbE(c.owner || 'No owner') : '', c.siteAddress ? 'Plant: ' + _cbE(cbPlace(c.siteAddress)) : '', c.headOfficeAddress ? 'Head office: ' + _cbE(cbPlace(c.headOfficeAddress)) : ''].filter(Boolean).join(' · ') + '</p></div>' +
       '<button type="button" class="btn btn-secondary cb-close" data-close>Close</button></div>' +
     '<div class="cb-tabs" role="tablist" aria-label="About ' + _cbE(c.company) + '">' + tab('overview', 'Overview') + tab('records', 'Records', r.total) +
       tab('contacts', 'Contacts', people.length) + tab('timeline', 'Timeline', log.length) + '</div></header>';
@@ -508,6 +514,9 @@ function cbDetail(no, back) {
         : '<span class="cb-dim">None set</span>', live ? '<button type="button" class="cb-recbtn cb-act" data-edit>Edit</button>' : '') +
       fact('Portal records', r.total ? _cbE(r.prs.length + ' PR' + (r.prs.length === 1 ? '' : 's') + ' · ' + r.quotes.length + ' quotation' + (r.quotes.length === 1 ? '' : 's') + ' · ' + r.sos.length + ' sales order' + (r.sos.length === 1 ? '' : 's')) +
         (r.openValue ? ' <span class="cb-fsub">' + _cbE(cbMoney(r.openValue)) + ' open</span>' : '') : '<span class="cb-dim">None yet</span>', goto('records', 'See them')) +
+      fact('Addresses', c.siteAddress || c.headOfficeAddress ? [c.siteAddress ? '<span class="cb-addr"><b>Plant</b> ' + _cbE(c.siteAddress) + '</span>' : '',
+        c.headOfficeAddress ? '<span class="cb-addr"><b>Head office</b> ' + _cbE(c.headOfficeAddress) + '</span>' : ''].join('')
+        : '<span class="cb-dim">None yet</span>', live ? '<button type="button" class="cb-recbtn cb-act" data-edit>Edit</button>' : '') +   // A369
       fact('Main contact', main ? '<b>' + _cbE(main.name || (main.emails || [])[0] || (main.phones || [])[0] || '') + '</b>' + (main.position ? ' <span class="cb-fsub">' + _cbE(main.position) + '</span>' : '') +
         ((main.emails || []).length || (main.phones || []).length ? '<span class="cb-flinks">' + (main.emails || []).slice(0, 1).map(mail).concat((main.phones || []).slice(0, 1).map(tel)).join(' · ') + '</span>' : '')
         : '<span class="cb-dim">No contact yet</span>', goto('contacts', people.length > 1 ? 'All ' + people.length : 'Contacts')) +
@@ -555,7 +564,7 @@ function cbDetail(no, back) {
   const box = cbShow(head + panel('overview', overview) + panel('records', records) + panel('contacts', contacts) + panel('timeline', timeline), back, { pane: true });
   cbMarkOpen();
   cbWirePeople(box);
-  if (box.querySelector('#cbEdit')) cbWireSector(box.querySelector('#cbEdit'), c.siteAddress);
+  if (box.querySelector('#cbEdit')) cbWireSector(box.querySelector('#cbEdit'), c.siteAddress, c.headOfficeAddress);
   cbWireTabs(box);
   const recs = box.querySelector('#cbRecs');
   if (recs && canLink) {
@@ -606,6 +615,7 @@ function cbDetail(no, back) {
       nextStep: el.nextStep.value.trim(), nextStepDate: el.nextStepDate.value, notes: el.notes.value.trim() };
     if (CB.v180 && cbTierOf(edit)) params.tier = cbTierOf(edit);
     if (CB.v180) { if (cbSectorOf(edit)) params.sector = cbSectorOf(edit); params.siteAddress = el.siteAddress.value.trim(); }
+    if (CB.v186) params.headOfficeAddress = el.headOfficeAddress.value.trim();   // A369
     cbPost(edit, 'saveClientBookClient', params);
   });
   const arch = box.querySelector('#cbArchive');

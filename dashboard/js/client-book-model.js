@@ -265,7 +265,7 @@ function cbFilter(clients, log, ix, f) {
     if (o.owner && c.owner !== o.owner) return false;
     if (o.flag) { const fl = cbFlags(c, log, clients, ix.today); if (o.flag === 'expiring' ? !(fl.expiring || fl.expired) : !fl[o.flag]) return false; }
     if (!q) return true;
-    const hay = [c.company, c.tier, c.sector, c.siteAddress, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
+    const hay = [c.company, c.tier, c.sector, c.siteAddress, c.headOfficeAddress, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
       a.concat([p.name, p.position, p.note]).concat(p.emails || []).concat(p.phones || []).concat((p.phones || []).map(x => String(x).replace(/\D/g, ''))), [])).join(' ').toLowerCase();
     return hay.indexOf(q) >= 0 || (q.replace(/\D/g, '').length >= 4 && hay.indexOf(q.replace(/\D/g, '')) >= 0);
   });
@@ -292,11 +292,11 @@ function cbSummary(clients, log, today) {
 /** The filtered list as CSV (one row per client, every contact person in one cell). */
 function cbCsv(rows, log, ix) {
   const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['Client No', 'Company', 'Major or minor', 'Sector', 'Site address', 'Owner', 'Accreditation', 'Step', 'Accredited until', 'Accreditation last update', 'Status', 'Status since', 'Status ref',
+  const head = ['Client No', 'Company', 'Major or minor', 'Sector', 'Plant address', 'Head office address', 'Owner', 'Accreditation', 'Step', 'Accredited until', 'Accreditation last update', 'Status', 'Status since', 'Status ref',
                 'Primary contact', 'Position', 'Emails', 'Phones', 'Other contacts', 'Open PRs', 'Open quotations', 'Open quotations value', 'Next step', 'Next step date', 'Last update'];
   const lines = rows.map(c => {
     const p = cbPrimary(c) || {}, others = (c.contacts || []).filter(x => x !== p), r = cbRecords(ix, c), fl = cbFlags(c, log, rows, ix.today);
-    return [c.clientNo, c.company, c.tier, c.sector, c.siteAddress, c.owner, c.accreditation, c.accreditationStep, c.accreditedUntil, _cbDate(cbAccredLast(c, log).at), c.status, _cbDate(c.statusUpdatedAt), c.statusRef,
+    return [c.clientNo, c.company, c.tier, c.sector, c.siteAddress, c.headOfficeAddress, c.owner, c.accreditation, c.accreditationStep, c.accreditedUntil, _cbDate(cbAccredLast(c, log).at), c.status, _cbDate(c.statusUpdatedAt), c.statusRef,
             p.name || '', p.position || '', (p.emails || []).join('; '), (p.phones || []).join('; '),
             others.map(o => [o.name, o.position, (o.emails || []).join(' / '), (o.phones || []).join(' / ')].filter(Boolean).join(', ')).join(' | '),
             r.openPrs, r.openQuotes, Math.round(r.openValue), c.nextStep, c.nextStepDate, fl.lastUpdate].map(q).join(',');

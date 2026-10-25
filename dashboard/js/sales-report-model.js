@@ -100,7 +100,7 @@ function srMoney(v) {
 
 /* ── the index: every read, cleaned and keyed once ─────────────────────────────────────────── */
 
-/** raw = { today, quotations, salesOrders, quotationEmails, prs, activity, calls, visits, itineraries, settings } */
+/** raw = { today, quotations, salesOrders, quotationEmails, prs, activity, calls, visits, itineraries, settings, visitPlans } */
 function srIndex(raw) {
   const r = raw || {};
   const ix = {
@@ -109,6 +109,7 @@ function srIndex(raw) {
     quotations: (r.quotations || []).filter(q => q && !_srDemo(q.quotationNo)),
     sos: (r.salesOrders || []).filter(s => s && !_srDemo(s.soNo)),
     activity: r.activity || [], calls: r.calls || [], visits: r.visits || [], itins: r.itineraries || [],
+    plans: r.visitPlans || [],   // A369 — client visits, the new itinerary (FlowAPI 186)
     hasSO: {}, links: {}, qByNo: {}, prs: {}, prCreated: {}, qSent: {},
     book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [], links: (r.book && r.book.links) || [] }   // A350 — the Client Book trial, when FlowAPI 178 is in; A360 its links
   };
@@ -189,9 +190,18 @@ function srLinked(report, day) {
 
 /* ── the day type ──────────────────────────────────────────────────────────────────────────── */
 
-/** The stops in the person's weekly plan for `day` (a plan that is submitted or approved; a draft is not a booking). */
+/** The stops in the person's weekly plan for `day` (a plan that is submitted or approved; a draft is not a booking),
+ *  and A369 their client visits that day (sent to the director, approved or done; not a draft, sent back or cancelled). */
 function srPlanned(ix, me, day) {
   const out = [];
+  (ix.plans || []).forEach(v => {
+    const st = _srS(v.status);
+    if (!_srSame(v.user, me.name) || _srS(v.date) !== day || ['Pending Director', 'Approved', 'Done'].indexOf(st) < 0) return;
+    const town = _srS(v.address).split(',').map(x => x.trim()).filter(Boolean).slice(-2).join(', ');
+    out.push({ ref: _srS(v.visitPlanNo), time: srClock(v.time) || _srS(v.time), sort: srMinutes(v.time), company: _srS(v.company),
+               person: (v.contacts || []).map(c => _srS(c && c.name)).concat(_srS(v.someoneElse)).filter(Boolean).join(', '),
+               city: town, purpose: _srS(v.purpose), status: st });
+  });
   ix.itins.forEach(it => {
     const st = _srS(it.status) || 'Draft';
     if (!_srSame(it.user, me.name) || st === 'Draft' || st === 'Rejected') return;

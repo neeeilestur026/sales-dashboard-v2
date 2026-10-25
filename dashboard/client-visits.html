@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client visits</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/director.css">
+  <link rel="stylesheet" href="css/client-visits.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="dh cv">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content dh-main">
+    <!-- A369 — client visits, the new itinerary (Neil, 25 Oct 2026): a sales rep plans visits to their own Client Book
+         clients and picks who to visit; the director approves first; accounting sees the approved visits by day;
+         management reads. The weekly itinerary keeps working beside it. One page, a view per role; js/client-visits.js
+         draws it. -->
+    <div class="dh-col cv-col">
+      <header class="cv-head">
+        <div class="cv-titles"><h1>Client visits</h1><p id="cvLede">Visits to clients from the Client Book.</p></div>
+        <div class="cv-actions" id="cvActions"></div>
+      </header>
+      <div id="cvNotice"></div>
+      <div class="cv-bar" id="cvBar">
+        <div class="cv-seg" id="cvSeg" role="tablist" aria-label="Show"></div>
+        <div class="cv-tools" id="cvTools"></div>
+      </div>
+      <section class="cv-body" id="cvBody" aria-live="polite"><p class="cv-empty">Reading the visits…</p></section>
+      <div class="cv-bulk" id="cvBulk" hidden></div>
+    </div>
+  </main>
+  <div class="dh-overlay" id="cvOverlay">
+    <div class="dh-modal wide cv-dlg" id="cvDlg" role="dialog" aria-modal="true" aria-labelledby="cvDlgTitle"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-visits-model.js"></script>
+  <script src="js/client-visits.js"></script>
+</body>
+</html>

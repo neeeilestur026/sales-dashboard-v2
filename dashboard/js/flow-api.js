@@ -150,6 +150,7 @@ const FLOW_SECURED_ACTIONS = [
   'getProofReports', 'saveProofReport', 'submitProofReport',   // A347 / A348 — the private sales daily report (a trial)
   'archiveClientBookClient', 'getClientBook', 'saveClientBookClient', 'setClientBookStatus',   // A350 — the Client Book trial
   'linkClientBookRecords', 'unlinkClientBookRecord',   // A360 — connecting old PRs and quotations to a client
+  'cancelVisitPlan', 'decideVisitPlans', 'getVisitPlans', 'markVisitPlanDone', 'saveVisitPlan', 'submitVisitPlans',   // A369 — client visits
   'saveLeadgenRecord', 'saveMarketingRecord', 'savePOPDF', 'savePRPDF', 'savePaymentRequestPDF',
   'savePfInquiry', 'saveQuotationPDF', 'saveSOCostDetails', 'saveSONotes', 'saveSupplier',
   'saveTravelPDF', 'saveTravelReplenishment', 'saveWeeklyItinerary', 'seedClientAliases', 'seedCommissionDemo',

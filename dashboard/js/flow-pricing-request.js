@@ -303,7 +303,7 @@ async function loadClientBook() {
   } catch (e) { return; }
   if (!prBook.length) return;
   sel.innerHTML = '<option value="">— not linked —</option>' + prBook.map(c => '<option value="' + flowEsc(c.clientNo) + '">' +
-    flowEsc(c.company + (c.siteAddress ? ' — ' + c.siteAddress : '') + (c.tier ? ' · ' + c.tier : '')) + '</option>').join('');
+    flowEsc(c.company + (c.siteAddress || c.headOfficeAddress ? ' — ' + (c.siteAddress || c.headOfficeAddress) : '') + (c.tier ? ' · ' + c.tier : '')) + '</option>').join('');
   row.hidden = false;
 }
 function prPickClientBook() {
@@ -316,7 +316,7 @@ function prPickClientBook() {
   const p = (c.contacts || []).find(x => x.primary) || (c.contacts || [])[0] || {};
   const fill = (id, v) => { const el = document.getElementById(id); if (!el || (el.value && el.dataset.cbfill !== '1')) return; el.value = v || ''; el.dataset.cbfill = v ? '1' : ''; };
   fill('prContact', p.name); fill('prDesignation', p.position); fill('prEmail', (p.emails || [])[0]); fill('prPhone', (p.phones || [])[0]);
-  fill('prAddress', c.siteAddress);
+  fill('prAddress', c.siteAddress || c.headOfficeAddress);   // A369 — the plant, or the head office when there is no plant
   prFillContacts();
 }
 

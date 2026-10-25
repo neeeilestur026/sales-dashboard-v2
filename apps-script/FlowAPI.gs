@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 185;   // A366 — management reads every person's new daily report (read only). History: see CHANGELOG.
+var FLOW_VERSION = 186;   // A369 — client visits (the new itinerary) and the Client Book's two addresses. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -574,11 +574,21 @@ var SCHEMA = {
                   'Accredited Until', 'Accreditation Updated At', 'Status', 'Status Note', 'Status Ref', 'Status Updated At',
                   'Next Step', 'Next Step Date', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At',
                   'Archived At', 'Archive Reason',
-                  'Tier', 'Sector', 'Site Address'],   // A354 — Major / Minor, the industry, the plant's address
+                  'Tier', 'Sector', 'Site Address',   // A354 — Major / Minor, the industry, the plant's address ("Plant address" on the page)
+                  'Head Office Address'],             // A369 — the head office, beside the plant
   ClientBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At'],
   // A360 — which client a PR or quotation belongs to, one row per record (the latest decision; blank Client No = none).
   // Written only by linkClientBookRecords / unlinkClientBookRecord.
-  ClientBookLinks: ['Kind', 'Record No', 'Client No', 'By', 'At']
+  ClientBookLinks: ['Kind', 'Record No', 'Client No', 'By', 'At'],
+  // A369 — client visits (the new itinerary): one row per planned visit to a Client Book client, and a log that is only
+  // ever appended to. Written only by saveVisitPlan / submitVisitPlans / decideVisitPlans / cancelVisitPlan /
+  // markVisitPlanDone; submitTravelReplenishment reads it (an approved visit in the week stands for the itinerary).
+  VisitPlans:    ['Visit Plan No', 'Date', 'Time', 'User', 'Client No', 'Company', 'Location', 'Address', 'Contacts JSON',
+                  'Someone Else', 'Purpose', 'Status', 'Created By', 'Created At', 'Updated By', 'Updated At', 'Submitted At',
+                  'Decision', 'Decided By', 'Decided At', 'Decision Note', 'Cancelled By', 'Cancelled At', 'Cancel Reason',
+                  'Done At', 'Result',
+                  'Travel Estimate (PHP)', 'Travel Estimate Basis'],   // reserved: how the estimate is worked out is not decided yet
+  VisitPlanLog:  ['Log No', 'Visit Plan No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -630,7 +640,8 @@ function _ss() {
    parsed stay as they are, so readers compare through _idNorm / _fpSame. */
 var _TEXT_COLS = { EventIndex: ['Fingerprint'], PaymentRequests: ['Account Number'], Suppliers: ['Account Number'],
                    FieldCollections: ['Cheque No', 'Reference No'],
-                   WebRequests: ['Ref', 'Key', 'Phone'] };   // A338 — a phone '0917…' must keep its 0
+                   WebRequests: ['Ref', 'Key', 'Phone'],   // A338 — a phone '0917…' must keep its 0
+                   VisitPlans: ['Time'] };                 // A369 — '09:30' stays text, not a time of day 1899
 var _TEXT_DONE = {};
 function _textColumns(name, sh) {
   if (!_TEXT_COLS[name] || _TEXT_DONE[name]) return;
@@ -819,6 +830,7 @@ var _SECURED = {
   submitProofReport: 1,   // A348
   getClientBook: 1, saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350 — the Client Book trial; its read is private too
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360 — connecting old PRs and quotations to a client
+  getVisitPlans: 1, saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369 — client visits
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
@@ -13655,7 +13667,16 @@ function adjustCommissionRequest(p) {
     message: 'Adjustment recorded — net payable is now ' + _commMoney(_num(r['Amount (PHP)']) + adj) + '.' };
 }
 
+/* A369 — the rate table is the director's: the page was director-only but these two were not, and the commission
+   rollout admits sales, so a signed-in rep could change or remove a rate through /flow/secure. */
+function _commRatesDenied(p) {
+  return String((p && p.actorRole) || '').toLowerCase() === 'director' ? null
+    : { success: false, message: 'Only the director can change the commission rates.' };
+}
+
 function setCommissionRate(p) {
+  var denied = _commRatesDenied(p);
+  if (denied) return denied;
   if (!p.rateKey) return { success: false, message: 'A rate key is required.' };
   var scope = String(p.scope || 'default').toLowerCase();
   if (['default', 'salesperson', 'customer'].indexOf(scope) < 0) {
@@ -13688,6 +13709,8 @@ function setCommissionRate(p) {
 }
 
 function deleteCommissionRate(p) {
+  var denied = _commRatesDenied(p);
+  if (denied) return denied;
   var r = _commRateRows().filter(function (x) { return String(x['Rate Key']) === String(p.rateKey); })[0];
   if (!r) return { success: false, message: 'Rate ' + p.rateKey + ' not found.' };
   _sheet('CommissionRates').deleteRow(r.rowIndex);
@@ -14514,20 +14537,24 @@ function submitTravelReplenishment(p) {
 
   var itin = _travItineraryFor(r['User'], r['Week Start']);
   var itinStatus = itin ? String(itin['Status'] || '') : '';
+  /* A369 — the new itinerary: an approved (or done) client visit in the week lets it through as an approved weekly
+     itinerary does, with no waiver. The visits' numbers stand in the Itinerary No. */
+  var visits = itinStatus === 'Approved' ? [] : _travVisitsFor(r['User'], r['Week Start']);
+  var viaVisits = visits.length > 0;
   var waiverBy = '', waiverReason = '';
   if (noProof.length) {                     // waived above; record who and why on the same pair
     waiverBy = String(p.actorName || '');
     waiverReason = String(p.waiverReason || '').trim();
   }
-  if (itinStatus !== 'Approved') {
+  if (itinStatus !== 'Approved' && !viaVisits) {
     var canWaive = canWaiveAny;
     if (!String(p.waiverReason || '').trim() || !canWaive) {
       return { success: false, needsWaiver: true, itineraryStatus: itinStatus || 'none',
         message: itin
-          ? 'The weekly itinerary for this week is ' + itinStatus + ', not Approved. Accounting or the ' +
-            'director can still let this week through by recording a reason.'
-          : 'There is no approved weekly itinerary for this week. Accounting or the director can still ' +
-            'let it through by recording a reason.' };
+          ? 'The weekly itinerary for this week is ' + itinStatus + ', not Approved, and no client visit that week is ' +
+            'approved. Accounting or the director can still let this week through by recording a reason.'
+          : 'There is no approved weekly itinerary or approved client visit for this week. Accounting or the director ' +
+            'can still let it through by recording a reason.' };
     }
     waiverBy = String(p.actorName || '');
     waiverReason = String(p.waiverReason || '').trim();
@@ -14539,8 +14566,8 @@ function submitTravelReplenishment(p) {
   var flt = _travFloatFor(r['User'], r['Week Start']);
   _travSet(p.travNo, {
     'Status': _TRAV_STAGES[0].status,
-    'Itinerary No': itin ? String(itin['Itinerary No']) : '',
-    'Itinerary Status At Submit': itinStatus || 'none',
+    'Itinerary No': viaVisits ? visits.map(function (v) { return String(v['Visit Plan No']); }).join(', ').slice(0, 300) : (itin ? String(itin['Itinerary No']) : ''),
+    'Itinerary Status At Submit': viaVisits ? 'Approved client visits' : (itinStatus || 'none'),
     'Waiver By': waiverBy, 'Waiver Reason': waiverReason,
     'Float Amount': flt.amount,
     'Total Spent': d.total, 'Transport Total': d.transport,
@@ -15816,7 +15843,8 @@ function _cbOut(r) {
            nextStepDate: r['Next Step Date'] ? _dateStr(r['Next Step Date']) : '', contacts: contacts, notes: String(r['Notes'] || ''),
            createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''),
            updatedAt: _webIso(r['Updated At']), archivedAt: _webIso(r['Archived At']), archiveReason: String(r['Archive Reason'] || ''),
-           tier: String(r['Tier'] || ''), sector: String(r['Sector'] || ''), siteAddress: String(r['Site Address'] || '') };
+           tier: String(r['Tier'] || ''), sector: String(r['Sector'] || ''), siteAddress: String(r['Site Address'] || ''),
+           headOfficeAddress: String(r['Head Office Address'] || '') };   // A369
 }
 
 /** getClientBook() — every client (archived ones too) and the whole log. A read never creates the tabs. */
@@ -15839,8 +15867,9 @@ function getClientBook(p) {
   return { success: true, clients: clients, log: log, links: links, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
 }
 
-/** saveClientBookClient({clientNo?, company, tier, sector, siteAddress, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
- *  A354: a new client must be Major or Minor and have its sector; an edit that sends neither keeps what it has. */
+/** saveClientBookClient({clientNo?, company, tier, sector, siteAddress, headOfficeAddress, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
+ *  A354: a new client must be Major or Minor and have its sector; an edit that sends neither keeps what it has.
+ *  A369: two addresses — the plant ('Site Address') and the head office; for each, null keeps it and '' clears it. */
 function saveClientBookClient(p) {
   var no = _cbDenied(p);
   if (no) return { success: false, message: no };
@@ -15862,6 +15891,7 @@ function saveClientBookClient(p) {
   var sector = _cbSector(p.sector);
   if (!row && !sector) return { success: false, message: 'Say which industry the client is in.' };
   var site = p.siteAddress === undefined || p.siteAddress === null ? null : _webCell(p.siteAddress, true).slice(0, 300);
+  var ho = p.headOfficeAddress === undefined || p.headOfficeAddress === null ? null : _webCell(p.headOfficeAddress, true).slice(0, 300);   // A369
   var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true';
   var twin = null;
   _rows('ClientBook').forEach(function (r) { if (!r['Archived At'] && String(r['Key']) === key && (!row || String(r['Client No']) !== String(row['Client No']))) twin = r; });
@@ -15877,6 +15907,7 @@ function saveClientBookClient(p) {
   if (tier) obj['Tier'] = tier;
   if (sector) obj['Sector'] = sector;
   if (site !== null) obj['Site Address'] = site;
+  if (ho !== null) obj['Head Office Address'] = ho;
   var clientNo = row ? String(row['Client No']) : _nextNumber('ClientBook', 1, 'CB');
   obj['Client No'] = clientNo;
   _cbPut(row, obj);
@@ -15887,7 +15918,8 @@ function saveClientBookClient(p) {
     if (String(row['Company']) !== company) changed.push('company "' + row['Company'] + '" to "' + company + '"');
     if (tier && String(row['Tier'] || '') !== tier) changed.push('the label ' + (row['Tier'] || 'not set') + ' to ' + tier);
     if (sector && String(row['Sector'] || '') !== sector) changed.push('the sector ' + (row['Sector'] || 'not set') + ' to ' + sector);
-    if (site !== null && String(row['Site Address'] || '') !== site) changed.push('the site address');
+    if (site !== null && String(row['Site Address'] || '') !== site) changed.push('the plant address');
+    if (ho !== null && String(row['Head Office Address'] || '') !== ho) changed.push('the head office address');   // A369
     if (String(row['Owner']) !== owner) changed.push('owner ' + (row['Owner'] || '—') + ' to ' + (owner || '—'));
     if (String(row['Next Step']) !== obj['Next Step'] || (row['Next Step Date'] ? _dateStr(row['Next Step Date']) : '') !== nextDate) changed.push('next step');
     if (String(row['Notes']) !== obj['Notes']) changed.push('notes');
@@ -15951,6 +15983,61 @@ function archiveClientBookClient(p) {
   _cbPut(row, obj);
   _cbLog(String(row['Client No']), restore ? 'restored' : 'archived', '', '', restore ? '' : reason, '', by);
   return { success: true, clientNo: String(row['Client No']), client: _cbOut(obj) };
+}
+
+/* A369 — Neil, 25 Oct 2026: the imports kept a client's head office as a line "Head office: X" in its notes; now that it
+   has its own field, those lines move into it. Run once from the Apps Script editor (not an action):
+   previewClientBookHeadOffices() says what would change and writes nothing; tidyClientBookHeadOffices() does it. A line
+   counts only with the colon ("Head office: …"); an import tail ". From Gerald's masterlist …" stays in the notes. When
+   the field is empty the address moves in; when it already holds the same address the line is simply dropped; when it
+   holds a different one, nothing changes and the client is listed for a person to settle. Archived clients are included.
+   Updated By / At are left alone (a tidy is not anyone's edit); each client changed gets one 'details' log row. A second
+   run changes nothing. */
+var _CB_HO_LINE = /^\s*head\s*office\s*(?:address)?\s*:\s*(.+?)\s*$/i;
+function previewClientBookHeadOffices() { var r = _cbTidyHeadOffices(true); Logger.log(r.text); return r; }
+function tidyClientBookHeadOffices() { var r = _cbTidyHeadOffices(false); Logger.log(r.text); return r; }
+function _cbTidyHeadOffices(dry) {
+  if (SCHEMA.ClientBook.indexOf('Head Office Address') < 0) throw new Error('This FlowAPI has no Head Office Address column yet (186 or later).');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var norm = function (v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase(); };
+    var moved = [], deduped = [], conflicts = [], several = [], bad = [], none = 0;
+    var sh = _ss().getSheetByName('ClientBook');
+    var rows = sh && sh.getLastRow() >= 2 ? _rows('ClientBook') : [];
+    rows.forEach(function (row) {
+      var no = String(row['Client No']), label = no + ' ' + String(row['Company'] || '');
+      var lines = String(row['Notes'] || '').replace(/\r\n?/g, '\n').split('\n');
+      var hits = [];
+      lines.forEach(function (l, i) { if (_CB_HO_LINE.test(l)) hits.push(i); });
+      if (!hits.length) { none++; return; }
+      if (hits.length > 1) { several.push(label); return; }
+      var text = _CB_HO_LINE.exec(lines[hits[0]])[1], tail = '';
+      var cut = /\.\s+(?=(?:From|Merged)\b)/.exec(text);
+      if (cut) { tail = text.slice(cut.index + cut[0].length).trim(); text = text.slice(0, cut.index); }
+      var addr = text.replace(/\s+/g, ' ').replace(/[.;,\s]+$/, '').trim();
+      if (!addr || addr.length > 300) { bad.push(label); return; }
+      var field = String(row['Head Office Address'] || '').trim();
+      if (field && norm(field) !== norm(addr)) { conflicts.push(label + ' — notes: "' + addr + '", field: "' + field + '"'); return; }
+      var keep = lines.slice(); keep[hits[0]] = tail;
+      var notes = keep.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      (field ? deduped : moved).push(label);
+      if (dry) return;
+      var obj = {}; SCHEMA.ClientBook.forEach(function (h) { obj[h] = row[h]; });
+      obj['Notes'] = notes;
+      if (!field) obj['Head Office Address'] = addr.slice(0, 300);
+      _cbPut(row, obj);
+      _cbLog(no, 'details', '', '', field ? 'Dropped the "Head office:" line from the notes; the address was already in Head office address.'
+                                          : 'Moved the head office address out of the notes into its own field.', '', 'Neil Estur');
+    });
+    var text2 = (dry ? 'PREVIEW (nothing written). ' : '') + 'Head office tidy: ' + moved.length + ' moved, ' + deduped.length + ' already in the field, ' +
+      conflicts.length + ' different (left as they are), ' + several.length + ' with several head office lines (skipped), ' + bad.length + ' unreadable, ' + none + ' with none.' +
+      (conflicts.length ? '\nDifferent — settle by hand:\n' + conflicts.join('\n') : '') + (several.length ? '\nSeveral lines:\n' + several.join('\n') : '') +
+      (bad.length ? '\nUnreadable:\n' + bad.join('\n') : '');
+    return { dry: !!dry, moved: moved.length, deduped: deduped.length, conflicts: conflicts, several: several, unreadable: bad, none: none, text: text2 };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ── A360 · connecting old purchase requests and quotations to a client ──────────────────────────────────
@@ -16045,6 +16132,281 @@ function unlinkClientBookRecord(p) {
   _cbSetLink(m, kind, rn, '', by);
   _cbLog(cur, 'unlinked', '', '', _cbRecName(kind), rn, by);
   return { success: true, clientNo: cur, no: rn };
+}
+
+/* ── A369 · client visits (the new itinerary) ─────────────────────────────────────────────────────────────
+   Neil, 25 Oct 2026: "create a new client visit page for each sales, they can select their clients and who to visit
+   in their client book", the director approves first, and accounting sees the approved visits with an estimated
+   travel allowance for the day ("set aside first on how to be calculated, just put it there"). The weekly itinerary
+   stays and keeps working beside it.
+   A visit is one row of VisitPlans: one of the rep's own live Client Book clients, a day (today to 92 days ahead), an
+   optional time, where (Plant / Head office, copied from the client at the save, or Other, typed) and who (people from
+   the client's contacts, by id, kept as name and position only, or "someone else"). Draft → Pending Director →
+   Approved → Done, or Rejected (sent back with a note) or Cancelled (with a reason). Editing a pending or approved
+   visit sends it back to the director. Each change is one VisitPlanLog row; nothing is deleted and nothing goes to
+   the ActivityLog. 'Travel Estimate (PHP)' and 'Travel Estimate Basis' are reserved and never written here: how the
+   estimate is worked out is not decided yet. Who reads: the rep their own, the director and management all
+   (management read only), accounting the approved ones (and the ones cancelled after approval). */
+var VP_STATUSES = ['Draft', 'Pending Director', 'Approved', 'Done', 'Rejected', 'Cancelled'];
+var VP_LOCATIONS = ['Plant', 'Head office', 'Other'];
+var _VP_AHEAD = 92, _VP_MAX = 100;
+function _vpRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+function _vpWho(p) { return String((p && p.actorName) || '').trim(); }
+function _vpTime(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, _tz(), 'HH:mm');
+  return String(v == null ? '' : v).trim();
+}
+/** The day a number of days after a yyyy-MM-dd, as yyyy-MM-dd. */
+function _vpAddDays(ymd, n) {
+  var d = new Date(+ymd.substring(0, 4), +ymd.substring(5, 7) - 1, +ymd.substring(8, 10) + n);
+  return Utilities.formatDate(d, _tz(), 'yyyy-MM-dd');
+}
+function _vpHas(name) { var sh = _ss().getSheetByName(name); return !!(sh && sh.getLastRow() >= 2); }
+function _vpRows() { return _vpHas('VisitPlans') ? _rows('VisitPlans') : []; }
+function _vpRow(no) {
+  var hit = null;
+  _vpRows().forEach(function (r) { if (String(r['Visit Plan No']) === String(no)) hit = r; });
+  return hit;
+}
+/** Write a whole visit row in SCHEMA order, so the width always matches. */
+function _vpPut(row, obj) {
+  var vals = SCHEMA.VisitPlans.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('VisitPlans').getRange(row.rowIndex, 1, 1, SCHEMA.VisitPlans.length).setValues([vals]);
+  else _append('VisitPlans', vals);
+}
+function _vpCopy(row) { var o = {}; SCHEMA.VisitPlans.forEach(function (h) { o[h] = row ? row[h] : ''; }); return o; }
+function _vpLog(no, kind, from, to, note, by) {
+  _append('VisitPlanLog', [_nextNumber('VisitPlanLog', 1, 'VPL'), no, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), by, _now()]);
+}
+/* A369 — Neil, 25 Oct 2026: "make sure that the sales has no trace of the estimated travel allowance". A rep's reads
+   and saves never carry the two estimate fields; only the director, accounting and management get them. */
+function _vpOut(r, forSales) {
+  var people = [];
+  try { people = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { people = []; }
+  var est = r['Travel Estimate (PHP)'];
+  var out = { visitPlanNo: String(r['Visit Plan No']), date: _dateStr(r['Date']), time: _vpTime(r['Time']), user: String(r['User'] || ''),
+           clientNo: String(r['Client No'] || ''), company: String(r['Company'] || ''), location: String(r['Location'] || ''),
+           address: String(r['Address'] || ''), contacts: Array.isArray(people) ? people : [], someoneElse: String(r['Someone Else'] || ''),
+           purpose: String(r['Purpose'] || ''), status: String(r['Status'] || ''), createdBy: String(r['Created By'] || ''),
+           createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''), updatedAt: _webIso(r['Updated At']),
+           submittedAt: _webIso(r['Submitted At']), decision: String(r['Decision'] || ''), decidedBy: String(r['Decided By'] || ''),
+           decidedAt: _webIso(r['Decided At']), decisionNote: String(r['Decision Note'] || ''), cancelledBy: String(r['Cancelled By'] || ''),
+           cancelledAt: _webIso(r['Cancelled At']), cancelReason: String(r['Cancel Reason'] || ''), doneAt: _webIso(r['Done At']),
+           result: String(r['Result'] || '') };
+  if (!forSales) {
+    out.travelEstimate = est === '' || est === null || est === undefined ? null : _num(est);
+    out.travelEstimateBasis = String(r['Travel Estimate Basis'] || '');
+  }
+  return out;
+}
+/** What accounting sees: the approved visits, the done ones, and the ones cancelled after they were approved. */
+function _vpForAccounting(r) {
+  var s = String(r['Status'] || '');
+  return s === 'Approved' || s === 'Done' || (s === 'Cancelled' && String(r['Decision'] || '') === 'Approved');
+}
+/** A list of visit numbers, sent as a JSON array or a comma-separated string. */
+function _vpNos(v) {
+  var list = v;
+  if (typeof v === 'string') { try { list = JSON.parse(v); } catch (e) { list = v.split(','); } }
+  if (!Array.isArray(list)) list = [list];
+  var seen = {};
+  return list.map(function (x) { return String(x == null ? '' : x).trim(); }).filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
+}
+
+/** getVisitPlans({from?, to?}) — the visits this person may see (see above), newest day first, with their log.
+ *  A read never creates the tabs. */
+function getVisitPlans(p) {
+  p = p || {};
+  var role = _vpRole(p), who = _vpWho(p);
+  if (['sales', 'director', 'accounting', 'management'].indexOf(role) < 0) return { success: false, message: 'Client visits are for sales, the director, accounting and management.' };
+  if (!who) return { success: false, message: 'Sign in again — there is no name to read the visits under.' };
+  var from = _cbDate(p.from), to = _cbDate(p.to);
+  var rows = _vpRows().filter(function (r) {
+    if (role === 'sales' && !_cbSame(r['User'], who)) return false;
+    if (role === 'accounting' && !_vpForAccounting(r)) return false;
+    var d = _dateStr(r['Date']);
+    return (!from || d >= from) && (!to || d <= to);
+  });
+  var data = rows.map(function (r) { return _vpOut(r, role === 'sales'); }).sort(function (a, b) { return a.date === b.date ? (a.time < b.time ? -1 : a.time > b.time ? 1 : 0) : (a.date < b.date ? 1 : -1); });
+  var mine = {}; data.forEach(function (v) { mine[v.visitPlanNo] = 1; });
+  var log = role === 'accounting' || !_vpHas('VisitPlanLog') ? [] : _rows('VisitPlanLog').filter(function (r) { return mine[String(r['Visit Plan No'])]; }).map(function (r) {
+    return { logNo: String(r['Log No']), visitPlanNo: String(r['Visit Plan No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
+             to: String(r['To'] || ''), note: String(r['Note'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
+  });
+  return { success: true, data: data, log: log, today: _fieldToday(), lists: { statuses: VP_STATUSES, locations: VP_LOCATIONS, ahead: _VP_AHEAD } };
+}
+
+/** saveVisitPlan({visitPlanNo?, clientNo, date, time?, location, address?, contactIds, someoneElse?, purpose?, send?})
+ *  A rep plans a visit to one of their own live clients. `send` puts it straight to the director. */
+function saveVisitPlan(p) {
+  p = p || {};
+  if (_vpRole(p) !== 'sales') return { success: false, message: 'Only a sales rep plans client visits.' };
+  var who = _vpWho(p);
+  if (!who) return { success: false, message: 'Sign in again — there is no name to save the visit under.' };
+  var row = null;
+  if (p.visitPlanNo) {
+    row = _vpRow(p.visitPlanNo);
+    if (!row) return { success: false, message: 'Visit ' + p.visitPlanNo + ' was not found.' };
+    if (!_cbSame(row['User'], who)) return { success: false, message: 'Visit ' + p.visitPlanNo + ' is not yours.' };
+    var st = String(row['Status'] || '');
+    if (st === 'Done' || st === 'Cancelled') return { success: false, message: 'Visit ' + p.visitPlanNo + ' is ' + st.toLowerCase() + ' and can no longer be changed.' };
+  }
+  var cbNo = String(p.clientNo || '').trim(), client = cbNo ? _cbRow(cbNo) : null;
+  if (!client || client['Archived At']) return { success: false, message: 'Choose a live client from your Client Book.' };
+  if (!_cbSame(client['Owner'], who)) return { success: false, message: 'Client ' + cbNo + ' is not in your Client Book.' };
+  var today = _fieldToday(), date = _cbDate(p.date);
+  if (!date) return { success: false, message: 'Choose the day of the visit.' };
+  if (date < today) return { success: false, message: 'The day of the visit has passed; choose today or a later day.' };
+  if (date > _vpAddDays(today, _VP_AHEAD)) return { success: false, message: 'A visit can be planned up to ' + _VP_AHEAD + ' days ahead.' };
+  var time = String(p.time == null ? '' : p.time).trim();
+  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { success: false, message: 'The time must be like 09:30.' };
+  var loc = VP_LOCATIONS.filter(function (x) { return x.toLowerCase() === String(p.location || '').trim().toLowerCase(); })[0];
+  if (!loc) return { success: false, message: 'Say where: ' + VP_LOCATIONS.join(', ') + '.' };
+  var addr = loc === 'Plant' ? String(client['Site Address'] || '').trim() : loc === 'Head office' ? String(client['Head Office Address'] || '').trim()
+           : _webCell(p.address, true).slice(0, 300);
+  if (!addr) return { success: false, message: loc === 'Other' ? 'Type the address of the visit.' : 'This client has no ' + loc.toLowerCase() + ' address in the Client Book; add it there, or choose Other and type the address.' };
+  var ids = [];
+  try { ids = typeof p.contactIds === 'string' ? JSON.parse(p.contactIds || '[]') : (p.contactIds || []); } catch (e) { return { success: false, message: 'The people to visit could not be read.' }; }
+  if (!Array.isArray(ids)) return { success: false, message: 'The people to visit could not be read.' };
+  var book = [];
+  try { book = JSON.parse(String(client['Contacts JSON'] || '[]')); } catch (e) { book = []; }
+  var people = [], missing = '';
+  ids.forEach(function (id) {
+    var hit = (Array.isArray(book) ? book : []).filter(function (c) { return c && String(c.id) === String(id); })[0];
+    if (!hit) { missing = missing || String(id); return; }
+    if (people.some(function (x) { return x.id === String(hit.id); })) return;
+    people.push({ id: String(hit.id), name: String(hit.name || ''), position: String(hit.position || '') });
+  });
+  if (missing) return { success: false, message: 'One of the people chosen is no longer among this client\'s contacts; open the form again.' };
+  var other = _webCell(p.someoneElse).slice(0, 120);
+  if (!people.length && !other) return { success: false, message: 'Choose who you will visit, or type someone else.' };
+  var twin = _vpRows().filter(function (r) {
+    return String(r['Visit Plan No']) !== String(p.visitPlanNo || '') && _cbSame(r['User'], who) && String(r['Client No']) === cbNo &&
+           _dateStr(r['Date']) === date && String(r['Status']) !== 'Cancelled';
+  })[0];
+  if (twin) return { success: false, duplicate: String(twin['Visit Plan No']), message: 'You already have a visit to ' + String(client['Company'] || cbNo) + ' that day (' + twin['Visit Plan No'] + ').' };
+
+  var now = _now(), was = row ? String(row['Status'] || '') : '', send = p.send === true || p.send === 'true' || p.send === 1;
+  var reopen = was === 'Pending Director' || was === 'Approved';
+  var status = send || reopen ? 'Pending Director' : (was || 'Draft');
+  var no = row ? String(row['Visit Plan No']) : _nextNumber('VisitPlans', 1, 'VP');
+  var obj = _vpCopy(row);
+  Object.assign(obj, { 'Visit Plan No': no, 'Date': date, 'Time': time, 'User': row ? row['User'] : who, 'Client No': cbNo,
+    'Company': String(client['Company'] || ''), 'Location': loc, 'Address': addr, 'Contacts JSON': JSON.stringify(people), 'Someone Else': other,
+    'Purpose': _webCell(p.purpose, true).slice(0, 500), 'Status': status, 'Updated By': who, 'Updated At': now });
+  if (!row) Object.assign(obj, { 'Created By': who, 'Created At': now });
+  if (status === 'Pending Director') Object.assign(obj, { 'Submitted At': now, 'Decision': '', 'Decided By': '', 'Decided At': '', 'Decision Note': '' });
+  _vpPut(row, obj);
+  if (!row) _vpLog(no, 'created', '', status, '', who);
+  else _vpLog(no, reopen ? 'reopened' : 'edited', was, status, reopen ? 'Changed after it was ' + (was === 'Approved' ? 'approved' : 'sent') + '; back with the director.' : '', who);
+  if (row && send && !reopen) _vpLog(no, 'sent', was, status, '', who);
+  return { success: true, visitPlanNo: no, refNo: no, status: status, plan: _vpOut(obj, true),
+           message: status === 'Pending Director' ? 'Sent to the director.' : 'Saved as a draft.' };
+}
+
+/** submitVisitPlans({visitPlanNos}) — a rep sends their own drafts (or visits sent back) to the director; all or none. */
+function submitVisitPlans(p) {
+  p = p || {};
+  if (_vpRole(p) !== 'sales') return { success: false, message: 'Only a sales rep sends client visits.' };
+  var who = _vpWho(p), nos = _vpNos(p.visitPlanNos), today = _fieldToday();
+  if (!who) return { success: false, message: 'Sign in again — there is no name to send the visits under.' };
+  if (!nos.length) return { success: false, message: 'Choose the visits to send.' };
+  if (nos.length > _VP_MAX) return { success: false, message: 'Send up to ' + _VP_MAX + ' visits at a time.' };
+  var byNo = {}; _vpRows().forEach(function (r) { byNo[String(r['Visit Plan No'])] = r; });
+  for (var i = 0; i < nos.length; i++) {
+    var r = byNo[nos[i]];
+    if (!r) return { success: false, message: 'Visit ' + nos[i] + ' was not found. Nothing was sent.' };
+    if (!_cbSame(r['User'], who)) return { success: false, message: 'Visit ' + nos[i] + ' is not yours. Nothing was sent.' };
+    var s = String(r['Status'] || '');
+    if (s !== 'Draft' && s !== 'Rejected') return { success: false, message: 'Visit ' + nos[i] + ' is ' + s + '; only drafts and visits sent back can be sent. Nothing was sent.' };
+    if (_dateStr(r['Date']) < today) return { success: false, message: 'The day of visit ' + nos[i] + ' has passed; change its day first. Nothing was sent.' };
+  }
+  var now = _now();
+  nos.forEach(function (no) {
+    var r = byNo[no], obj = _vpCopy(r), was = String(r['Status']);
+    Object.assign(obj, { 'Status': 'Pending Director', 'Submitted At': now, 'Decision': '', 'Decided By': '', 'Decided At': '', 'Decision Note': '', 'Updated By': who, 'Updated At': now });
+    _vpPut(r, obj);
+    _vpLog(no, 'sent', was, 'Pending Director', '', who);
+  });
+  return { success: true, sent: nos.length, message: nos.length + ' visit' + (nos.length === 1 ? '' : 's') + ' sent to the director.' };
+}
+
+/** decideVisitPlans({visitPlanNos, decision: 'approve' | 'reject', note}) — the director, one visit or many; all or none.
+ *  Sending back needs a note. */
+function decideVisitPlans(p) {
+  p = p || {};
+  if (_vpRole(p) !== 'director') return { success: false, message: 'Only the director approves client visits.' };
+  var who = _vpWho(p), nos = _vpNos(p.visitPlanNos), dec = String(p.decision || '').trim().toLowerCase(), note = _webCell(p.note, true).slice(0, 500);
+  if (!who) return { success: false, message: 'Sign in again — there is no name to save the decision under.' };
+  if (dec !== 'approve' && dec !== 'reject') return { success: false, message: 'Approve or send back.' };
+  if (dec === 'reject' && !note) return { success: false, message: 'Say why the visit is sent back.' };
+  if (!nos.length) return { success: false, message: 'Choose the visits.' };
+  if (nos.length > _VP_MAX) return { success: false, message: 'Decide up to ' + _VP_MAX + ' visits at a time.' };
+  var byNo = {}; _vpRows().forEach(function (r) { byNo[String(r['Visit Plan No'])] = r; });
+  for (var i = 0; i < nos.length; i++) {
+    var r = byNo[nos[i]];
+    if (!r) return { success: false, message: 'Visit ' + nos[i] + ' was not found. Nothing was changed.' };
+    if (String(r['Status']) !== 'Pending Director') return { success: false, message: 'Visit ' + nos[i] + ' is ' + r['Status'] + ', not waiting for you. Nothing was changed.' };
+  }
+  var now = _now(), to = dec === 'approve' ? 'Approved' : 'Rejected';
+  nos.forEach(function (no) {
+    var r = byNo[no], obj = _vpCopy(r);
+    Object.assign(obj, { 'Status': to, 'Decision': to, 'Decided By': who, 'Decided At': now, 'Decision Note': note, 'Updated By': who, 'Updated At': now });
+    _vpPut(r, obj);
+    _vpLog(no, dec === 'approve' ? 'approved' : 'sent back', 'Pending Director', to, note, who);
+  });
+  return { success: true, decided: nos.length, status: to, message: nos.length + ' visit' + (nos.length === 1 ? '' : 's') + (dec === 'approve' ? ' approved.' : ' sent back.') };
+}
+
+/** cancelVisitPlan({visitPlanNo, reason}) — the rep who planned it, or the director. A reason is required. */
+function cancelVisitPlan(p) {
+  p = p || {};
+  var role = _vpRole(p), who = _vpWho(p);
+  if (role !== 'sales' && role !== 'director') return { success: false, message: 'Only the rep who planned a visit, or the director, can cancel it.' };
+  if (!who) return { success: false, message: 'Sign in again — there is no name to save the change under.' };
+  var r = _vpRow(p.visitPlanNo);
+  if (!r) return { success: false, message: 'Visit ' + (p.visitPlanNo || '') + ' was not found.' };
+  if (role === 'sales' && !_cbSame(r['User'], who)) return { success: false, message: 'Visit ' + p.visitPlanNo + ' is not yours.' };
+  var was = String(r['Status'] || '');
+  if (was === 'Done' || was === 'Cancelled') return { success: false, message: 'Visit ' + p.visitPlanNo + ' is already ' + was.toLowerCase() + '.' };
+  var reason = _webCell(p.reason, true).slice(0, 300);
+  if (!reason) return { success: false, message: 'Say why the visit is cancelled.' };
+  var now = _now(), obj = _vpCopy(r);
+  Object.assign(obj, { 'Status': 'Cancelled', 'Cancelled By': who, 'Cancelled At': now, 'Cancel Reason': reason, 'Updated By': who, 'Updated At': now });
+  _vpPut(r, obj);
+  _vpLog(String(r['Visit Plan No']), 'cancelled', was, 'Cancelled', reason, who);
+  return { success: true, visitPlanNo: String(r['Visit Plan No']), refNo: String(r['Visit Plan No']), message: 'Visit cancelled.' };
+}
+
+/** markVisitPlanDone({visitPlanNo, result}) — the rep, once the day of an approved visit has come: one line on how it went. */
+function markVisitPlanDone(p) {
+  p = p || {};
+  if (_vpRole(p) !== 'sales') return { success: false, message: 'Only the rep who made the visit marks it done.' };
+  var who = _vpWho(p), r = _vpRow(p.visitPlanNo);
+  if (!who) return { success: false, message: 'Sign in again — there is no name to save the change under.' };
+  if (!r) return { success: false, message: 'Visit ' + (p.visitPlanNo || '') + ' was not found.' };
+  if (!_cbSame(r['User'], who)) return { success: false, message: 'Visit ' + p.visitPlanNo + ' is not yours.' };
+  if (String(r['Status']) !== 'Approved') return { success: false, message: 'Only an approved visit can be marked done (this one is ' + r['Status'] + ').' };
+  if (_dateStr(r['Date']) > _fieldToday()) return { success: false, message: 'The day of this visit has not come yet.' };
+  var result = _webCell(p.result).slice(0, 300);
+  if (!result) return { success: false, message: 'Say in a line how the visit went.' };
+  var now = _now(), obj = _vpCopy(r);
+  Object.assign(obj, { 'Status': 'Done', 'Done At': now, 'Result': result, 'Updated By': who, 'Updated At': now });
+  _vpPut(r, obj);
+  _vpLog(String(r['Visit Plan No']), 'done', 'Approved', 'Done', result, who);
+  return { success: true, visitPlanNo: String(r['Visit Plan No']), refNo: String(r['Visit Plan No']), message: 'Marked done.' };
+}
+
+/** The rep's approved or done client visits in a travel week (Monday to Sunday). submitTravelReplenishment lets a week
+ *  through on these as it does on an approved weekly itinerary. */
+function _travVisitsFor(user, weekStart) {
+  var wk = _dateStr(weekStart);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(wk)) return [];
+  var end = _travWeekEnd(wk);
+  return _vpRows().filter(function (r) {
+    var d = _dateStr(r['Date']), s = String(r['Status'] || '');
+    return _cbSame(r['User'], user) && (s === 'Approved' || s === 'Done') && d >= wk && d <= end;
+  });
 }
 
 /** Management acknowledges a submitted report (optionally with a comment). */
@@ -19369,6 +19731,8 @@ var HANDLERS = {
   getClientBook: getClientBook, saveClientBookClient: saveClientBookClient, setClientBookStatus: setClientBookStatus,
   archiveClientBookClient: archiveClientBookClient,   // A350
   linkClientBookRecords: linkClientBookRecords, unlinkClientBookRecord: unlinkClientBookRecord,   // A360
+  getVisitPlans: getVisitPlans, saveVisitPlan: saveVisitPlan, submitVisitPlans: submitVisitPlans, decideVisitPlans: decideVisitPlans,
+  cancelVisitPlan: cancelVisitPlan, markVisitPlanDone: markVisitPlanDone,   // A369
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -19479,6 +19843,7 @@ var MUTATIONS = {
   submitProofReport: 1,   // A348
   saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360
+  saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -19507,6 +19872,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written, and a rep's reads and saves never carry them (Neil: "make sure that the sales has no trace of the estimated travel allowance"). submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
 A366 MANAGEMENT READS EVERY PERSON'S NEW DAILY REPORT (185; A327 takes 186 or later). Neil, 23 Oct 2026: a page on the management dashboard that opens any person's new daily report in the same format as their own, read only. proofReportRoles defaults to director, management, sales, accounting, leadgen, admin (FlowSettings can still narrow it — a sheet that names roles must add management). getProofReports: the director and management read every report of any kind, may narrow by user, and may ask kind 'all' (every kind in one read, each row carrying its kind). Writes are unchanged: management has no report of its own, so saveProofReport and submitProofReport still refuse it. No new actions, no new columns.
 A363 EACH PERSON'S OWN NEW DAILY REPORT (184; A327 takes 185 or later). Neil, 22 Oct 2026: "put the daily report on each of the dashboard user, but put it as a new daily report" (the old DailyReports flow is not touched, and there is no summary for management). proofReportRoles now defaults to director, sales, accounting, leadgen, admin (FlowSettings can still narrow it). The director reads every report and may still save any kind under his own name; everyone else saves, submits and reads only their own report (the name Flask stamps), of the one kind their role has (sales -> sales, accounting -> accounting, leadgen -> leadgen, admin -> admin); another kind is refused, and a role with no report of its own gets none. getProofReports ignores `user` for them. No new actions, no new columns.
 A360 OLD PURCHASE REQUESTS AND QUOTATIONS CAN BE CONNECTED TO A CLIENT (183; A327 takes 184 or later). Neil, 22 Oct 2026: "can we do it so that even old quotation and prs can be connected to the client?" New tab ClientBookLinks (Kind, Record No, Client No, By, At): one row per PR or quotation, the latest decision — a Client No, or blank once taken off a client (then it is no client's, not even by its company name). A row beats the PR's own Client Book No (A358), and a quotation's own row beats its PR's. Two secured actions: linkClientBookRecords({clientNo, records}) connects up to 100 at once, all checked before any write (a rep: their own records — the PR's Salesperson or Requested By, the quotation's owner or creator — to their own live clients; a record with another rep's client is refused; the director anything) and unlinkClientBookRecord({kind, no}) takes one off (the rep must own its client). Each writes ClientBookLog rows ('linked' / 'unlinked', Ref = the record) on every client it touches. getClientBook returns links (a rep: those on their clients, plus the blank ones). PR and quotation rows are never written.

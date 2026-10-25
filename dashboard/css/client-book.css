@@ -121,6 +121,9 @@ textarea.cb-in { resize: vertical; min-height: 54px; }
 .cb-flinks { display: block; margin-top: 2px; font-size: 12.5px; }
 .cb-fv a, .cb-plinks a { color: var(--hx-navy-text); }
 .cb-notes { white-space: pre-line; }
+.cb-addr { display: block; }   /* A369 — the plant and the head office, one per line */
+.cb-addr + .cb-addr { margin-top: 4px; }
+.cb-addr b { margin-right: 6px; font-weight: 600; color: var(--hx-ink-2); }
 .cb-act { justify-self: end; }
 .cb-subform { grid-column: 1 / -1; margin: 8px 0 2px; padding-top: 12px; border-top: 1px solid var(--hx-hair-2); }
 .cb-subform[hidden], .cb-form[hidden], #cbPeople[hidden] { display: none; }

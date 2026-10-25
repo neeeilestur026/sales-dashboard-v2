@@ -275,6 +275,38 @@ console.log('\n== an APPROVED itinerary needs no waiver at all ==');
   eq('no waiver was recorded', String(f.c.__store.TravelReplenishments[0]['Waiver By']), '');
 }
 
+console.log('\n== A369: an approved client visit that week stands for the itinerary ==');
+{
+  const visit = (o) => Object.assign({ 'Visit Plan No': 'VP-202607-001', 'Date': '2026-07-29', 'Time': '09:30', 'User': 'Crystal Gayle',
+    'Client No': 'CB-1', 'Company': 'Plant A', 'Status': 'Approved', 'Decision': 'Approved' }, o);
+  const f = fresh();
+  f.c.__store.VisitPlans = [visit({ 'Visit Plan No': 'VP-202607-001' }), visit({ 'Visit Plan No': 'VP-202607-002', 'Date': '2026-08-02', 'Status': 'Done' }),
+                            visit({ 'Visit Plan No': 'VP-202607-003', 'Status': 'Pending Director', 'Decision': '' })];
+  const r = f.c.submitTravelReplenishment(with_(GAYLE, { travNo: f.no }));
+  const row = f.c.__store.TravelReplenishments[0];
+  eq('the rep submits their own week unaided', r.success, true);
+  eq('the approved and done visits stand in the Itinerary No (not the pending one)', String(row['Itinerary No']), 'VP-202607-001, VP-202607-002');
+  eq('  recorded as approved client visits, with no waiver', [String(row['Itinerary Status At Submit']), String(row['Waiver By'])], ['Approved client visits', '']);
+  const none = (rows) => {
+    const g = fresh();
+    g.c.__store.VisitPlans = rows;
+    const x = g.c.submitTravelReplenishment(with_(GAYLE, { travNo: g.no }));
+    return [x.success, x.needsWaiver === true];
+  };
+  eq('a pending visit does not count', none([visit({ 'Status': 'Pending Director', 'Decision': '' })]), [false, true]);
+  eq('nor a visit cancelled after approval', none([visit({ 'Status': 'Cancelled' })]), [false, true]);
+  eq('nor another rep\'s approved visit', none([visit({ 'User': 'Other Rep' })]), [false, true]);
+  eq('nor an approved visit the week after', none([visit({ 'Date': '2026-08-03' })]), [false, true]);
+  const g = fresh();
+  const msg = g.c.submitTravelReplenishment(with_(GAYLE, { travNo: g.no })).message;
+  ok('with neither, the refusal names both ways through', /no approved weekly itinerary or approved client visit/.test(msg), msg);
+  const h = fresh();
+  h.c.__store.WeeklyItineraries.push({ 'Itinerary No': 'ITN-1', 'Week Start': '2026-07-27', 'Week End': '2026-08-02', 'User': 'Crystal Gayle', 'Status': 'Approved' });
+  h.c.__store.VisitPlans = [visit({})];
+  h.c.submitTravelReplenishment(with_(GAYLE, { travNo: h.no }));
+  eq('an approved weekly itinerary still comes first', String(h.c.__store.TravelReplenishments[0]['Itinerary No']), 'ITN-1');
+}
+
 console.log('\n== the chain is ACCOUNTING then DIRECTOR — not management, not the other way round ==');
 {
   const f = fresh();

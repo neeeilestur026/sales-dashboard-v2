@@ -65,7 +65,9 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   // A340 — the director's pricing engine
   'director-pricing-engine.html',
   // A350 — the Client Book trial
-  'director-client-book.html'];
+  'director-client-book.html',
+  // A369 — client visits, the new itinerary
+  'client-visits.html'];
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

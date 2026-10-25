@@ -435,7 +435,7 @@ async function tvSubmit() {
   if (tvReceiptWaiver) base.waiverReason = 'Receipts waived: ' + tvReceiptWaiver;
   await tvAct('submitTravelReplenishment', base, async (res) => {
     if (res.needsWaiver && tvIsApprover()) {
-      const why = prompt('There is no approved weekly itinerary for this week (' +
+      const why = prompt('There is no approved weekly itinerary or approved client visit for this week (itinerary: ' +   // A369
         (res.itineraryStatus || 'none') + ').\n\nYou can still let it through — record why:');
       if (!why || !why.trim()) return false;
       return Object.assign({}, base, {
