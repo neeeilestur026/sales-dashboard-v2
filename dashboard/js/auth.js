@@ -335,6 +335,21 @@ function requireClientBookAccess() {
   return session;
 }
 
+/* A374 — the supplier list (supplier-list.html): admin keeps it, the director too. FlowSettings supplierBookRoles widens
+   who the server lets in; the page follows the default. */
+function requireSupplierListAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['admin', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 /* A369 — client visits, the new itinerary (client-visits.html): a rep plans their own, the director approves, accounting
    sees the approved visits by day, management reads. */
 function requireClientVisitsAccess() {
@@ -651,7 +666,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -678,6 +693,7 @@ function renderNavbar(activePage) {
           </div>
           <div class="dd-group">
             <div class="dd-title">Buy & pay</div>
+            <a href="supplier-list.html" class="${activePage === 'supplier-list' ? 'active' : ''}">Supplier List</a>   <!-- A374 -->
             <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">Purchase Orders</a>
             <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
             <a href="flow-ap-aging.html" class="${activePage === 'flow-ap-aging' ? 'active' : ''}">AP Aging</a>
@@ -938,7 +954,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'director') {
-    const dirPayablesActive = ['flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
+    const dirPayablesActive = ['supplier-list', 'flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits'].includes(activePage);   // A216, A366, A369
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
@@ -981,6 +997,7 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
+          <a href="supplier-list.html" class="${activePage === 'supplier-list' ? 'active' : ''}">Supplier List</a>   <!-- A374 -->
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
           <a href="flow-other-payables.html" class="${activePage === 'flow-other-payables' ? 'active' : ''}">Other Payables</a>
           <a href="flow-payments.html" class="${activePage === 'flow-payments' ? 'active' : ''}">Payment Register</a>

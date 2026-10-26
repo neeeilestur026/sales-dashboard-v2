@@ -707,6 +707,7 @@ function openPr(no) {
   if (canSource && (r.status === 'Requested' || r.status === 'Sourcing')) {
     body.innerHTML = sourcingTable(r);
     sqDecorateSourcing();   // A161: fill in each row's past supplier prices (async, best-effort)
+    prSlDecorate();   // A374: the supplier list's names, and each supplier's last price for the item
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       <button class="btn btn-secondary" onclick="openDocsModal('Pricing Request','${flowEsc(r.prNo)}','Supplier quotation · ${flowEsc(r.prNo)}','Supplier Quotation')">Supplier Quotation (PDF)</button>
       <button class="btn btn-secondary" onclick="saveSourcing(false)">Save Draft</button>
@@ -825,6 +826,7 @@ function openSourcingEdit(no) {
       : '');
   body.innerHTML = hint + sourcingTable(r);
   sqDecorateSourcing();   // A161: same history on the edit-anytime sourcing view
+  prSlDecorate();   // A374
   // Post-pricing stages get a one-click "save + send back to management" so the final price
   // is recomputed from the corrected costs (submitForPricing just flips the status back).
   foot.innerHTML = `<button class="btn btn-secondary" onclick="openPr('${flowEsc(no)}')">← Back</button>
@@ -895,7 +897,7 @@ function sourcingTable(r) {
         <td><input type="text" class="s-no" value="${flowEsc(i.itemNo)}" style="min-width:110px;"></td>
         <td><input type="text" class="s-name" value="${flowEsc(i.itemName || '')}" style="min-width:200px;">${/^HE-\d{5}$/.test(String(i.itemNo || '').trim()) ? '<div class="fc-dim">Website product family (A338): choose the exact model and enter its code.</div>' : ''}</td>
         <td class="num">${flowNum(i.qty)}</td>
-        <td><input type="text" class="s-sup" value="${flowEsc(i.supplier || '')}"></td>
+        <td><input type="text" class="s-sup" list="slSupNames" autocomplete="off" value="${flowEsc(i.supplier || '')}"><div class="fc-dim s-suplast" data-suplast="${i.line}" aria-live="polite"></div></td>
         <td><select class="s-prin">${principalSelect(i.principal)}</select></td>
         <td><select class="s-cur">${currencySelect(i.currency)}</select></td>
         <td class="num"><input type="number" step="any" min="0" class="s-price" value="${i.supplierPrice || 0}"></td>
@@ -908,7 +910,7 @@ function sourcingTable(r) {
         <div id="sqHist_${i.line}" style="display:none;margin:0.4rem 0 0.2rem;padding:0.6rem;border:1px solid var(--hx-hair);border-radius:8px;overflow-x:auto;">
           <div data-sq-body></div>
         </div>
-      </td></tr>`).join('')}</tbody></table></div>
+      </td></tr>`).join('')}</tbody></table></div><datalist id="slSupNames"></datalist>
     <div style="margin-top:0.75rem;">
       <button type="button" class="link-btn" onclick="sqToggleBrowse()">Browse all saved supplier quotations</button>
       <div id="sqBrowse" style="display:none;margin-top:0.5rem;padding:0.6rem;border:1px solid var(--hx-hair);border-radius:8px;">
@@ -920,6 +922,51 @@ function sourcingTable(r) {
     <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;font-size:0.85rem;">
       <input type="checkbox" id="srcVerified"> I have <b>verified the supplier prices are correct</b> before forwarding to management.
     </label>`;
+}
+
+/* ── A374 · the supplier list in the sourcing table ─────────────────────────────────────────────
+   Neil, 26 Oct 2026: what admin prices goes under the supplier with its price and date (FlowAPI 189 files it at the
+   forward). Here, the supplier box suggests the names on the supplier list, and under it says what that supplier last
+   priced this item at, or that a name not on the list will be added when the request is forwarded. Before 189, or for
+   a role the list refuses, it stays quiet. */
+let prSl = null;   // getSupplierBook {lite} — read once per page
+async function prSlDecorate() {
+  const t = document.getElementById('srcTable');
+  if (!t || typeof slResolve !== 'function') return;
+  if (!prSl) {
+    const v = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(189).catch(() => false) : false;
+    const r = v ? await postFlow('getSupplierBook', { lite: true }).catch(() => null) : null;
+    prSl = r && r.success ? { suppliers: r.suppliers || [], latest: r.latest || [] } : { suppliers: [], latest: [], off: true };
+  }
+  if (prSl.off) return;
+  const dl = document.getElementById('slSupNames');
+  if (dl) dl.innerHTML = prSl.suppliers.reduce((a, s) => a.concat([s.supplier], s.aliases || []), [])
+    .filter((n, i, all) => n && all.indexOf(n) === i).sort().map(n => `<option value="${flowEsc(n)}"></option>`).join('');
+  const rows = t.querySelectorAll('tbody tr[data-line]');
+  rows.forEach(tr => {
+    const say = () => prSlHint(tr);
+    ['.s-sup', '.s-no', '.s-name'].forEach(sel => { const el = tr.querySelector(sel); if (el) el.addEventListener('input', say); });
+    say();
+  });
+}
+function prSlHint(tr) {
+  const out = tr.querySelector('[data-suplast]'), sup = tr.querySelector('.s-sup');
+  if (!out || !sup || !prSl || prSl.off) return;
+  const name = sup.value.trim(), no = name ? slResolve(prSl.suppliers, name) : '';
+  if (!name) { out.textContent = ''; return; }
+  if (!no) { out.textContent = 'Not on the supplier list yet; it is added when you forward.'; return; }
+  const last = slLastPrice(prSl.latest, no, tr.querySelector('.s-no').value, tr.querySelector('.s-name').value);
+  const s = prSl.suppliers.find(x => x.supplierNo === no), link = prRole === 'admin' || prRole === 'director';
+  const who = link ? `<a href="supplier-list.html?supplier=${encodeURIComponent(no)}" target="_blank" rel="noopener">${flowEsc(s ? s.supplier : name)}</a>` : flowEsc(s ? s.supplier : name);
+  out.innerHTML = last ? `Last priced ${flowEsc(slMoney(last.currency, last.price))} on ${flowEsc(slDay(last.at))} · ${flowEsc(last.prNo)} (${who})`
+                       : `On the supplier list (${who}); no price for this item yet.`;
+}
+/** The forward's own words for what it filed: "3 prices filed in the supplier list; 1 new supplier needs details (Bolt King)." */
+function prSlForwardSay(rec) {
+  if (!rec || (!rec.prices && !(rec.newSuppliers || []).length)) return '';
+  const n = (k, w) => k + ' ' + w + (k === 1 ? '' : 's'), fresh = rec.newSuppliers || [];
+  return (rec.prices ? n(rec.prices, 'price') + ' filed in the supplier list' : 'Nothing new for the supplier list') +
+    (fresh.length ? '; ' + n(fresh.length, 'new supplier') + (fresh.length === 1 ? ' needs' : ' need') + ' details (' + fresh.map(x => x.supplier).join(', ') + ')' : '') + '.';
 }
 
 function collectSourcing() {
@@ -988,10 +1035,12 @@ async function saveSourcing(forward) {
     } else {
       const f = await postFlow('submitForPricing', { prNo });
       if (!f.success) throw new Error(f.message);
-      flowMsg('modalMsg', 'Forwarded to management.', true);
+      const filed = prSlForwardSay(f.recorded);   // A374 — what went into the supplier list
+      flowMsg('modalMsg', 'Forwarded to management.' + (filed ? ' ' + filed : ''), true);
+      if (filed) forward = 'read';                // leave the message up long enough to read
     }
     await loadRequests();
-    if (forward) setTimeout(closePr, 800);
+    if (forward) setTimeout(closePr, forward === 'read' ? 2600 : 800);
   } catch (e) { flowMsg('modalMsg', e.message, false); }
 }
 
