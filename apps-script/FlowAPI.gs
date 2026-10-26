@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 187;   // A370 — several companies in one day of client visits, saved all or none. History: see CHANGELOG.
+var FLOW_VERSION = 188;   // A372 — the director restates what was paid on a payable, from its paid requests. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -835,6 +835,7 @@ var _SECURED = {
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
   removeReceivable: 1,                                                  // A342 — a director correction
+  restateAPPaid: 1,                                                     // A372 — a director correction
   dispatchByScan: 1, linkBarcode: 1, receiveByScan: 1, saveScanCount: 1,   // A316
   uploadScanPhoto: 1, setItemTracking: 1, registerAssets: 1, returnByScan: 1, ensureItemLabels: 1, logLabelPrint: 1,   // A318
   createItemByScan: 1,   // A319
@@ -4096,6 +4097,66 @@ function removeReceivable(p) {
   _sheet('ARAging').deleteRow(ar.rowIndex);
   return { success: true, arNo: arNo, invNo: invNo, plan: plan,
     message: 'Removed ' + said + '. A full copy is in Overrides' + (invNo && !others ? '; invoice ' + invNo + ' will not be offered a new receivable' : '') + '.' };
+}
+
+/* A372 — RESTATE WHAT WAS PAID ON A PAYABLE. Neil, 26 Oct 2026, on AP-202607-013 (CON BAN KIAT, PO 2026-44, ₱250,560):
+   "we only paid the other half before, it was not fully paid … change it, and let the accounting create a new prf
+   paying for the other half". The payable said ₱250,560 paid and Paid, while the only payment request on its order,
+   PRF-2026-92 CBK, paid ₱125,280 — and the books (A320) already follow the request. A payable that reads fully paid
+   leaves nothing for a new request (_poRemainingPayable), and with the books on updateAPAging rightly refuses to move
+   Paid (PHP) at all, so nothing else can bring it back.
+   restateAPPaid({apNo, expectPaid, reason, dryRun}) — the director only. Paid (PHP) becomes what the order's PAID
+   payment requests settled (the same figure markPaymentRequestPaid adds: what the bank debited less its charge, else
+   the request's amount) — never a typed figure — and the status follows (Paid / Partial / Unpaid). The Notes say who,
+   when, from what to what and why; the legacy APPAY journal is posted again at the new figure; a full copy of the row
+   goes to Overrides ('restated-ap-paid'). The books are not touched: they post from the payment requests.
+   Refuses: a figure on file other than expectPaid, a foreign-currency payable (its peso paid is the bank's), a payable
+   with no order or an order with more than one payable, a restated figure above the payable, or nothing to change. */
+function _a372Settled(r) {
+  var debited = _num(r['Actual Debited (PHP)']);
+  return debited > 0 ? debited - _num(r['Bank Charge (PHP)']) : _num(r['Amount']);
+}
+function restateAPPaid(p) {
+  p = p || {};
+  if (!_A342_ROLES[_sgRole(p)]) return _sgRefuse('Only the director can restate what was paid on a payable.');
+  var reason = _a342Reason(p);
+  if (!reason) return _sgRefuse('Give the reason (at least 10 characters); it is recorded.');
+  var apNo = String(p.apNo || '').trim();
+  var aps = _rows('APAging').filter(function (a) { return String(a['AP No']) === apNo; });
+  if (aps.length !== 1) return _sgRefuse(aps.length ? apNo + ' is on file more than once.' : 'Payable ' + (apNo || '?') + ' was not found.');
+  var ap = aps[0], poNo = String(ap['PO No'] || '').trim(), paid = _a342R2(ap['Paid (PHP)']), amount = _a342R2(ap['Amount (PHP)']);
+  if (Math.abs(paid - _num(p.expectPaid)) > 0.005) return _sgRefuse(apNo + ' shows ' + paid.toFixed(2) + ' paid on file, not ' + _num(p.expectPaid).toFixed(2) + '. Nothing was changed.');
+  if (String(ap['Currency'] || 'PHP').toUpperCase() !== 'PHP') return _sgRefuse(apNo + ' is a ' + ap['Currency'] + ' payable; its peso paid is what the bank took. Check it by hand.');
+  if (!poNo) return _sgRefuse(apNo + ' has no purchase order, so there are no payment requests to restate it from.');
+  var siblings = _rows('APAging').filter(function (a) { return String(a['PO No'] || '').trim() === poNo; }).length;
+  if (siblings !== 1) return _sgRefuse(poNo + ' has ' + siblings + ' payables; which one each payment settled is not on file. Check it by hand.');
+  var reqs = _rows('PaymentRequests').filter(function (r) { return String(r['PO No'] || '').trim() === poNo && String(r['Type']) === 'PO' && String(r['Status']) === 'Paid'; });
+  var newPaid = _a342R2(reqs.reduce(function (s, r) { return s + _a372Settled(r); }, 0));
+  if (Math.abs(newPaid - paid) <= 0.005) return _sgRefuse(apNo + ' already shows ' + paid.toFixed(2) + ' paid, what its paid payment requests settled. Nothing to change.');
+  if (newPaid > amount + 0.005) return _sgRefuse('The paid payment requests on ' + poNo + ' come to ' + newPaid.toFixed(2) + ', more than the payable of ' + amount.toFixed(2) + '. Check it by hand.');
+  var status = amount > 0 && newPaid >= amount - 0.005 ? 'Paid' : newPaid > 0.005 ? 'Partial' : 'Unpaid';
+  var copy = {};
+  SCHEMA.APAging.forEach(function (h) { copy[h] = ap[h] instanceof Date ? _dateStr(ap[h]) : ap[h]; });
+  var plan = { apNo: apNo, poNo: poNo, supplier: String(ap['Supplier'] || ''), amount: amount, paidBefore: paid, paidAfter: newPaid,
+    statusBefore: String(ap['Status'] || ''), statusAfter: status, openAfter: _a342R2(amount - newPaid),
+    requests: reqs.map(function (r) { return { prNo: String(r['PR No']), settled: _a342R2(_a372Settled(r)), paidAt: _dateStr(r['Paid At']) }; }), row: copy };
+  var said = apNo + ' (' + plan.supplier + ', ' + poNo + '): paid ' + paid.toFixed(2) + ' → ' + newPaid.toFixed(2) + ' of ' + amount.toFixed(2) + ', ' + plan.statusBefore + ' → ' + status;
+  if (_a342Dry(p)) return { success: true, dryRun: true, plan: plan, message: 'Would restate ' + said + '.' };
+  _a342Log(p, 'restateAPPaid', apNo, 'restated-ap-paid', String(newPaid), JSON.stringify(copy), reason);
+  var stamp = 'Paid restated from ' + paid.toFixed(2) + ' to ' + newPaid.toFixed(2) + ' (the paid payment requests: ' +
+    (plan.requests.map(function (r) { return r.prNo; }).join(', ') || 'none') + ') by ' + String(p.actorName || 'the director') + ' on ' + _dateStr(_now()) + ': ' + reason;
+  var notes = String(ap['Notes'] || '');
+  _a342SetRow('APAging', ap.rowIndex, { 'Paid (PHP)': newPaid, 'Status': status, 'Notes': notes ? notes + ' | ' + stamp : stamp, 'Updated At': _now() });
+  if (newPaid > 0.005) {
+    _postJournal('APPAY', apNo, _now(), 'PHP', [
+      { account: ACC.AP, debit: newPaid, memo: 'Payment of ' + apNo },
+      { account: ACC.CASH, credit: newPaid, memo: 'Payment of ' + apNo }
+    ]);
+  } else {
+    _removeJournal('APPAY', apNo);
+  }
+  return { success: true, apNo: apNo, refNo: apNo, plan: plan,
+    message: 'Restated ' + said + '. ' + (plan.openAfter > 0.005 ? plan.openAfter.toFixed(2) + ' is open for a new payment request. ' : '') + 'A full copy is in Overrides.' };
 }
 
 /* A252 — RENAME AN INVOICE NUMBER. The business issues its own invoice numbers on its own paper;
@@ -15139,6 +15200,7 @@ var _MODULE_MAP = {
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
   removeReceivable: ['AR Aging', 'Receivable removed'],   // A342
+  restateAPPaid: ['AP Aging', 'Paid restated'],   // A372
   convertWebRequest: ['Website request', 'Pricing request made'],    // A338
   setWebRequestStatus: ['Website request', 'Status changed'], eraseWebRequest: ['Website request', 'Personal data erased'],
   peSaveTables: ['Pricing engine', 'Tables saved'], peSetApprovalCode: ['Pricing engine', 'Approval code set'],   // A340
@@ -19688,6 +19750,7 @@ var HANDLERS = {
   voidCollection: voidCollection, voidInvoice: voidInvoice,   // A158: the missing reversals
   retireDuplicateReceivables: retireDuplicateReceivables,   // A334
   removeReceivable: removeReceivable,   // A342
+  restateAPPaid: restateAPPaid,   // A372
   getWebRequests: getWebRequests, collectWebsiteRequestsNow: collectWebsiteRequestsNow,   // A338
   convertWebRequest: convertWebRequest, setWebRequestStatus: setWebRequestStatus, eraseWebRequest: eraseWebRequest,
   peGetTables: peGetTables, peSaveTables: peSaveTables, peSetApprovalCode: peSetApprovalCode,   // A340
@@ -19858,6 +19921,7 @@ var MUTATIONS = {
      Found by tests/audit/registration.js, which fails on precisely this if it is ever undone. */
   reverseReceiving: 1,
   removeReceivable: 1,                                                  // A342: deleteRow()s under the lock
+  restateAPPaid: 1,                                                     // A372: rewrites a payable and its journal under the lock
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334: voids and deleteRow()s, so the lock matters
   convertWebRequest: 1, setWebRequestStatus: 1, eraseWebRequest: 1,   // A338 (collectWebsiteRequestsNow takes its own lock)
   peSaveTables: 1, peSetApprovalCode: 1, peSaveRecord: 1,             // A340
@@ -19934,6 +19998,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A372 RESTATING WHAT WAS PAID ON A PAYABLE (188; A327 takes 189 or later). Neil, 26 Oct 2026: AP-202607-013 (CON BAN KIAT, PO 2026-44, ₱250,560) said fully paid while its only payment request, PRF-2026-92 CBK, paid half (₱125,280; the books follow the request), so accounting could not raise the request for the other half. restateAPPaid({apNo, expectPaid, reason, dryRun}) — secured, director only, under the lock, audited (AP Aging / Paid restated): Paid (PHP) becomes what the order's paid payment requests settled (debited less bank charge, else the amount), never a typed figure; the status follows (Paid / Partial / Unpaid); the Notes are stamped; the legacy APPAY journal is re-posted at the new figure; a full copy of the row goes to Overrides ('restated-ap-paid'). The books are not touched. Refuses a figure other than expectPaid, a foreign-currency payable, an order with no or several payables, a figure above the payable, or nothing to change.
 A370 A DAY OF CLIENT VISITS (187; A327 takes 188 or later). Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day, then with this itinerary for this day, it will show the estimated travel allowance in the accounting". saveVisitPlan also takes {date, stops: [{clientNo, time, location, address, contactIds, someoneElse, purpose}, …], send}: up to 10 companies on one day, all or none — every stop is checked as a single visit is (a refusal names the visit and its company), a client twice in the list or already visited that day is refused, then one row and one 'created' log row per stop, numbered in order. A single visit and every other action are unchanged; no new columns, no new actions. Accounting's week already reads each rep's day as one row with its estimate.
 A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written, and a rep's reads and saves never carry them (Neil: "make sure that the sales has no trace of the estimated travel allowance"). submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
 A366 MANAGEMENT READS EVERY PERSON'S NEW DAILY REPORT (185; A327 takes 186 or later). Neil, 23 Oct 2026: a page on the management dashboard that opens any person's new daily report in the same format as their own, read only. proofReportRoles defaults to director, management, sales, accounting, leadgen, admin (FlowSettings can still narrow it — a sheet that names roles must add management). getProofReports: the director and management read every report of any kind, may narrow by user, and may ask kind 'all' (every kind in one read, each row carrying its kind). Writes are unchanged: management has no report of its own, so saveProofReport and submitProofReport still refuse it. No new actions, no new columns.
