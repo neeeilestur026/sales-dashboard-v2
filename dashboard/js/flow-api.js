@@ -606,6 +606,20 @@ function flowMsg(elId, text, ok) {
   if (el.classList) { el.classList.add('flow-msg'); el.classList.remove('ok', 'bad'); el.classList.add(ok ? 'ok' : 'bad'); }
   el.style.display = 'block';
   el.textContent = text;
+  /* A375 — the box can be out of sight (a long form scrolled away, a banner at the top of the page): then the same
+     words also come as a toast (js/hx-feedback.js), so a save or a refusal is never silent. */
+  try {
+    if (typeof window !== 'undefined' && typeof window.hxToast === 'function' && text && !_flowInView(el)) {
+      const t = window.hxFeedback && window.hxFeedback.tone ? window.hxFeedback.tone(text) : '';
+      window.hxToast(text, { tone: ok ? 'ok' : (t === 'error' ? 'error' : 'warn') });
+    }
+  } catch (e) {}
+}
+/** Is an element on the screen now (laid out, and inside the window)? */
+function _flowInView(el) {
+  if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+  const r = el.getBoundingClientRect(), hgt = window.innerHeight || (document.documentElement && document.documentElement.clientHeight) || 0;
+  return r.height > 0 && r.bottom > 0 && r.top < hgt;
 }
 
 // ─── PDF generation helpers (Flask renders; FlowAPI stores to Drive) ─────────

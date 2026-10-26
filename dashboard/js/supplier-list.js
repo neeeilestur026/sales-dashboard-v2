@@ -382,7 +382,9 @@ function slDetail(no, back) {
   SL.open = no;
   if (SL_TABS.indexOf(SL.tab) < 0) SL.tab = 'overview';
   const live = !slArchived(s) && SL.ok, items = slItems(SL.prices, no), log = slLogFor(SL.log, no), people = s.contacts || [], main = slPrimary(s);
-  const flash = SL.flash; SL.flash = '';
+  /* A375 — a completion is a toast (js/hx-feedback.js); the header line is only for a page without it */
+  let flash = SL.flash; SL.flash = '';
+  if (flash && typeof window.hxToast === 'function') { window.hxToast(flash, { tone: 'ok' }); flash = ''; }
   const tab = (id, label, n) => '<button type="button" role="tab" class="sl-tab" id="slTab-' + id + '" aria-controls="slPanel-' + id + '" aria-selected="' + (SL.tab === id) + '"' +
     ' tabindex="' + (SL.tab === id ? 0 : -1) + '" data-tab="' + id + '">' + label + (n ? ' <span class="n">' + n + '</span>' : '') + '</button>';
   const panel = (id, html) => '<div class="sl-panel" role="tabpanel" id="slPanel-' + id + '" aria-labelledby="slTab-' + id + '"' + (SL.tab === id ? '' : ' hidden') + '>' + html + '</div>';
@@ -503,12 +505,25 @@ function slWireDetail(box, s, items) {
   const arch = box.querySelector('#slArchive');
   if (arch) arch.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    if (slArchived(s)) { SL.flash = 'Restored.'; await slPost(arch, 'archiveSupplierBookSupplier', { supplierNo: s.supplierNo, restore: true }); return; }
+    if (slArchived(s)) { SL.flash = 'Restored ' + s.supplier + '.'; await slPost(arch, 'archiveSupplierBookSupplier', { supplierNo: s.supplierNo, restore: true }); return; }
     const reason = arch.elements.reason.value.trim();
     if (!reason) { arch.elements.reason.focus(); slMsg(arch, 'Say why first.', true); return; }
-    SL.flash = 'Archived. Restore it below if that was a mistake.';   // undo instead of a confirm
-    await slPost(arch, 'archiveSupplierBookSupplier', { supplierNo: s.supplierNo, reason });
+    /* undo instead of a confirm: a snackbar with Undo (A375), else a line in the header */
+    const undo = typeof window.hxSnackbar === 'function';
+    SL.flash = undo ? '' : 'Archived. Restore it below if that was a mistake.';
+    const r = await slPost(arch, 'archiveSupplierBookSupplier', { supplierNo: s.supplierNo, reason }, { quiet: undo });
+    if (undo && r && r.success) { await slReload(); window.hxSnackbar('Archived ' + s.supplier + '.', { action: 'Undo', onAction: () => slRestore(s) }); }   // the snackbar says it; no "Saved." too
   });
+}
+
+/** Undo an archive from its snackbar: restore, then show the supplier again. */
+async function slRestore(s) {
+  const r = await postFlow('archiveSupplierBookSupplier', { supplierNo: s.supplierNo, restore: true }).catch(e => ({ success: false, message: String(e && e.message || e) }));
+  if (!(r && r.success)) { if (typeof window.hxToast === 'function') window.hxToast((r && r.message) || 'Could not restore ' + s.supplier + '.', { tone: 'error' }); return; }
+  SL.flash = 'Restored ' + s.supplier + '.';
+  SL.open = s.supplierNo;
+  if (SL.f.archived) SL.f.archived = false;
+  await slReload();
 }
 
 /* Merge: the one step that cannot simply be undone, so it is checked first and shown in full. */
