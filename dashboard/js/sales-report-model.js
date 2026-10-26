@@ -25,7 +25,7 @@ const SR_TARGETS = {
   srOpenQuotes: 4500000, srOpenQuotesRed: 3000000
 };
 const SR_FOLLOW_DAYS = [3, 7, 14];                 // after the sent date; a weekend due date moves to Monday
-const SR_LINE_TYPES = ['Call', 'Performance call', 'Quote result', 'Sales order', 'Visit'];
+const SR_LINE_TYPES = ['Call', 'Performance call', 'Quote result', 'Sales order', 'Visit', 'Other task'];   // A371 — Other task (Neil, 26 Oct: "add other tasks")
 const SR_CALL_RESULTS = ['Reached', 'No answer', 'Booked', 'Call back'];
 const SR_VISIT_RESULTS = ['RFQ promised', 'RFQ on site', 'Need later', 'No need'];
 const SR_LOST_REASONS = ['Price', 'Time', 'Spec', 'Other'];
@@ -184,7 +184,7 @@ const _srLive = (report) => ((report && report.lines) || []).filter(l => !l.void
 function _srOn(day) { return (l) => _srDate(l.loggedAt) === day; }
 /** "Log lines with a link: X of Y" — the day's live lines. */
 function srLinked(report, day) {
-  const lines = _srLive(report).filter(_srOn(day));
+  const lines = _srLive(report).filter(_srOn(day)).filter(l => l.type !== 'Other task');   // A371 — another task needs no link
   return { linked: lines.filter(l => l.linkType && l.linkType !== 'none' && l.linkId).length, total: lines.length };
 }
 
@@ -433,7 +433,12 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
           status: dt.planned.length ? (nVisits >= dt.planned.length ? 'ok' : 'watch') : 'none',
           items: visits.map(l => ({ time: srClock(l.loggedAt), client: l.company, person: l.person, what: l.note, result: l.result, ref: l.linkId }))
             .concat(oldVisits.map(x => Object.assign({ grey: true }, x, { client: x.company, what: x.note })))
-        })
+        }),
+    /* A371 — anything else the rep did, typed as an Other task */
+    _srTile('otherTasks', 'Other tasks', {
+      value: lines.filter(l => l.type === 'Other task').length, text: String(lines.filter(l => l.type === 'Other task').length), target: 'typed lines', status: 'none',
+      items: lines.filter(l => l.type === 'Other task').map(l => ({ time: srClock(l.loggedAt), client: l.company, what: l.note, result: l.result }))
+    })
   ];
 }
 
