@@ -85,7 +85,8 @@ function world(o) {
   };
   return { ctx, body, store, winL, tick,
            toasts: () => { const s = body.querySelector('.hx-toasts'); return s ? s.children.filter(c => c.classList.contains('hx-toast')) : []; },
-           snacks: () => body.children.filter(c => c.classList.contains('hx-snack')) };
+           snacks: () => { const s = body.querySelector('.hx-toasts'); return s ? s.children.filter(c => c.classList.contains('hx-snack')) : []; },
+           dock: () => { const s = body.querySelector('.hx-toasts'); return s ? s.children.map(c => c.className) : []; } };
 }
 
 sec('1 · what a message says, and how long it stays');
@@ -108,16 +109,24 @@ sec('2 · toasts');
   const box = w.body.querySelector('.hx-toasts');
   ok('the first toast makes one notifications region', box && box.getAttribute('role') === 'region' && box.getAttribute('aria-label') === 'Notifications');
   const t1 = w.toasts()[0];
-  ok('  a done toast: polite, with its icon, its words and a dismiss button', t1.className === 'hx-toast hx-ok' && t1.getAttribute('role') === 'status' && t1.getAttribute('aria-live') === 'polite' &&
-     !!t1.querySelector('.hx-ticon') && t1.querySelector('.hx-ttext').textContent === 'Saved.' && t1.querySelector('.hx-tclose').getAttribute('class') === null && /aria-label="Dismiss"/.test(t1.innerHTML));
+  ok('  a done toast: polite, its outlined icon tile, the title Success over its words, a dismiss button', t1.className === 'hx-toast hx-ok' && t1.getAttribute('role') === 'status' && t1.getAttribute('aria-live') === 'polite' &&
+     /<span class="hx-ticon"><svg[^>]*><rect /.test(t1.innerHTML) && t1.querySelector('.hx-ttitle').textContent === 'Success' && t1.querySelector('.hx-ttext').textContent === 'Saved.' && /aria-label="Dismiss"/.test(t1.innerHTML));
   w.ctx.hxToast('Failed: <b>the sheet</b>');
-  const t2 = w.toasts()[0];
-  ok('  an error is assertive, newest on top, and its words are text (no markup)', t2.className === 'hx-toast hx-error' && t2.getAttribute('role') === 'alert' && /Failed: &lt;b&gt;the sheet&lt;\/b&gt;/.test(t2.innerHTML));
+  const t2 = w.toasts()[w.toasts().length - 1];
+  ok('  an error is assertive, titled Error, the newest nearest the corner, and its words are text (no markup)', t2.className === 'hx-toast hx-error' && t2.getAttribute('role') === 'alert' &&
+     t2.querySelector('.hx-ttitle').textContent === 'Error' && /Failed: &lt;b&gt;the sheet&lt;\/b&gt;/.test(t2.innerHTML));
+  {
+    const w2 = world();
+    w2.ctx.alert('Error: the sheet is busy');
+    ok('  "Error: …" under the title Error says just what went wrong', w2.toasts()[0].querySelector('.hx-ttext').textContent === 'the sheet is busy');
+    w2.ctx.hxToast('Note this.', { tone: 'info', title: 'Heads up' });
+    ok('  a title can be given', w2.toasts()[1].querySelector('.hx-ttitle').textContent === 'Heads up');
+  }
   w.ctx.hxToast('Saved.');
   ok('the same words again: still one toast, now with a count', w.toasts().length === 2 && t1.querySelector('.hx-tcount').textContent === '×2' && t1.querySelector('.hx-tcount').hidden === false);
   w.ctx.hxToast('One.', { tone: 'info' }); w.ctx.hxToast('Two.', { tone: 'info' });
   w.tick(300);
-  ok('at most three are up; the oldest goes first', w.toasts().length === 3 && w.toasts().every(x => x !== t1));
+  ok('at most three are up; the oldest goes first', w.toasts().length === 3 && w.toasts().every(x => x !== t1) && w.toasts()[2].querySelector('.hx-ttext').textContent === 'Two.');
   w.tick(20000);
   ok('they leave in time', w.toasts().length === 0);
   const h = world();
@@ -141,8 +150,10 @@ sec('3 · the snackbar');
   let undone = 0;
   w.ctx.hxSnackbar('Archived Yale Hardware.', { action: 'Undo', onAction: () => { undone++; } });
   const s = w.snacks()[0];
-  ok('one bar at the bottom, polite, with its action and a dismiss button', w.snacks().length === 1 && s.getAttribute('role') === 'status' && s.querySelector('.hx-stext').textContent === 'Archived Yale Hardware.' &&
-     s.querySelector('.hx-sact').textContent === 'Undo' && !!s.querySelector('.hx-sclose'));
+  ok('one dark bar in the corner, polite, a solid icon, its action and a dismiss button', w.snacks().length === 1 && s.className === 'hx-snack hx-ok' && s.getAttribute('role') === 'status' && !!s.querySelector('.hx-sicon') &&
+     s.querySelector('.hx-stext').textContent === 'Archived Yale Hardware.' && s.querySelector('.hx-sact').textContent === 'Undo' && !!s.querySelector('.hx-sclose'));
+  w.ctx.hxToast('Saved.');
+  eq('  toasts stack above it, in the same corner', w.dock(), ['hx-toast hx-ok', 'hx-snack hx-ok']);
   s.querySelector('.hx-sact').click(); s.querySelector('.hx-sact').click();
   w.tick(300);
   ok('  its action runs once and the bar leaves', undone === 1 && w.snacks().length === 0);
@@ -210,12 +221,16 @@ sec('6 · the site rules');
   const CSS = read('css/hx-feedback.css'), JS = read('js/hx-feedback.js'), APPLE = read('css/apple.css'), AJS = read('js/apple.js');
   ok('the stylesheet uses tokens only (no hex, rgb or named colours)', !/#[0-9a-fA-F]{3,6}\b|rgba?\(|\b(white|black|red|green|blue)\b\s*[;}]/.test(CSS));
   ok('  no hex colour, emoji or inline style in the script', !/#[0-9a-fA-F]{3,6}\b/.test(JS) && !/[\u{1F300}-\u{1FAFF}]/u.test(JS) && !/style="/.test(JS));
-  ok('apple-design: press feedback (.97 over 100ms), materials (the Apple look\'s blur), out the way they came in', /:active[^{]*\{ transform: scale\(\.97\); \}/.test(CSS) && /transition: transform 100ms ease-out/.test(CSS) &&
-     /\[data-look="apple"\] \.hx-toast \{ background: var\(--a-mat-pop\); -webkit-backdrop-filter: var\(--a-blur\)/.test(CSS) && /@keyframes hx-t-out \{[^}]*\} to \{ opacity: 0; transform: translate3d\(0, -14px, 0\)/.test(CSS) && /@keyframes hx-s-out \{[^}]*\} to \{ opacity: 0; transform: translate3d\(0, 18px, 0\)/.test(CSS));
+  ok('A376: the soft tinted card (pale tone over the page\'s card, the tone\'s line, coloured title), bottom right', /background: linear-gradient\(var\(--t-soft\), var\(--t-soft\)\), var\(--hx-card\); border: 1px solid var\(--t-line\)/.test(CSS) &&
+     /\.hx-toast\.hx-ok \{ --t-c: var\(--hx-ok\); --t-soft: var\(--hx-ok-soft\); --t-line: var\(--hx-ok-line\); \}/.test(CSS) && /\.hx-toasts \{ position: fixed; right: max\(1\.25rem, env\(safe-area-inset-right\)\); bottom: max\(1\.25rem/.test(CSS));
+  ok('  the dark snackbar with its solid icon disc', /\.hx-snack \{[^}]*background: var\(--hx-ink\); color: var\(--hx-card\)/.test(CSS) && /\.hx-sicon \{[^}]*border-radius: 50%; background: var\(--s-c\)/.test(CSS));
+  ok('apple-design: press feedback (.97 over 100ms), the snackbar glass under the Apple look, in and out the same way (from the right)', /:active[^{]*\{ transform: scale\(\.97\); \}/.test(CSS) && /transition: transform 100ms ease-out/.test(CSS) &&
+     /\[data-look="apple"\] \.hx-snack \{ background: color-mix\(in srgb, var\(--hx-ink\) 92%, transparent\); -webkit-backdrop-filter: var\(--a-blur\)/.test(CSS) &&
+     /@keyframes hx-t-in \{ from \{ opacity: 0; transform: translate3d\(28px, 0, 0\)/.test(CSS) && /@keyframes hx-t-out \{[^}]*\} to \{ opacity: 0; transform: translate3d\(28px, 0, 0\)/.test(CSS));
   ok('  a cross-fade under reduced motion, solid under reduced transparency, defined edges under more contrast, hidden in print',
-     /@media \(prefers-reduced-motion: reduce\) \{\s*\.hx-toast, \.hx-snack \{ animation: hx-fade/.test(CSS) && /@media \(prefers-reduced-transparency: reduce\)/.test(CSS) && /@media \(prefers-contrast: more\)/.test(CSS) && /@media print \{ \.hx-toasts, \.hx-snack \{ display: none; \} \}/.test(CSS));
-  ok('  the spring and the flick: damping 1.0 / 0.8, response 0.3–0.4, rubber band 0.55, projection 0.998, grabbed from the live value', /damping: Math\.abs\(v\) > 300 \? 0\.8 : 1, response: 0\.3/.test(JS) &&
-     /0\.55/.test(JS) && /var d = 0\.998/.test(JS) && /function liveY\(el\)/.test(JS));
+     /@media \(prefers-reduced-motion: reduce\) \{\s*\.hx-toast, \.hx-snack \{ animation: hx-fade/.test(CSS) && /@media \(prefers-reduced-transparency: reduce\)/.test(CSS) && /@media \(prefers-contrast: more\)/.test(CSS) && /@media print \{ \.hx-toasts \{ display: none; \} \}/.test(CSS));
+  ok('  the spring and the flick (right, to dismiss): damping 1.0 / 0.8, response 0.3–0.4, rubber band 0.55, projection 0.998, grabbed from the live value', /damping: Math\.abs\(v\) > 300 \? 0\.8 : 1, response: 0\.3/.test(JS) &&
+     /0\.55/.test(JS) && /var d = 0\.998/.test(JS) && /function liveX\(el\)/.test(JS) && /if \(project\(spring\.x, v\) > el\.offsetWidth \* 0\.5\) dismiss\(v, spring\);/.test(JS));
   ['.dh-overlay.open .dh-modal', '.modal-overlay.open .modal-box', '.bk-modal-bg.open .bk-modal', '.dp-modal-bg.open .dp-modal', '.sm-overlay:not(.sm-pdf) > .sm-dialog', '.sh-overlay > .sh-modal'].forEach(sel =>
     ok('phones: ' + sel + ' is a bottom sheet with a grabber', APPLE.indexOf('html[data-skin="ledger"][data-look="apple"] ' + sel + ' {') < 0 ? APPLE.indexOf('html[data-skin="ledger"][data-look="apple"] ' + sel + ', ') >= 0 && APPLE.indexOf('html[data-skin="ledger"][data-look="apple"] ' + sel + '::before') >= 0
       : APPLE.indexOf('html[data-skin="ledger"][data-look="apple"] ' + sel + '::before') >= 0));

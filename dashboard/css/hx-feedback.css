@@ -1,55 +1,63 @@
 /* hx-feedback.css — A375 · toasts and the snackbar (js/hx-feedback.js), on every page in both looks. Tokens only.
-   Toasts drop in at the top and leave the way they came, up; the snackbar rises at the bottom and leaves down. Under the
-   Apple look both are translucent material (blur 20px, saturate 180%) — the snackbar the heavier, inverted one, as it
-   carries an action. The colour sits on the solid icon, never on the glass. Text is a step heavier over glass. */
-.hx-toasts { position: fixed; top: max(.75rem, env(safe-area-inset-top)); left: 1rem; right: 1rem; z-index: 10050; width: min(26rem, calc(100vw - 2rem));
-  margin: 0 auto; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
-.hx-toast { pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: .625rem; padding: .7rem .5rem .7rem .8rem;
-  border-radius: 14px; background: var(--hx-glass-solid); color: var(--hx-ink); border: 1px solid var(--hx-hair); box-shadow: var(--hx-sh-3);
-  font: 500 .845rem/1.42 var(--hx-text); letter-spacing: .004em; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; will-change: transform;
+   A376 (Neil, 26 Oct 2026, from two pictures): toasts are soft tinted cards — the tone's pale colour, an outlined icon
+   tile, a bold title (Success / Error / Warning / Info) over the message — and the snackbar is the dark bar with a solid
+   icon, its action and a close. Both live in one corner, bottom right (on a phone, along the bottom): the toasts stack
+   above the snackbar, the newest nearest the corner. They come in from the right and leave the way they came.
+   The tinted card sits on the page's own card colour, so the pale tint reads the same in light and dark. */
+.hx-toasts { position: fixed; right: max(1.25rem, env(safe-area-inset-right)); bottom: max(1.25rem, env(safe-area-inset-bottom)); z-index: 10050;
+  width: min(24rem, calc(100vw - 2rem)); display: flex; flex-direction: column; align-items: stretch; gap: .625rem; pointer-events: none; }
+.hx-toast { --t-c: var(--hx-cyan-ink); --t-soft: var(--hx-cyan-soft); --t-line: var(--hx-cyan-ring);
+  pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: .75rem; padding: .85rem .6rem .85rem .9rem;
+  border-radius: 14px; background: linear-gradient(var(--t-soft), var(--t-soft)), var(--hx-card); border: 1px solid var(--t-line); color: var(--t-c);
+  box-shadow: var(--hx-sh-3); font: 400 .82rem/1.45 var(--hx-text); touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; will-change: transform;
   animation: hx-t-in .42s cubic-bezier(.2, .9, .25, 1) both; }
+.hx-toasts > .hx-toast, .hx-toasts > .hx-snack { margin: 0; }   /* an older page rule spaces [role="alert"] boxes; not these */
+.hx-toast.hx-ok { --t-c: var(--hx-ok); --t-soft: var(--hx-ok-soft); --t-line: var(--hx-ok-line); }
+.hx-toast.hx-warn { --t-c: var(--hx-warn); --t-soft: var(--hx-warn-soft); --t-line: var(--hx-warn-line); }
+.hx-toast.hx-error { --t-c: var(--hx-red); --t-soft: var(--hx-red-soft); --t-line: var(--hx-red-line); }
 .hx-toast:active { cursor: grabbing; }
-.hx-ttext { min-width: 0; padding-top: .1rem; white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; }
-.hx-ticon svg, .hx-tclose svg, .hx-sclose svg { display: block; width: 1.3rem; height: 1.3rem; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.hx-ticon { color: var(--hx-navy-text); }
-.hx-ok .hx-ticon { color: var(--hx-ok); }
-.hx-warn .hx-ticon { color: var(--hx-warn); }
-.hx-error .hx-ticon { color: var(--hx-red); }
-.hx-tcount { align-self: center; padding: 0 .4rem; border-radius: 999px; background: var(--hx-hair); color: var(--hx-ink-2); font: 700 .69rem/1.5 var(--hx-text); font-variant-numeric: tabular-nums; }
+.hx-ticon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; color: var(--t-c); }
+.hx-ticon svg { display: block; width: 1.75rem; height: 1.75rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hx-tbody { min-width: 0; padding-top: .1rem; }
+.hx-ttitle { display: flex; align-items: center; gap: .4rem; margin: 0 0 .1rem; font: 700 .9rem/1.3 var(--hx-text); letter-spacing: -.003em; color: var(--t-c); }
+.hx-ttext { display: block; white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; color: color-mix(in srgb, var(--t-c) 78%, var(--hx-ink)); }
+.hx-tcount { padding: 0 .4rem; border-radius: 999px; background: color-mix(in srgb, var(--t-c) 16%, transparent); color: var(--t-c); font: 700 .69rem/1.5 var(--hx-text); font-variant-numeric: tabular-nums; }
 .hx-tcount[hidden] { display: none; }
-.hx-tclose, .hx-sclose { display: grid; place-items: center; width: 1.85rem; height: 1.85rem; margin: -.2rem 0; padding: 0; border: 0; border-radius: 999px; background: transparent;
-  color: var(--hx-ink-3); cursor: pointer; transition: transform 100ms ease-out; }
-.hx-tclose svg, .hx-sclose svg { width: 1rem; height: 1rem; }
-.hx-tclose:hover { background: var(--hx-hair); color: var(--hx-ink); }
+.hx-tclose, .hx-sclose { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; margin: -.15rem 0; padding: 0; border: 0; border-radius: 999px; background: transparent;
+  cursor: pointer; transition: transform 100ms ease-out; }
+.hx-tclose { color: var(--t-c); }
+.hx-tclose svg, .hx-sclose svg { display: block; width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.hx-tclose:hover { background: color-mix(in srgb, var(--t-c) 12%, transparent); }
 .hx-tclose:active, .hx-sclose:active, .hx-sact:active { transform: scale(.97); }
 .hx-tclose:focus-visible, .hx-sclose:focus-visible, .hx-sact:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
 .hx-toast.hx-out { animation: hx-t-out .22s cubic-bezier(.4, 0, .9, .4) both; pointer-events: none; }
-@keyframes hx-t-in { from { opacity: 0; transform: translate3d(0, -14px, 0) scale(.96); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
-@keyframes hx-t-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, -14px, 0) scale(.96); filter: blur(4px); } }
+@keyframes hx-t-in { from { opacity: 0; transform: translate3d(28px, 0, 0) scale(.97); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes hx-t-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(28px, 0, 0) scale(.97); filter: blur(3px); } }
 
-.hx-snack { position: fixed; left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom)); z-index: 10040; width: fit-content; max-width: min(36rem, calc(100vw - 2rem));
-  margin: 0 auto; display: flex; align-items: center; gap: .75rem; padding: .55rem .45rem .55rem 1rem; border-radius: 14px; background: var(--hx-ink); color: var(--hx-card);
-  box-shadow: var(--hx-sh-3); font: 500 .845rem/1.42 var(--hx-text); letter-spacing: .004em; touch-action: none; user-select: none; -webkit-user-select: none; will-change: transform;
-  animation: hx-s-in .42s cubic-bezier(.2, .9, .25, 1) both; }
-.hx-stext { min-width: 0; padding: .2rem 0; overflow-wrap: anywhere; }
-.hx-sact { flex: none; padding: .4rem .85rem; border: 1px solid color-mix(in srgb, var(--hx-card) 40%, transparent); border-radius: 999px; background: transparent; color: inherit;
+/* the snackbar: the dark bar (inverted, so in the dark theme it is the light one), a solid icon, its action, a close */
+.hx-snack { --s-c: var(--hx-ok); pointer-events: auto; display: flex; align-items: center; gap: .8rem; padding: .7rem .55rem .7rem .8rem; border-radius: 14px;
+  background: var(--hx-ink); color: var(--hx-card); box-shadow: var(--hx-sh-3); font: 600 .9rem/1.4 var(--hx-text); letter-spacing: -.003em;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; will-change: transform; animation: hx-t-in .42s cubic-bezier(.2, .9, .25, 1) both; }
+.hx-snack.hx-warn { --s-c: var(--hx-warn); }
+.hx-snack.hx-error { --s-c: var(--hx-red); }
+.hx-snack.hx-info { --s-c: var(--hx-cyan); }
+.hx-sicon { flex: none; display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--s-c); color: var(--hx-card); }
+.hx-sicon svg { display: block; width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.hx-stext { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hx-sact { flex: none; padding: .42rem .9rem; border: 1px solid color-mix(in srgb, var(--hx-card) 38%, transparent); border-radius: 999px; background: transparent; color: inherit;
   font: 700 .8rem/1.2 var(--hx-text); cursor: pointer; transition: transform 100ms ease-out; }
 .hx-sact:hover { background: color-mix(in srgb, var(--hx-card) 14%, transparent); }
-.hx-sclose { color: color-mix(in srgb, var(--hx-card) 72%, transparent); }
-.hx-snack.hx-warn .hx-stext::before { content: ''; display: inline-block; width: .5rem; height: .5rem; margin-right: .5rem; border-radius: 50%; background: var(--hx-warn); vertical-align: .05em; }
-.hx-snack.hx-out { animation: hx-s-out .22s cubic-bezier(.4, 0, .9, .4) both; pointer-events: none; }
-@keyframes hx-s-in { from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.97); } to { opacity: 1; transform: none; } }
-@keyframes hx-s-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 18px, 0) scale(.97); } }
+.hx-sclose { color: color-mix(in srgb, var(--hx-card) 80%, transparent); }
+.hx-sclose:hover { background: color-mix(in srgb, var(--hx-card) 12%, transparent); }
+.hx-snack.hx-out { animation: hx-t-out .22s cubic-bezier(.4, 0, .9, .4) both; pointer-events: none; }
 
-/* the Apple look: translucent material, the snackbar the heavier, inverted one */
-html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--a-mat-pop); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
-  border: 1px solid var(--a-mat-edge); box-shadow: var(--l-p-shadow-pop); font-family: var(--l-sans); }
-html[data-skin="ledger"][data-look="apple"] .hx-snack { background: color-mix(in srgb, var(--hx-ink) 86%, transparent); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
-  box-shadow: var(--l-p-shadow-pop); font-family: var(--l-sans); }
+/* the Apple look: its type, its pop-over shadow; the snackbar a touch of glass over what passes behind it */
+html[data-skin="ledger"][data-look="apple"] .hx-toast, html[data-skin="ledger"][data-look="apple"] .hx-snack { font-family: var(--l-sans); box-shadow: var(--l-p-shadow-pop); }
+html[data-skin="ledger"][data-look="apple"] .hx-ttitle { font-family: var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .hx-snack { background: color-mix(in srgb, var(--hx-ink) 92%, transparent); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur); }
 
 @media (max-width: 640px) {
-  .hx-toasts { width: auto; }
-  .hx-snack { width: auto; justify-content: space-between; }
+  .hx-toasts { left: 1rem; right: 1rem; width: auto; bottom: max(1rem, env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .hx-toast, .hx-snack { animation: hx-fade .18s ease-out both; }
@@ -60,11 +68,11 @@ html[data-motion="off"] .hx-toast, html[data-motion="off"] .hx-snack { animation
 @keyframes hx-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes hx-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-transparency: reduce) {
-  html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--hx-glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   html[data-skin="ledger"][data-look="apple"] .hx-snack { background: var(--hx-ink); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
-  .hx-toast, html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--hx-card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--hx-ink-2); }
+  .hx-toast { border: 2px solid var(--t-c); }
+  .hx-ttext { color: var(--hx-ink); }
   .hx-snack, html[data-skin="ledger"][data-look="apple"] .hx-snack { background: var(--hx-ink); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--hx-card); }
 }
-@media print { .hx-toasts, .hx-snack { display: none; } }
+@media print { .hx-toasts { display: none; } }
