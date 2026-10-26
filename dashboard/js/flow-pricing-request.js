@@ -928,14 +928,13 @@ function sourcingTable(r) {
    Neil, 26 Oct 2026: what admin prices goes under the supplier with its price and date (FlowAPI 189 files it at the
    forward). Here, the supplier box suggests the names on the supplier list, and under it says what that supplier last
    priced this item at, or that a name not on the list will be added when the request is forwarded. Before 189, or for
-   a role the list refuses, it stays quiet. */
+   a role the list refuses, it stays quiet. The read itself is the test (a getVersion read can be stale or dropped). */
 let prSl = null;   // getSupplierBook {lite} — read once per page
 async function prSlDecorate() {
   const t = document.getElementById('srcTable');
   if (!t || typeof slResolve !== 'function') return;
   if (!prSl) {
-    const v = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(189).catch(() => false) : false;
-    const r = v ? await postFlow('getSupplierBook', { lite: true }).catch(() => null) : null;
+    const r = await postFlow('getSupplierBook', { lite: true }).catch(() => null);   // before 189 it is refused, and the hint stays quiet
     prSl = r && r.success ? { suppliers: r.suppliers || [], latest: r.latest || [] } : { suppliers: [], latest: [], off: true };
   }
   if (prSl.off) return;

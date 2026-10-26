@@ -103,12 +103,13 @@ async function boot(o) {
   const p = page(['js/client-rollup.js', 'js/supplier-list-model.js', 'js/supplier-list.js'], 'supplier-list.html', o.session || { username: 'admin1', name: 'Admin One', role: 'admin' }, { data: {} });
   ['slQ', 'slDelivery', 'slSort'].forEach(id => { p.els[id] = Object.assign(stubEl(), { id }); });
   p.ctx.__book = JSON.parse(JSON.stringify(o.book || BOOK)); p.ctx.__stub = stubEl; p.ctx.__v = o.v || 189;
+  p.ctx.__old = !!o.old;   // the server has no getSupplierBook (FlowAPI before 189)
   p.run(`requireSupplierListAccess = function () { return __session; };
     flowToday = function () { return "2026-10-26"; };
     flowVersionAtLeast = function (n) { return Promise.resolve(n <= __v); };
     var __posted = [], __shown = '';
     postFlow = function (a, p) { __posted.push({ a: a, p: p });
-      if (a === 'getSupplierBook') return Promise.resolve(JSON.parse(JSON.stringify(__book)));
+      if (a === 'getSupplierBook') return Promise.resolve(__old ? { success: false, message: 'Unknown action: getSupplierBook' } : JSON.parse(JSON.stringify(__book)));
       return Promise.resolve({ success: true, supplierNo: p.supplierNo || 'SB-9' }); };
     slShow = function (h, back) { __shown = h; SL.back = back || SL.back; return __stub(); };`);
   await p.boot();
@@ -158,9 +159,14 @@ async function boot(o) {
   p.run('slDetail("SB-1", null)');
   ok('  and not again', !/sl-flash/.test(p.run('__shown')));
 
-  const old = await boot({ v: 188 });
-  ok('before FlowAPI 189: it says what to paste, reads nothing, adds nothing', /version 189/.test(old.els.slNotice.innerHTML) && !/ bad/.test(old.els.slNotice.innerHTML) &&
-     old.run('__posted.length') === 0 && old.els.slAdd.disabled === true);
+  const old = await boot({ old: true });
+  ok('before FlowAPI 189 (the server has no such action): it says what to paste and adds nothing', /version 189/.test(old.els.slNotice.innerHTML) && !/ bad/.test(old.els.slNotice.innerHTML) &&
+     old.run('__posted.map(function (x) { return x.a; })').join() === 'getSupplierBook' && old.els.slAdd.disabled === true);
+  const stale = await boot({ v: 188 });
+  ok('a stale or dropped version read never hides a list the server has (the list itself is the test)', !stale.els.slNotice.innerHTML && (stale.els.slTable.innerHTML.match(/data-open="/g) || []).length === 3 &&
+     !/flowVersionAtLeast/.test(read('js/supplier-list.js')));
+  const down = await boot({ book: { success: false, message: 'Request timed out.' } });
+  ok('  any other failure says what went wrong, not "paste 189"', /Could not read the supplier list: Request timed out\./.test(down.els.slNotice.innerHTML) && !/version 189/.test(down.els.slNotice.innerHTML));
   const empty = await boot({ book: { success: true, suppliers: [], prices: [], log: [] } });
   ok('an empty list invites the first supplier and says forwards fill it too', /No suppliers yet\./.test(empty.els.slTable.innerHTML) && /its suppliers are added here by themselves/.test(empty.els.slTable.innerHTML) && /data-addfirst/.test(empty.els.slTable.innerHTML));
   ok('while it reads, rows shaped like the list (not a spinner)', /class="sl-skel" aria-hidden="true"/.test(p.run('slSkeleton()')) && /role="status">Reading the supplier list/.test(p.run('slSkeleton()')));
@@ -197,7 +203,8 @@ async function boot(o) {
     eq('what a forward filed, in its own words', [pr.run('prSlForwardSay({ prices: 3, unchanged: 0, newSuppliers: [{ supplierNo: "SB-9", supplier: "Bolt King" }] })'), pr.run('prSlForwardSay({ prices: 1, newSuppliers: [] })'), pr.run('prSlForwardSay({ prices: 0, unchanged: 2, newSuppliers: [] })'), pr.run('prSlForwardSay(undefined)')],
        ['3 prices filed in the supplier list; 1 new supplier needs details (Bolt King).', '1 price filed in the supplier list.', '', '']);
     const PRJS = read('js/flow-pricing-request.js'), PRH = read('flow-pricing-request.html');
-    ok('  the supplier box suggests the list\'s names (a datalist), and the hint waits for FlowAPI 189', /class="s-sup" list="slSupNames"/.test(PRJS) && /<datalist id="slSupNames"><\/datalist>/.test(PRJS) && /flowVersionAtLeast\(189\)/.test(PRJS) && /postFlow\('getSupplierBook', \{ lite: true \}\)/.test(PRJS));
+    ok('  the supplier box suggests the list\'s names (a datalist); the hint reads the list itself and stays quiet when refused', /class="s-sup" list="slSupNames"/.test(PRJS) && /<datalist id="slSupNames"><\/datalist>/.test(PRJS) && !/flowVersionAtLeast\(189\)/.test(PRJS) &&
+       /const r = await postFlow\('getSupplierBook', \{ lite: true \}\)\.catch\(\(\) => null\);/.test(PRJS) && /prSl = r && r\.success \?/.test(PRJS));
     ok('  both sourcing views decorate it, and the forward says what it filed', (PRJS.match(/prSlDecorate\(\);/g) || []).length === 2 && /const filed = prSlForwardSay\(f\.recorded\);/.test(PRJS));
     ok('  the page loads the model before its own script', /client-rollup\.js"><\/script>\s*<script src="js\/supplier-list-model\.js"><\/script>\s*<script src="js\/flow-pricing-request\.js"><\/script>/.test(PRH));
   }

@@ -12,7 +12,7 @@
  * Restore instead of a confirm for Archive, and a preview before the one step that cannot be undone (Merge).
  * The numbers are js/supplier-list-model.js (pure, tested). */
 
-const SL = { me: '', ok: true, okMsg: '', v189: false, suppliers: [], prices: [], log: [], lists: null, today: '', open: '', back: null, built: false,
+const SL = { me: '', ok: true, okMsg: '', suppliers: [], prices: [], log: [], lists: null, today: '', open: '', back: null, built: false,
              tab: 'overview', wasSplit: null, flash: '',
              f: { q: '', type: '', distributor: false, delivery: '', needs: false, archived: false, sort: 'name' } };
 
@@ -45,9 +45,10 @@ function slSkeleton() {
 async function slLoad() {
   _slId('slTable').innerHTML = slSkeleton();
   SL.today = typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10);
-  SL.v189 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(189).catch(() => false) : false;
-  slTake(SL.v189 ? await postFlow('getSupplierBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) }))
-                 : { success: false, message: 'Unknown action: getSupplierBook' });
+  /* The list itself is the test, not getVersion: a version read can be a minute stale in this browser, or dropped by
+     Google right after a deployment, and then said "189 is not pasted" on a server that has it. Only the server saying
+     it has no such action means the update is missing. */
+  slTake(await postFlow('getSupplierBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })));
   slRender();
   const ask = new URLSearchParams(location.search || '').get('supplier');   // the sourcing table links here
   if (ask && SL.suppliers.some(x => x.supplierNo === ask)) slDetail(ask, null);
