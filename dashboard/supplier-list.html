@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supplier list</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/supplier-list.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content sl-main">
+    <!-- A374 — the supplier list (Neil, 26 Oct 2026): each supplier with its people, address, local or international, the
+         distributorship we hold for them, delivery, payment terms and usual items, and every price admin forwarded to
+         management, with the date it was last updated. Laid out like the Client Book: the list on the left, the supplier
+         on the right; on a tablet or phone the supplier opens as a sheet. js/supplier-list.js draws it. -->
+    <header class="sl-head">
+      <div class="sl-titles">
+        <h1>Supplier list</h1>
+        <p class="sl-lede">Suppliers with their people and terms, and what they priced for us: each item's last price and when.</p>
+      </div>
+      <div class="sl-actions">
+        <button type="button" class="btn btn-secondary" id="slExport">Export CSV</button>
+        <button type="button" class="btn btn-primary" id="slAdd">Add supplier</button>
+      </div>
+    </header>
+    <div id="slNotice"></div>
+    <div class="sl-bar">
+      <div class="sl-filters" id="slFilters" role="search"></div>
+      <div class="sl-chips" id="slChips" role="group" aria-label="Show"></div>
+    </div>
+    <div class="sl-split" id="slSplit">
+      <section class="sl-listcol" aria-label="Suppliers">
+        <p class="sl-count" id="slFoot" aria-live="polite"></p>
+        <div class="sl-list" id="slTable" role="list"></div>
+      </section>
+      <section class="sl-pane" id="slPane" aria-label="The supplier"></section>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-rollup.js"></script>
+  <script src="js/supplier-list-model.js"></script>
+  <script src="js/supplier-list.js"></script>
+</body>
+</html>

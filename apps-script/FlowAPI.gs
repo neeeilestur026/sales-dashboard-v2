@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 188;   // A372 — the director restates what was paid on a payable, from its paid requests. History: see CHANGELOG.
+var FLOW_VERSION = 189;   // A374 — the supplier list: admin's forwarded prices filed under each supplier. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -588,7 +588,18 @@ var SCHEMA = {
                   'Decision', 'Decided By', 'Decided At', 'Decision Note', 'Cancelled By', 'Cancelled At', 'Cancel Reason',
                   'Done At', 'Result',
                   'Travel Estimate (PHP)', 'Travel Estimate Basis'],   // reserved: how the estimate is worked out is not decided yet
-  VisitPlanLog:  ['Log No', 'Visit Plan No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
+  VisitPlanLog:  ['Log No', 'Visit Plan No', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
+  // A374 — the supplier list (admin): one row per supplier, a log that is only ever appended to, and the prices admin
+  // forwarded to management, one row per purchase-request line. Apart from the old Suppliers tab (bank details).
+  // Written only by saveSupplierBookSupplier / mergeSupplierBookSupplier / archiveSupplierBookSupplier /
+  // importSupplierBookHistory, and by submitForPricing (_sbRecordForward) for the prices.
+  SupplierBook:  ['Supplier No', 'Supplier', 'Key', 'Aliases', 'Type', 'Distributorship', 'Brands', 'Contacts JSON',
+                  'Address', 'Delivery', 'Delivery Note', 'Payment Terms', 'Usual Items', 'Notes', 'Needs Details',
+                  'Source', 'Status', 'Created By', 'Created At', 'Updated By', 'Updated At', 'Archived By', 'Archived At',
+                  'Archive Reason', 'TIN'],
+  SupplierBookLog: ['Log No', 'Supplier No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At'],
+  SupplierPrices: ['Price No', 'Supplier No', 'Supplier', 'Item Key', 'Item No', 'Item Name', 'UOM', 'Qty', 'Currency',
+                   'Supplier Price (FC)', 'VAT', 'Principal', 'PR No', 'Line', 'Customer', 'Priced By', 'Priced At', 'Source']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -641,7 +652,9 @@ function _ss() {
 var _TEXT_COLS = { EventIndex: ['Fingerprint'], PaymentRequests: ['Account Number'], Suppliers: ['Account Number'],
                    FieldCollections: ['Cheque No', 'Reference No'],
                    WebRequests: ['Ref', 'Key', 'Phone'],   // A338 — a phone '0917…' must keep its 0
-                   VisitPlans: ['Time'] };                 // A369 — '09:30' stays text, not a time of day 1899
+                   VisitPlans: ['Time'],                   // A369 — '09:30' stays text, not a time of day 1899
+                   SupplierPrices: ['Item No'],            // A374 — an item code '00412' keeps its zeros
+                   SupplierBook: ['TIN'] };                // A374 — a TIN '000236850002' too
 var _TEXT_DONE = {};
 function _textColumns(name, sh) {
   if (!_TEXT_COLS[name] || _TEXT_DONE[name]) return;
@@ -831,6 +844,7 @@ var _SECURED = {
   getClientBook: 1, saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350 — the Client Book trial; its read is private too
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360 — connecting old PRs and quotations to a client
   getVisitPlans: 1, saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369 — client visits
+  getSupplierBook: 1, saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374 — the supplier list (contacts and buy prices, so its read is secured too)
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
   updatePaymentRequest: 1, updatePurchaseOrder: 1, updateQuotation: 1, updateSalesOrder: 1, updateShipment: 1, verifyReturnToSales: 1,
   voidCollection: 1, voidInvoice: 1, retireDuplicateReceivables: 1,   // A334
@@ -16533,6 +16547,525 @@ function _travVisitsFor(user, weekStart) {
   });
 }
 
+/* ── A374 · THE SUPPLIER LIST ───────────────────────────────────────────────────────────────────────────────────────────
+   Neil, 26 Oct 2026: "a suppliers list for admin dashboard — name of the supplier, contact person (can be multiple),
+   contact number (can be multiple), email (can be multiple), address, local, international, distributorship, usual item
+   delivery type (pickup in warehouse, delivery to our warehouse, and others), payment terms, usual items that we order",
+   and connect it to pricing: "after the admin dashboard priced, then this product will go to under this supplier with
+   the priced and last updated price date". His answers: a NEW list, apart from the old Suppliers tab (bank details,
+   untouched for now); a distributorship is one WE hold for them (yes or no, and its brands); a supplier a forwarded line
+   names that is not in the list yet is added and flagged as needing details; the list is filled once from past
+   requests, after a preview.
+   SupplierBook is one row per supplier (Key = _canonKey of the name; Aliases = its other spellings, one per line).
+   SupplierBookLog is only ever appended to. SupplierPrices is one row per purchase-request line forwarded to
+   management, upserted on PR No + Line, so a supplier's last price for an item is its newest row for that Item Key.
+   The price is ADMIN'S, taken at the forward: setMgmtPricing later overwrites Supplier Price (FC) with management's. */
+var SB_TYPES = ['Local', 'International'];
+var SB_DELIVERY = ['Pickup at their warehouse', 'Delivered to our warehouse', 'Other'];
+var SB_TERMS = ['COD', 'Prepaid', '50% down', '7 days', '15 days', '30 days', '60 days'];   // the page offers these; any term may be typed
+var SB_PAST_FORWARD = { 'For Mgmt Pricing': 1, 'Mgmt Priced': 1, 'Returned to Sales': 1, 'Quoted': 1, 'Partly Quoted': 1, 'Migrated': 1 };
+var _SB_SOURCING = { admin: 1, accounting: 1, director: 1 };   // who prices requests: they read the names and last prices
+function _sbRoles() {
+  var raw = '';
+  try { raw = String((getFlowSettings().data || {}).supplierBookRoles || ''); } catch (e) { raw = ''; }
+  var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return list.length ? list : ['admin', 'director'];
+}
+function _sbDenied(p) {
+  if (_sbRoles().indexOf(_sgRole(p)) < 0) return 'The supplier list is for ' + _sbRoles().join(' and ') + '.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save the change under.';
+  return '';
+}
+function _sbYes(v) { return v === true || /^(yes|true|1)$/i.test(String(v == null ? '' : v).trim()); }
+function _sbSplit(v) { return String(v == null ? '' : v).split('\n').map(function (x) { return x.trim(); }).filter(Boolean); }
+function _sbText(v, n) { return _webCell(v, true).replace(/\n+/g, ' ').slice(0, n || 500); }
+/** A list typed one per line (or sent as an array): trimmed, no repeats (any case), at most `max` of `len` characters. */
+function _sbLines(v, max, len) {
+  var arr = Array.isArray(v) ? v : String(v == null ? '' : v).replace(/\r\n?/g, '\n').split('\n');
+  var seen = {}, out = [];
+  arr.forEach(function (x) { var t = _webCell(x).slice(0, len || 160), k = t.toLowerCase(); if (t && !seen[k]) { seen[k] = 1; out.push(t); } });
+  return out.slice(0, max || 50);
+}
+/** One of `list` (any case), '' for nothing chosen, or null for something else. */
+function _sbPick(v, list) {
+  var t = String(v == null ? '' : v).trim();
+  if (!t) return '';
+  var hit = list.filter(function (x) { return x.toLowerCase() === t.toLowerCase(); })[0];
+  return hit || null;
+}
+function _sbNoCode(v) { var s = String(v == null ? '' : v).trim().toLowerCase(); return !s || /^(n\/?a|none|tba|-+)$/.test(s); }
+/** Which item a price is for: its code when it has one, else its name. */
+function _sbItemKey(itemNo, itemName) { return _sbNoCode(itemNo) ? 'name:' + _rawKey(itemName) : 'code:' + _idNorm(itemNo); }
+function _sbRows(name) { var sh = _ss().getSheetByName(name); return sh && sh.getLastRow() >= 2 ? _rows(name) : []; }
+function _sbRow(no) { return _sbRows('SupplierBook').filter(function (r) { return String(r['Supplier No']) === String(no || ''); })[0] || null; }
+function _sbArchived(r) { return String((r && r['Status']) || '') === 'Archived'; }
+/** Write a whole supplier row in SCHEMA order, so the width always matches. */
+function _sbPut(row, obj) {
+  var vals = SCHEMA.SupplierBook.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('SupplierBook').getRange(row.rowIndex, 1, 1, SCHEMA.SupplierBook.length).setValues([vals]);
+  else _append('SupplierBook', vals);
+}
+function _sbLog(no, kind, from, to, note, ref, by) {
+  var n = _nextNumber('SupplierBookLog', 1, 'SBL');
+  _append('SupplierBookLog', [n, no, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), _webCell(ref).slice(0, 60), by, _now()]);
+}
+/** `count` numbers in one go (an import files hundreds of rows): the counter moves once, to the last one handed out. */
+function _sbNextNumbers(name, prefix, count) {
+  if (count < 1) return [];
+  var first = _nextNumber(name, 1, prefix), m = first.match(/^(.*-)(\d+)$/), stem = m[1], n = parseInt(m[2], 10), out = [first];
+  for (var i = 1; i < count; i++) { var k = n + i; out.push(stem + (k < 1000 ? ('00' + k).slice(-3) : String(k))); }
+  if (count > 1) { try { PropertiesService.getScriptProperties().setProperty('seq_' + name + '_' + prefix + '_' + stem.split('-')[1], String(n + count - 1)); } catch (e) {} }
+  return out;
+}
+/** Rows written in one block below the last one: an import must not pay for hundreds of appendRow calls. */
+function _sbAppendBlock(name, rows) {
+  if (!rows.length) return;
+  var sh = _sheet(name);
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, SCHEMA[name].length).setValues(rows);
+}
+function _sbOut(r) {
+  var contacts = [];
+  try { contacts = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  return { supplierNo: String(r['Supplier No']), supplier: String(r['Supplier'] || ''), key: String(r['Key'] || ''), aliases: _sbSplit(r['Aliases']),
+           type: String(r['Type'] || ''), distributor: _sbYes(r['Distributorship']), brands: _sbSplit(r['Brands']), contacts: contacts,
+           address: String(r['Address'] || ''), delivery: String(r['Delivery'] || ''), deliveryNote: String(r['Delivery Note'] || ''),
+           terms: String(r['Payment Terms'] || ''), usualItems: _sbSplit(r['Usual Items']), notes: String(r['Notes'] || ''),
+           needsDetails: _sbYes(r['Needs Details']), source: String(r['Source'] || ''), status: String(r['Status'] || 'Active'),
+           createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''),
+           updatedAt: _webIso(r['Updated At']), archivedBy: String(r['Archived By'] || ''), archivedAt: _webIso(r['Archived At']),
+           archiveReason: String(r['Archive Reason'] || ''), tin: String(r['TIN'] || '') };
+}
+function _sbPriceOut(r) {
+  return { priceNo: String(r['Price No']), supplierNo: String(r['Supplier No'] || ''), supplier: String(r['Supplier'] || ''),
+           itemKey: String(r['Item Key'] || ''), itemNo: String(r['Item No'] || ''), itemName: String(r['Item Name'] || ''),
+           uom: String(r['UOM'] || ''), qty: _num(r['Qty']), currency: String(r['Currency'] || ''), price: _num(r['Supplier Price (FC)']),
+           vat: String(r['VAT'] || ''), principal: String(r['Principal'] || ''), prNo: String(r['PR No'] || ''), line: _num(r['Line']),
+           customer: String(r['Customer'] || ''), by: String(r['Priced By'] || ''), at: _webIso(r['Priced At']), source: String(r['Source'] || '') };
+}
+/** Every supplier's name and other spellings, raw and as a comparison key. A live supplier wins over an archived one. */
+function _sbIndex(rows) {
+  var byRaw = {}, byKey = {}, live = {};
+  (rows || _sbRows('SupplierBook')).forEach(function (r) {
+    var no = String(r['Supplier No']), on = !_sbArchived(r);
+    if (on) live[no] = 1;
+    var put = function (map, k) { if (k && (!map[k] || (on && !live[map[k]]))) map[k] = no; };
+    [String(r['Supplier'] || '')].concat(_sbSplit(r['Aliases'])).forEach(function (n) { put(byRaw, _rawKey(n)); put(byKey, _canonKey(n)); });
+  });
+  return { byRaw: byRaw, byKey: byKey, live: live };
+}
+function _sbResolve(idx, name) { var k = _canonKey(name); return idx.byRaw[_rawKey(name)] || (k ? idx.byKey[k] : '') || ''; }
+function _sbRemember(idx, no, name) { idx.byRaw[_rawKey(name)] = no; var k = _canonKey(name); if (k) idx.byKey[k] = no; idx.live[no] = 1; }
+/** The price row for one request line. */
+function _sbPriceVals(no, name, r, prNo, customer, by, at, source) {
+  return { 'Supplier No': no, 'Supplier': name, 'Item Key': _sbItemKey(r['Item No'], r['Item Name']), 'Item No': _webCell(r['Item No']).slice(0, 80),
+           'Item Name': _sbText(r['Item Name'], 500), 'UOM': _webCell(r['UOM']).slice(0, 40), 'Qty': _num(r['Qty']),
+           'Currency': _webCell(r['Currency']).slice(0, 10), 'Supplier Price (FC)': _num(r['Supplier Price (FC)']),
+           'VAT': _webCell(r['Supplier Price VAT']).slice(0, 20), 'Principal': _webCell(r['Principal']).slice(0, 80), 'PR No': String(prNo),
+           'Line': _num(r['Line']), 'Customer': _webCell(customer).slice(0, 160), 'Priced By': by || '', 'Priced At': at, 'Source': source };
+}
+function _sbArr(vals) { return SCHEMA.SupplierPrices.map(function (h) { return vals[h] === undefined || vals[h] === null ? '' : vals[h]; }); }
+
+/** getSupplierBook({lite?}) — every supplier (archived ones too), every price and the whole log. `lite` is for the
+ *  sourcing table: the live suppliers' names and spellings and the last price of each of their items, for whoever
+ *  prices requests (admin, accounting, director). A read never creates the tabs. */
+function getSupplierBook(p) {
+  p = p || {};
+  var lite = p.lite === true || String(p.lite) === 'true', no = _sbDenied(p);
+  if (no && !(lite && _SB_SOURCING[_sgRole(p)] && String(p.actorName || '').trim())) return { success: false, message: no };
+  var rows = _sbRows('SupplierBook'), prices = _sbRows('SupplierPrices').map(_sbPriceOut);
+  if (lite) {
+    var latest = {};
+    prices.forEach(function (x) { var k = x.supplierNo + '|' + x.itemKey, was = latest[k]; if (!was || x.at > was.at) latest[k] = x; });
+    return { success: true, lite: true,
+      suppliers: rows.filter(function (r) { return !_sbArchived(r); }).map(function (r) { return { supplierNo: String(r['Supplier No']), supplier: String(r['Supplier'] || ''), aliases: _sbSplit(r['Aliases']) }; }),
+      latest: Object.keys(latest).map(function (k) { var x = latest[k]; return { supplierNo: x.supplierNo, itemKey: x.itemKey, itemNo: x.itemNo, itemName: x.itemName, currency: x.currency, price: x.price, vat: x.vat, prNo: x.prNo, at: x.at }; }) };
+  }
+  var log = _sbRows('SupplierBookLog').map(function (r) {
+    return { logNo: String(r['Log No']), supplierNo: String(r['Supplier No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
+             to: String(r['To'] || ''), note: String(r['Note'] || ''), ref: String(r['Ref'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
+  });
+  return { success: true, suppliers: rows.map(_sbOut), prices: prices, log: log, lists: { types: SB_TYPES, delivery: SB_DELIVERY, terms: SB_TERMS } };
+}
+
+/** saveSupplierBookSupplier({supplierNo?, supplier, aliases, type, distributor, brands, contactsJson, address, delivery,
+ *  deliveryNote, terms, usualItems, notes, allowDuplicate?}) — add or edit. On an edit, a field that is not sent keeps
+ *  what it has. A supplier with neither a contact person nor an address is flagged as needing details. */
+function saveSupplierBookSupplier(p) {
+  var no = _sbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), name = _webCell(p.supplier).slice(0, 160), key = name ? _canonKey(name) : '';
+  if (!name || !key) return { success: false, message: 'A supplier needs its name.' };
+  var row = p.supplierNo ? _sbRow(p.supplierNo) : null;
+  if (p.supplierNo && !row) return { success: false, message: 'Supplier ' + p.supplierNo + ' is not in the supplier list.' };
+  if (row && _sbArchived(row)) return { success: false, message: 'This supplier is archived; restore it first.' };
+  var has = function (k) { return !row || (p[k] !== undefined && p[k] !== null); };
+  var type = _sbPick(p.type, SB_TYPES), delivery = _sbPick(p.delivery, SB_DELIVERY);
+  if (type === null) return { success: false, message: 'A supplier is Local or International.' };
+  if (delivery === null) return { success: false, message: 'Delivery is one of: ' + SB_DELIVERY.join(', ') + '.' };
+  var ct = has('contactsJson') ? _cbContacts(p.contactsJson) : null;
+  if (ct && ct.error) return { success: false, message: ct.error.replace('A client', 'A supplier') };
+  var obj = {};
+  if (row) SCHEMA.SupplierBook.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Created By': by, 'Created At': _now(), 'Source': 'Manual', 'Status': 'Active', 'Contacts JSON': '[]' });
+  obj['Supplier'] = name; obj['Key'] = key;
+  if (has('aliases')) obj['Aliases'] = _sbLines(p.aliases, 40, 160).filter(function (a) { return _rawKey(a) !== _rawKey(name); }).join('\n');
+  if (has('type')) obj['Type'] = type;
+  if (has('distributor')) obj['Distributorship'] = _sbYes(p.distributor) ? 'Yes' : '';
+  if (has('brands')) obj['Brands'] = _sbLines(p.brands, 30, 80).join('\n');
+  if (!obj['Distributorship']) obj['Brands'] = '';   // the brands are the ones WE distribute for them
+  if (ct) obj['Contacts JSON'] = ct.text;
+  if (has('address')) obj['Address'] = _webCell(p.address, true).slice(0, 300);
+  if (has('delivery')) obj['Delivery'] = delivery;
+  if (has('deliveryNote')) obj['Delivery Note'] = _webCell(p.deliveryNote).slice(0, 190);
+  if (obj['Delivery'] !== 'Other') obj['Delivery Note'] = obj['Delivery'] ? obj['Delivery Note'] : '';
+  if (obj['Delivery'] === 'Other' && !String(obj['Delivery Note'] || '').trim()) return { success: false, message: 'Say how this supplier delivers.' };
+  if (has('terms')) obj['Payment Terms'] = _webCell(p.terms).slice(0, 80);
+  if (has('tin')) obj['TIN'] = _webCell(p.tin).slice(0, 40);
+  if (has('usualItems')) obj['Usual Items'] = _sbLines(p.usualItems, 60, 160).join('\n');
+  if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 2000);
+  var people = []; try { people = JSON.parse(String(obj['Contacts JSON'] || '[]')); } catch (e) { people = []; }
+  obj['Needs Details'] = people.length || String(obj['Address'] || '').trim() ? '' : 'Yes';
+  /* the same supplier twice: another live supplier with this comparison key, or a name or spelling in common */
+  var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true', mine = [name].concat(_sbSplit(obj['Aliases'])).map(_rawKey), twin = null;
+  _sbRows('SupplierBook').forEach(function (r) {
+    if (twin || _sbArchived(r) || (row && String(r['Supplier No']) === String(row['Supplier No']))) return;
+    var theirs = [String(r['Supplier'] || '')].concat(_sbSplit(r['Aliases'])).map(_rawKey);
+    if (String(r['Key']) === key || theirs.some(function (t) { return mine.indexOf(t) >= 0; })) twin = r;
+  });
+  if (twin && !allow) return { success: false, duplicate: String(twin['Supplier No']), message: '"' + twin['Supplier'] + '" (' + twin['Supplier No'] + ') is already in the supplier list.' };
+  var now = _now();
+  obj['Updated By'] = by; obj['Updated At'] = now;
+  var supplierNo = row ? String(row['Supplier No']) : _nextNumber('SupplierBook', 1, 'SB');
+  obj['Supplier No'] = supplierNo;
+  _sbPut(row, obj);
+  if (!row) {
+    _sbLog(supplierNo, 'created', '', name, [obj['Type'], obj['Distributorship'] ? 'we distribute for them' : '', people.length + ' contact' + (people.length === 1 ? '' : 's')].filter(Boolean).join(', ') + '.', '', by);
+  } else {
+    var changed = [], label = { 'Supplier': 'the name', 'Aliases': 'the other spellings', 'Type': 'local or international', 'Distributorship': 'the distributorship',
+      'Brands': 'the brands', 'Address': 'the address', 'Delivery': 'the delivery', 'Delivery Note': 'the delivery note', 'Payment Terms': 'the payment terms',
+      'Usual Items': 'the usual items', 'Notes': 'the notes', 'TIN': 'the TIN' };
+    Object.keys(label).forEach(function (h) { if (String(row[h] == null ? '' : row[h]) !== String(obj[h] == null ? '' : obj[h])) changed.push(label[h]); });
+    if (changed.length) _sbLog(supplierNo, 'details', '', '', 'Changed ' + changed.join(', ') + '.', '', by);
+    var before = []; try { before = JSON.parse(String(row['Contacts JSON'] || '[]')); } catch (e) { before = []; }
+    if (JSON.stringify(before) !== String(obj['Contacts JSON'])) {
+      var names = function (l) { return l.map(function (c) { return c.name || (c.emails || [])[0] || (c.phones || [])[0] || ''; }); };
+      var was = names(before), is = names(people);
+      var added = is.filter(function (n) { return was.indexOf(n) < 0; }), gone = was.filter(function (n) { return is.indexOf(n) < 0; });
+      _sbLog(supplierNo, 'contacts', String(before.length), String(people.length),
+             [added.length ? 'Added ' + added.join(', ') : '', gone.length ? 'Removed ' + gone.join(', ') : '', !added.length && !gone.length ? 'Details changed' : ''].filter(Boolean).join('. ') + '.', '', by);
+    }
+  }
+  return { success: true, supplierNo: supplierNo, supplier: _sbOut(obj), message: row ? 'Supplier updated.' : 'Supplier added.' };
+}
+
+/** mergeSupplierBookSupplier({fromNo, intoNo, dryRun?}) — one supplier entered twice ("Yale" and "Yale Hardware"):
+ *  the first one's prices, names and contact people move to the second, its blanks are filled, and the first is
+ *  archived with a note saying where it went. `dryRun` says exactly what would move and writes nothing. */
+function mergeSupplierBookSupplier(p) {
+  var no = _sbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), from = _sbRow(p.fromNo), into = _sbRow(p.intoNo);
+  if (!from || !into) return { success: false, message: 'Choose the supplier to merge and the one it goes into.' };
+  if (String(from['Supplier No']) === String(into['Supplier No'])) return { success: false, message: 'A supplier cannot be merged into itself.' };
+  if (_sbArchived(from)) return { success: false, message: '"' + from['Supplier'] + '" is archived already.' };
+  if (_sbArchived(into)) return { success: false, message: '"' + into['Supplier'] + '" is archived; restore it first.' };
+  var fromNo = String(from['Supplier No']), intoNo = String(into['Supplier No']);
+  var prices = _sbRows('SupplierPrices').filter(function (r) { return String(r['Supplier No']) === fromNo; });
+  var keep = {}, aliases = [];
+  keep[_rawKey(into['Supplier'])] = 1;
+  _sbSplit(into['Aliases']).concat([String(from['Supplier'] || '')], _sbSplit(from['Aliases'])).forEach(function (a) { var k = _rawKey(a); if (a && !keep[k]) { keep[k] = 1; aliases.push(a); } });
+  var moved = aliases.filter(function (a) { return _sbSplit(into['Aliases']).map(_rawKey).indexOf(_rawKey(a)) < 0; });
+  var mineP = [], theirsP = [];
+  try { mineP = JSON.parse(String(into['Contacts JSON'] || '[]')); } catch (e) { mineP = []; }
+  try { theirsP = JSON.parse(String(from['Contacts JSON'] || '[]')); } catch (e) { theirsP = []; }
+  var sig = function (c) { return String(c.name || '').trim().toLowerCase() + '|' + String((c.emails || [])[0] || '').toLowerCase(); };
+  var seen = {}; mineP.forEach(function (c) { seen[sig(c)] = 1; });
+  var addP = theirsP.filter(function (c) { return !seen[sig(c)]; }).map(function (c, i) { var x = JSON.parse(JSON.stringify(c)); x.id = 'M' + (i + 1) + '-' + String(c.id || '').slice(0, 18); x.primary = false; return x; });
+  var people = mineP.concat(addP).slice(0, 30);
+  var union = function (a, b, max) { return _sbLines(_sbSplit(a).concat(_sbSplit(b)), max, 160).join('\n'); };
+  var obj = {}; SCHEMA.SupplierBook.forEach(function (h) { obj[h] = into[h]; });
+  obj['Aliases'] = aliases.slice(0, 40).join('\n');
+  obj['Contacts JSON'] = JSON.stringify(people);
+  obj['Usual Items'] = union(into['Usual Items'], from['Usual Items'], 60);
+  ['Type', 'Address', 'Payment Terms', 'TIN'].forEach(function (h) { if (!String(obj[h] || '').trim() && String(from[h] || '').trim()) obj[h] = from[h]; });
+  if (!obj['Delivery'] && from['Delivery']) { obj['Delivery'] = from['Delivery']; obj['Delivery Note'] = from['Delivery Note']; }
+  if (!_sbYes(obj['Distributorship']) && _sbYes(from['Distributorship'])) obj['Distributorship'] = 'Yes';
+  if (_sbYes(obj['Distributorship'])) obj['Brands'] = _sbLines(_sbSplit(into['Brands']).concat(_sbYes(from['Distributorship']) ? _sbSplit(from['Brands']) : []), 30, 80).join('\n');
+  if (String(from['Notes'] || '').trim() && String(obj['Notes'] || '').indexOf(String(from['Notes']).trim()) < 0) obj['Notes'] = (String(obj['Notes'] || '') + (obj['Notes'] ? '\n' : '') + 'From ' + from['Supplier'] + ': ' + String(from['Notes']).trim()).slice(0, 2000);
+  obj['Needs Details'] = people.length || String(obj['Address'] || '').trim() ? '' : 'Yes';
+  var plan = { from: { supplierNo: fromNo, supplier: String(from['Supplier']) }, into: { supplierNo: intoNo, supplier: String(into['Supplier']) },
+               prices: prices.length, names: moved, contacts: addP.length };
+  var said = prices.length + ' price' + (prices.length === 1 ? '' : 's') + ', ' + moved.length + ' name' + (moved.length === 1 ? '' : 's') +
+             (addP.length ? ' and ' + addP.length + ' contact' + (addP.length === 1 ? '' : 's') : '') + ' to ' + into['Supplier'];
+  if (p.dryRun === true || String(p.dryRun) === 'true') return { success: true, dryRun: true, plan: plan, message: 'Would move ' + said + '.' };
+  var now = _now(), col = SCHEMA.SupplierPrices.indexOf('Supplier No') + 1, sh = prices.length ? _sheet('SupplierPrices') : null;
+  prices.forEach(function (r) { sh.getRange(r.rowIndex, col, 1, 1).setValues([[intoNo]]); });
+  obj['Updated By'] = by; obj['Updated At'] = now;
+  _sbPut(into, obj);
+  var gone = {}; SCHEMA.SupplierBook.forEach(function (h) { gone[h] = from[h]; });
+  Object.assign(gone, { 'Status': 'Archived', 'Archived By': by, 'Archived At': now, 'Archive Reason': 'Merged into ' + intoNo + ' (' + into['Supplier'] + ')', 'Updated By': by, 'Updated At': now });
+  _sbPut(from, gone);
+  _sbLog(intoNo, 'merged', fromNo, intoNo, 'Merged in ' + from['Supplier'] + ' (' + fromNo + '): ' + said.replace(/ to .*$/, '') + '.', fromNo, by);
+  _sbLog(fromNo, 'merged', fromNo, intoNo, 'Merged into ' + into['Supplier'] + ' (' + intoNo + ').', intoNo, by);
+  return { success: true, plan: plan, supplierNo: intoNo, supplier: _sbOut(obj), message: 'Moved ' + said + '.' };
+}
+
+/** archiveSupplierBookSupplier({supplierNo, reason, restore?}) — set aside with a reason, or brought back. Never a delete. */
+function archiveSupplierBookSupplier(p) {
+  var no = _sbDenied(p);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), row = _sbRow(p.supplierNo);
+  if (!row) return { success: false, message: 'Supplier ' + (p.supplierNo || '') + ' is not in the supplier list.' };
+  var restore = p.restore === true || String(p.restore) === 'true', reason = _webCell(p.reason).slice(0, 190), now = _now();
+  if (!restore && !reason) return { success: false, message: 'Say why the supplier is being archived.' };
+  if (restore === !_sbArchived(row)) return { success: false, message: restore ? 'This supplier is not archived.' : 'This supplier is already archived.' };
+  var obj = {}; SCHEMA.SupplierBook.forEach(function (h) { obj[h] = row[h]; });
+  Object.assign(obj, { 'Status': restore ? 'Active' : 'Archived', 'Archived By': restore ? '' : by, 'Archived At': restore ? '' : now,
+                       'Archive Reason': restore ? '' : reason, 'Updated By': by, 'Updated At': now });
+  _sbPut(row, obj);
+  _sbLog(String(row['Supplier No']), restore ? 'restored' : 'archived', '', '', restore ? '' : reason, '', by);
+  return { success: true, supplierNo: String(row['Supplier No']), supplier: _sbOut(obj) };
+}
+
+/** A374 — file what a forward carries under its suppliers: the lines _sourcingSplit counts as ready that name a
+ *  supplier. A supplier not in the list yet is added, flagged as needing details. One row per request line: a
+ *  forward again with a different price (or supplier) rewrites that row and its date; the same price changes nothing.
+ *  Called by submitForPricing AFTER the status is set, inside a try/catch there: filing never stops a forward. */
+function _sbRecordForward(prNo, by) {
+  var hdr = _prHeaderRow(prNo), customer = hdr ? String(hdr['Customer'] || '') : '', quoByNo = {};
+  _rows('Quotations').forEach(function (q) { quoByNo[String(q['Quotation No'])] = q; });
+  var lines = _rows('PricingRequestItems').filter(function (r) {
+    return String(r['PR No']) === String(prNo) && (r['Included'] === true || String(r['Included']) === 'true') && _prLineQuotable(r, quoByNo)
+      && _num(r['Supplier Price (FC)']) > 0 && String(r['Principal'] || '').trim() && String(r['Currency'] || '').trim() && String(r['Supplier'] || '').trim();
+  });
+  var out = { prices: 0, unchanged: 0, newSuppliers: [] };
+  if (!lines.length) return out;
+  var idx = _sbIndex(), mine = {}, now = _now(), touched = {}, order = [];
+  _sbRows('SupplierPrices').forEach(function (r) { if (String(r['PR No']) === String(prNo)) mine[_num(r['Line'])] = r; });
+  lines.forEach(function (r) {
+    var name = _webCell(r['Supplier']).slice(0, 160), no = _sbResolve(idx, name);
+    if (!no) {
+      var made = { 'Supplier': name, 'Key': _canonKey(name), 'Contacts JSON': '[]', 'Needs Details': 'Yes', 'Source': 'Forwarded PR',
+                   'Status': 'Active', 'Created By': by, 'Created At': now, 'Updated By': by, 'Updated At': now };
+      no = made['Supplier No'] = _nextNumber('SupplierBook', 1, 'SB');
+      _sbPut(null, made);
+      _sbRemember(idx, no, name);
+      out.newSuppliers.push({ supplierNo: no, supplier: name });
+      _sbLog(no, 'created', '', name, 'Added from ' + prNo + ' when it was forwarded to management; needs details.', prNo, by);
+    }
+    var vals = _sbPriceVals(no, name, r, prNo, customer, by, now, 'Forwarded PR'), was = mine[_num(r['Line'])];
+    if (was && String(was['Supplier No']) === no && String(was['Item Key']) === vals['Item Key'] && String(was['Currency']) === vals['Currency']
+        && Math.abs(_num(was['Supplier Price (FC)']) - vals['Supplier Price (FC)']) < 0.000001 && String(was['VAT'] || '') === vals['VAT']) { out.unchanged++; return; }
+    vals['Price No'] = was ? String(was['Price No']) : _nextNumber('SupplierPrices', 1, 'SP');
+    if (was) _sheet('SupplierPrices').getRange(was.rowIndex, 1, 1, SCHEMA.SupplierPrices.length).setValues([_sbArr(vals)]);
+    else _append('SupplierPrices', _sbArr(vals));
+    out.prices++;
+    if (!touched[no]) { touched[no] = []; order.push(no); }
+    touched[no].push(vals['Item Name'] || vals['Item No']);
+  });
+  order.forEach(function (no) {
+    var t = touched[no];
+    _sbLog(no, 'priced', '', String(t.length), t.length + ' item' + (t.length === 1 ? '' : 's') + ' priced on ' + prNo + (customer ? ' (' + customer + ')' : '') + ': ' +
+           t.slice(0, 6).join(', ') + (t.length > 6 ? ', …' : '') + '.', prNo, by);
+  });
+  return out;
+}
+
+/** importSupplierBookList({suppliers, dryRun = true}) — the director loads the company's own supplier file (Neil, 26 Oct
+ *  2026: "import this supplier list … make sure you overwrite the current listed in the supplier list if theres any").
+ *  `suppliers` (an array, or its JSON) holds {supplier, type, contacts:[{name, position, emails, phones}], address,
+ *  delivery, deliveryNote, terms, tin, notes}. A supplier already on the list (by a name, another spelling or the
+ *  comparison key) is OVERWRITTEN with the file's details — its name becomes the file's, the old name kept as another
+ *  spelling — while its prices, other spellings, distributorship, usual items and history stay. The rest are added
+ *  (Source "Supplier file"). Every row is checked first: one bad row (no name, an email that is not one, two rows that
+ *  are one supplier) refuses the whole file and writes nothing. A dry run (the default) says what it would do. */
+function importSupplierBookList(p) {
+  p = p || {};
+  if (_sgRole(p) !== 'director') return _sgRefuse('Only the director can load the supplier file.');
+  var dry = !(p.dryRun === false || String(p.dryRun) === 'false'), list = p.suppliers;
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { return _sgRefuse('The supplier file could not be read.'); } }
+  if (!Array.isArray(list) || !list.length) return _sgRefuse('There are no suppliers in the file.');
+  if (list.length > 2000) return _sgRefuse('That is more than 2,000 suppliers in one go.');
+  var book = _sbRows('SupplierBook'), idx = _sbIndex(book), byNo = {}, seen = {}, bad = [], plan = [];
+  book.forEach(function (r) { byNo[String(r['Supplier No'])] = r; });
+  list.forEach(function (x, i) {
+    var row = 'Row ' + (i + 1), name = _webCell(x && x.supplier).replace(/\s+/g, ' ').slice(0, 160), key = name ? _canonKey(name) || _rawKey(name) : '';
+    if (!name) { bad.push(row + ': no supplier name.'); return; }
+    if (seen[key]) { bad.push(row + ' (' + name + '): the same supplier as ' + seen[key] + '.'); return; }
+    seen[key] = row + ' (' + name + ')';
+    var type = _sbPick(x.type, SB_TYPES), delivery = _sbPick(x.delivery, SB_DELIVERY);
+    if (type === null) { bad.push(row + ' (' + name + '): "' + x.type + '" is neither Local nor International.'); return; }
+    if (delivery === null) { bad.push(row + ' (' + name + '): delivery "' + x.delivery + '" is not one of ' + SB_DELIVERY.join(', ') + '.'); return; }
+    var ct = _cbContacts(JSON.stringify(Array.isArray(x.contacts) ? x.contacts : []));
+    if (ct.error) { bad.push(row + ' (' + name + '): ' + ct.error.replace('A client', 'A supplier')); return; }
+    var no = _sbResolve(idx, name);
+    plan.push({ name: name, key: key, supplierNo: no, type: type, delivery: delivery, deliveryNote: _webCell(x.deliveryNote).slice(0, 190), contacts: ct,
+                address: _webCell(x.address, true).slice(0, 300), terms: _webCell(x.terms).slice(0, 80), tin: _webCell(x.tin).slice(0, 40),
+                notes: _webCell(x.notes, true).slice(0, 2000) });
+  });
+  if (bad.length) return { success: false, problems: bad, message: 'Nothing was loaded: ' + bad.length + ' row' + (bad.length === 1 ? '' : 's') + ' need fixing. ' + bad.slice(0, 5).join(' ') };
+  var twice = {};
+  plan.forEach(function (x) { if (x.supplierNo) twice[x.supplierNo] = (twice[x.supplierNo] || []).concat([x.name]); });
+  var clash = Object.keys(twice).filter(function (k) { return twice[k].length > 1; });
+  if (clash.length) return { success: false, problems: clash.map(function (k) { return twice[k].join(' and ') + ' are both ' + byNo[k]['Supplier'] + ' (' + k + ').'; }),
+                             message: 'Nothing was loaded: two rows of the file are one supplier on the list (' + clash.length + ').' };
+  var over = plan.filter(function (x) { return x.supplierNo; }), fresh = plan.length - over.length;
+  var said = plan.length + ' supplier' + (plan.length === 1 ? '' : 's') + ': ' + fresh + ' new, ' + over.length + ' already on the list and overwritten';
+  if (dry) return { success: true, dryRun: true, add: plan.filter(function (x) { return !x.supplierNo; }).map(function (x) { return x.name; }),
+                    overwrite: over.map(function (x) { return { supplierNo: x.supplierNo, was: String(byNo[x.supplierNo]['Supplier']), now: x.name }; }), message: 'Would load ' + said + '.' };
+  var by = String(p.actorName || '').trim(), now = _now(), nos = _sbNextNumbers('SupplierBook', 'SB', fresh), n = 0, newRows = [], logs = [];
+  var fill = function (obj, x) {
+    obj['Supplier'] = x.name; obj['Key'] = _canonKey(x.name); obj['Type'] = x.type; obj['Contacts JSON'] = x.contacts.text; obj['Address'] = x.address;
+    obj['Payment Terms'] = x.terms; obj['TIN'] = x.tin;
+    if (x.delivery) { obj['Delivery'] = x.delivery; obj['Delivery Note'] = x.delivery === 'Other' ? x.deliveryNote : ''; }
+    if (x.notes) obj['Notes'] = x.notes;
+    obj['Needs Details'] = x.contacts.list.length || x.address ? '' : 'Yes';
+    obj['Updated By'] = by; obj['Updated At'] = now;
+    return obj;
+  };
+  plan.forEach(function (x) {
+    if (x.supplierNo) {
+      var row = byNo[x.supplierNo], obj = {}, was = String(row['Supplier'] || '');
+      SCHEMA.SupplierBook.forEach(function (h) { obj[h] = row[h]; });
+      fill(obj, x);
+      var names = _sbSplit(row['Aliases']).filter(function (a) { return _rawKey(a) !== _rawKey(x.name); });
+      if (_rawKey(was) !== _rawKey(x.name) && names.map(_rawKey).indexOf(_rawKey(was)) < 0) names.push(was);
+      obj['Aliases'] = names.slice(0, 40).join('\n');
+      if (_sbArchived(row)) Object.assign(obj, { 'Status': 'Active', 'Archived By': '', 'Archived At': '', 'Archive Reason': '' });   // the file says it is a supplier
+      _sbPut(row, obj);
+      logs.push([x.supplierNo, 'file', was, x.name, 'Overwritten from the supplier file' + (_rawKey(was) !== _rawKey(x.name) ? ' (it was "' + was + '")' : '') + '.', '', by, now]);
+    } else {
+      var no = nos[n++], made = fill({ 'Supplier No': no, 'Aliases': '', 'Source': 'Supplier file', 'Status': 'Active', 'Created By': by, 'Created At': now }, x);
+      newRows.push(SCHEMA.SupplierBook.map(function (h) { return made[h] === undefined ? '' : made[h]; }));
+      logs.push([no, 'file', '', x.name, 'Added from the supplier file.', '', by, now]);
+    }
+  });
+  _sbAppendBlock('SupplierBook', newRows);
+  var lnos = _sbNextNumbers('SupplierBookLog', 'SBL', logs.length);
+  _sbAppendBlock('SupplierBookLog', logs.map(function (l, k) { return [lnos[k]].concat(l.map(function (v, c) { return c === 4 ? _webCell(v, true).slice(0, 500) : v; })); }));
+  return { success: true, added: fresh, overwritten: over.length, message: 'Loaded ' + said + '.' };
+}
+
+/** Levenshtein distance, capped: the import only asks "one or two letters apart?". */
+function _sbLev(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  var prev = [], cur, i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur = [i];
+    for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+/** Could two names be one supplier? One is the other with words added ("yale" / "yale hardware"), or they are one or
+ *  two letters apart ("hardwear" / "hardware"). Only ever a question for a person: the import never merges on it. */
+function _sbAlike(a, b) {
+  if (!a || !b || a === b) return false;
+  var s = a.length <= b.length ? a : b, l = s === a ? b : a;
+  if ((' ' + l + ' ').indexOf(' ' + s + ' ') >= 0) return true;
+  return s.length >= 5 && _sbLev(s, l) <= 2;
+}
+
+/** importSupplierBookHistory({dryRun = true, merges?}) — the director fills the list once from past requests: every
+ *  included line with a supplier and a price on a request already past the forward (For Mgmt Pricing, Mgmt Priced,
+ *  Returned to Sales, Quoted, Partly Quoted, Migrated). Its date is the request's latest "Forwarded" in the activity
+ *  log, else the request's Updated At, else its date. Spellings with one comparison key are one supplier; `merges`
+ *  ({spelling: the name it belongs to}) joins the ones a person confirms. A dry run (the default) lists the
+ *  suppliers, every spelling and the pairs that may be one supplier, and writes nothing. A line already filed is
+ *  skipped, so a second run changes nothing. On a request management has priced, Supplier Price (FC) may already be
+ *  management's buy price rather than admin's: the dry run counts those lines. */
+function importSupplierBookHistory(p) {
+  p = p || {};
+  if (_sgRole(p) !== 'director') return _sgRefuse('Only the director can fill the supplier list from past requests.');
+  var dry = !(p.dryRun === false || String(p.dryRun) === 'false'), merges = {}, raw = p.merges;
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch (e) { return _sgRefuse('The merges could not be read.'); } }
+  Object.keys(raw || {}).forEach(function (k) { var t = _webCell(raw[k]).slice(0, 160); if (t && _rawKey(k)) merges[_rawKey(k)] = t; });
+  var hdrs = {}, fwd = {}, filed = {};
+  _rows('PricingRequests').forEach(function (h) { hdrs[String(h['PR No'])] = h; });
+  _rows('ActivityLog').forEach(function (a) {
+    if (String(a['Module']) !== 'Pricing Request' || String(a['Action']) !== 'Forwarded') return;
+    var k = String(a['Ref No'] || ''), t = new Date(a['Timestamp']);
+    if (k && !isNaN(t.getTime()) && (!fwd[k] || t > fwd[k].at)) fwd[k] = { at: t, by: String(a['User'] || '') };
+  });
+  _sbRows('SupplierPrices').forEach(function (r) { filed[String(r['PR No']) + '|' + _num(r['Line'])] = 1; });
+  var book = _sbRows('SupplierBook'), idx = _sbIndex(book), byNo = {};
+  book.forEach(function (r) { byNo[String(r['Supplier No'])] = r; });
+  var groups = {}, order = [], lines = 0, skipped = 0, mgmt = 0;
+  _rows('PricingRequestItems').forEach(function (r) {
+    var prNo = String(r['PR No']), h = hdrs[prNo];
+    if (!h || !SB_PAST_FORWARD[String(h['Status'] || '')]) return;
+    var spelled = _webCell(r['Supplier']).replace(/\s+/g, ' ').slice(0, 160);
+    if (!spelled || _num(r['Supplier Price (FC)']) <= 0 || !(r['Included'] === true || String(r['Included']) === 'true')) return;
+    if (filed[prNo + '|' + _num(r['Line'])]) { skipped++; return; }
+    var target = merges[_rawKey(spelled)] || '', name = target || spelled, existing = _sbResolve(idx, name);
+    var gk = existing ? 'no:' + existing : 'key:' + (_canonKey(name) || _rawKey(name));
+    var g = groups[gk];
+    if (!g) { g = groups[gk] = { supplierNo: existing, target: '', names: {}, lines: [], items: {}, from: '', to: '' }; order.push(gk); }
+    if (target) g.target = target;
+    g.names[spelled] = (g.names[spelled] || 0) + 1;
+    var f = fwd[prNo], at = f ? f.at : (h['Updated At'] ? new Date(h['Updated At']) : (h['Date'] ? new Date(h['Date']) : _now()));
+    if (isNaN(at.getTime())) at = _now();
+    var d = _dateStr(at);
+    if (!g.from || d < g.from) g.from = d;
+    if (!g.to || d > g.to) g.to = d;
+    g.lines.push({ r: r, prNo: prNo, customer: String(h['Customer'] || ''), at: at, by: f ? f.by : '' });
+    g.items[_sbItemKey(r['Item No'], r['Item Name'])] = 1;
+    lines++;
+    if (String(h['Status']) !== 'For Mgmt Pricing') mgmt++;
+  });
+  var nameOf = function (g) {
+    if (g.supplierNo) return String(byNo[g.supplierNo]['Supplier']);
+    if (g.target) return g.target;
+    var caps = function (n) { return n === n.toUpperCase() && /[A-Z]/.test(n) ? 1 : 0; };   // "YALE HARDWARE INC." reads worse than "Yale Hardware"
+    return Object.keys(g.names).sort(function (a, b) { return g.names[b] - g.names[a] || caps(a) - caps(b) || b.length - a.length || a.localeCompare(b); })[0];
+  };
+  var plan = order.map(function (gk) {
+    var g = groups[gk];
+    return { supplier: nameOf(g), supplierNo: g.supplierNo || '', spellings: Object.keys(g.names).sort().map(function (n) { return { name: n, lines: g.names[n] }; }),
+             lines: g.lines.length, items: Object.keys(g.items).length, from: g.from, to: g.to };
+  }).sort(function (a, b) { return b.lines - a.lines || a.supplier.localeCompare(b.supplier); });
+  var keys = plan.map(function (x) { return { name: x.supplier, key: _canonKey(x.supplier) || _rawKey(x.supplier) }; }), alike = [];
+  book.filter(function (r) { return !_sbArchived(r); }).forEach(function (r) {
+    if (!plan.some(function (x) { return x.supplierNo === String(r['Supplier No']); })) keys.push({ name: String(r['Supplier']), key: String(r['Key'] || '') });
+  });
+  for (var i = 0; i < keys.length; i++) for (var j = i + 1; j < keys.length; j++) if (_sbAlike(keys[i].key, keys[j].key)) alike.push([keys[i].name, keys[j].name]);
+  var fresh = plan.filter(function (x) { return !x.supplierNo; }).length;
+  var summary = lines + ' priced line' + (lines === 1 ? '' : 's') + ' under ' + plan.length + ' supplier' + (plan.length === 1 ? '' : 's') + ' (' + fresh + ' new)' +
+                (skipped ? '; ' + skipped + ' already filed' : '') + (alike.length ? '; ' + alike.length + ' pair' + (alike.length === 1 ? '' : 's') + ' may be one supplier' : '');
+  if (dry) return { success: true, dryRun: true, suppliers: plan, possibleSame: alike, lines: lines, alreadyFiled: skipped, newSuppliers: fresh,
+                    maybeManagementPrice: mgmt, message: 'Would file ' + summary + '.' };
+  if (!lines) return { success: true, lines: 0, alreadyFiled: skipped, message: 'Nothing to file' + (skipped ? ': every past line is filed already.' : '.') };
+  var by = String(p.actorName || '').trim(), now = _now(), newRows = [], priceRows = [], logs = [];
+  var nos = _sbNextNumbers('SupplierBook', 'SB', fresh), n = 0;
+  order.forEach(function (gk) {
+    var g = groups[gk], name = nameOf(g), others = Object.keys(g.names).filter(function (s) { return _rawKey(s) !== _rawKey(name); });
+    if (!g.supplierNo) {
+      g.supplierNo = nos[n++];
+      var made = { 'Supplier No': g.supplierNo, 'Supplier': name, 'Key': _canonKey(name), 'Aliases': others.slice(0, 40).join('\n'), 'Contacts JSON': '[]',
+                   'Needs Details': 'Yes', 'Source': 'Import', 'Status': 'Active', 'Created By': by, 'Created At': now, 'Updated By': by, 'Updated At': now };
+      newRows.push(SCHEMA.SupplierBook.map(function (h) { return made[h] === undefined ? '' : made[h]; }));
+    } else {
+      var row = byNo[g.supplierNo], have = [String(row['Supplier'])].concat(_sbSplit(row['Aliases'])).map(_rawKey);
+      var add = others.filter(function (s) { return have.indexOf(_rawKey(s)) < 0; });
+      if (add.length) {
+        var obj = {}; SCHEMA.SupplierBook.forEach(function (h) { obj[h] = row[h]; });
+        obj['Aliases'] = _sbSplit(row['Aliases']).concat(add).slice(0, 40).join('\n');
+        _sbPut(row, obj);
+      }
+    }
+    g.lines.forEach(function (x) { priceRows.push(_sbPriceVals(g.supplierNo, _webCell(x.r['Supplier']).replace(/\s+/g, ' ').slice(0, 160), x.r, x.prNo, x.customer, x.by, x.at, 'Import')); });
+    logs.push([g.supplierNo, 'imported', '', String(g.lines.length), g.lines.length + ' past price' + (g.lines.length === 1 ? '' : 's') + ' filed from requests forwarded ' +
+               g.from + (g.to !== g.from ? ' to ' + g.to : '') + (others.length ? '; also spelled ' + others.slice(0, 5).join(', ') + (others.length > 5 ? ', …' : '') : '') + '.', '', by, now]);
+  });
+  _sbAppendBlock('SupplierBook', newRows);
+  var pnos = _sbNextNumbers('SupplierPrices', 'SP', priceRows.length);
+  _sbAppendBlock('SupplierPrices', priceRows.map(function (v, k) { v['Price No'] = pnos[k]; return _sbArr(v); }));
+  var lnos = _sbNextNumbers('SupplierBookLog', 'SBL', logs.length);
+  _sbAppendBlock('SupplierBookLog', logs.map(function (l, k) { return [lnos[k]].concat(l.map(function (v, c) { return c === 4 ? _webCell(v, true).slice(0, 500) : v; })); }));
+  return { success: true, lines: lines, suppliers: plan.length, newSuppliers: fresh, alreadyFiled: skipped, message: 'Filed ' + summary + '.' };
+}
+
 /** Management acknowledges a submitted report (optionally with a comment). */
 function reviewDailyReport(p) {
   if (!p.reportNo) return { success: false, message: 'reportNo required.' };
@@ -17034,9 +17567,14 @@ function submitForPricing(p) {
   if (gaps.length) return { success: false, message: 'Cannot forward to management — still needs ' + gaps.join(', ') + '.' };
   var split = _sourcingSplit(p.prNo);
   _setPRStatus(p.prNo, 'For Mgmt Pricing');
+  /* A374 — the prices go under their suppliers in the supplier list, with today's date. Never a reason to fail:
+     the request is already with management. */
+  var recorded;
+  try { recorded = _sbRecordForward(p.prNo, String(p.actorName || '').trim()); }
+  catch (e) { recorded = { prices: 0, unchanged: 0, newSuppliers: [], error: String((e && e.message) || e) }; }
   /* Say what is going and what is being left behind. A partial forward is a deliberate act and the
      admin should see its shape confirmed, not discover later that two lines never went. */
-  return { success: true, prNo: p.prNo, ready: split.ready, waiting: split.waiting,
+  return { success: true, prNo: p.prNo, ready: split.ready, waiting: split.waiting, recorded: recorded,
     message: 'Forwarded to management for pricing' +
       (split.waiting ? ' — ' + split.ready + ' item(s) sent, ' + split.waiting +
                        ' still waiting on a supplier price and left on this request.' : '.') };
@@ -19858,6 +20396,8 @@ var HANDLERS = {
   linkClientBookRecords: linkClientBookRecords, unlinkClientBookRecord: unlinkClientBookRecord,   // A360
   getVisitPlans: getVisitPlans, saveVisitPlan: saveVisitPlan, submitVisitPlans: submitVisitPlans, decideVisitPlans: decideVisitPlans,
   cancelVisitPlan: cancelVisitPlan, markVisitPlanDone: markVisitPlanDone,   // A369
+  getSupplierBook: getSupplierBook, saveSupplierBookSupplier: saveSupplierBookSupplier, mergeSupplierBookSupplier: mergeSupplierBookSupplier,   // A374
+  archiveSupplierBookSupplier: archiveSupplierBookSupplier, importSupplierBookHistory: importSupplierBookHistory, importSupplierBookList: importSupplierBookList,
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -19970,6 +20510,7 @@ var MUTATIONS = {
   saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360
   saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369
+  saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -19998,6 +20539,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A374 THE SUPPLIER LIST (189; A327 takes 190 or later). Neil, 26 Oct 2026: a suppliers list for the admin dashboard (name, several contact people, phones and emails, address, local or international, distributorship, usual delivery, payment terms, usual items), connected to pricing: what admin prices goes under the supplier with the price and the date it was last updated. A new list apart from the old Suppliers tab (bank details, not touched). New tabs SupplierBook (25 wide; SB-; TIN kept as text), SupplierBookLog (9 wide; SBL-) and SupplierPrices (18 wide; SP-; Item No kept as text), and six secured actions, each with its own role check (FlowSettings supplierBookRoles, default admin and director): getSupplierBook (the whole list, prices and log; lite = the live names, spellings and each item's last price, also for accounting, who prices requests too), saveSupplierBookSupplier (a field not sent keeps what it has; Local or International; the distributorship is ours, its brands kept only with it; contact people as in the Client Book; Other delivery needs a note; a second supplier with the same key or a shared spelling is refused unless allowDuplicate; neither a contact nor an address = Needs Details), mergeSupplierBookSupplier (prices, spellings and contact people move to the other supplier, its blanks are filled, the first is archived with a note; dryRun says what would move), archiveSupplierBookSupplier (with a reason; restore) and importSupplierBookHistory (director; dry run by default: past requests' priced lines by supplier, every spelling, pairs that may be one supplier; the real run takes the merges a person confirmed, writes in blocks, skips lines already filed) and importSupplierBookList (director; dry run by default: the company's own supplier file; a supplier already on the list is overwritten with the file's details, its prices, spellings and history kept; one bad row refuses the whole file). submitForPricing now files the lines it forwards (_sbRecordForward, after the status is set and inside a try/catch, so it never stops a forward): one SupplierPrices row per request line, upserted on PR No + Line (a new price or supplier rewrites the row and its date; the same price changes nothing); a supplier not in the list yet is added, flagged as needing details; the response carries recorded {prices, unchanged, newSuppliers}. The price is admin's at the forward; setMgmtPricing still overwrites Supplier Price (FC) afterwards.
 A372 RESTATING WHAT WAS PAID ON A PAYABLE (188; A327 takes 189 or later). Neil, 26 Oct 2026: AP-202607-013 (CON BAN KIAT, PO 2026-44, ₱250,560) said fully paid while its only payment request, PRF-2026-92 CBK, paid half (₱125,280; the books follow the request), so accounting could not raise the request for the other half. restateAPPaid({apNo, expectPaid, reason, dryRun}) — secured, director only, under the lock, audited (AP Aging / Paid restated): Paid (PHP) becomes what the order's paid payment requests settled (debited less bank charge, else the amount), never a typed figure; the status follows (Paid / Partial / Unpaid); the Notes are stamped; the legacy APPAY journal is re-posted at the new figure; a full copy of the row goes to Overrides ('restated-ap-paid'). The books are not touched. Refuses a figure other than expectPaid, a foreign-currency payable, an order with no or several payables, a figure above the payable, or nothing to change.
 A370 A DAY OF CLIENT VISITS (187; A327 takes 188 or later). Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day, then with this itinerary for this day, it will show the estimated travel allowance in the accounting". saveVisitPlan also takes {date, stops: [{clientNo, time, location, address, contactIds, someoneElse, purpose}, …], send}: up to 10 companies on one day, all or none — every stop is checked as a single visit is (a refusal names the visit and its company), a client twice in the list or already visited that day is refused, then one row and one 'created' log row per stop, numbered in order. A single visit and every other action are unchanged; no new columns, no new actions. Accounting's week already reads each rep's day as one row with its estimate.
 A369 CLIENT VISITS AND TWO ADDRESSES (186; A327 takes 187 or later). Neil, 25 Oct 2026: two addresses per client, a client visit page for every rep (pick a client from their Client Book and who to visit), the director approves first, and accounting sees the approved visits with an estimated travel allowance for the day, its formula set aside. ClientBook gains Head Office Address (appended; 27 wide; Site Address is the plant address): saveClientBookClient takes headOfficeAddress (null keeps it, '' clears it, 300 characters), getClientBook returns it, and the run-once previewClientBookHeadOffices / tidyClientBookHeadOffices move 'Head office: …' note lines into it (equal: dropped; different: listed, nothing written; several: skipped; safe to repeat). New tabs VisitPlans (28 wide; VP-) and VisitPlanLog (8 wide; VPL-), and six secured actions: getVisitPlans (sales their own, director and management all, accounting the approved, done and cancelled-after-approval ones, no log), saveVisitPlan (sales; the rep's own live client, today to 92 days ahead, HH:MM or no time, Plant / Head office copied from the client or Other typed, people by contact id kept as name and position, no second visit to one client on one day; send puts it to the director; an edit of a pending or approved visit goes back to the director), submitVisitPlans (all or none), decideVisitPlans (director; approve, or send back with a note; all or none), cancelVisitPlan (the rep or the director, with a reason) and markVisitPlanDone (the rep, an approved visit whose day has come, one line). Travel Estimate (PHP) and Travel Estimate Basis are reserved and never written, and a rep's reads and saves never carry them (Neil: "make sure that the sales has no trace of the estimated travel allowance"). submitTravelReplenishment: with no approved weekly itinerary, the rep's approved or done client visits in the week let it through with no waiver (Itinerary No = their numbers, status 'Approved client visits'); the weekly itinerary keeps working as before. Also: setCommissionRate and deleteCommissionRate are director-only (the commission rollout admits sales, so a rep could change a rate).
