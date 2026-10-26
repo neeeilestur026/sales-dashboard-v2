@@ -163,6 +163,7 @@ const FLOW_SECURED_ACTIONS = [
   'updatePaymentRequest', 'updatePurchaseOrder', 'updateQuotation', 'updateSalesOrder', 'updateShipment',
   'verifyReturnToSales', 'voidCollection', 'voidInvoice', 'retireDuplicateReceivables',
   'removeReceivable',   // A342
+  'restateAPPaid',   // A372 — a director correction
   // A316 — the warehouse scanner (scan.html)
   'dispatchByScan', 'linkBarcode', 'receiveByScan', 'saveScanCount', 'uploadScanPhoto', 'setItemTracking', 'registerAssets', 'returnByScan', 'ensureItemLabels', 'logLabelPrint', 'getScanContext', 'getScanLookup', 'getLabels', 'getStockInOptions', 'getScanPhotos', 'createItemByScan', 'saveAccount', 'saveAccountRule', 'resolveBooksInboxItem', 'getBooksCoverage', 'syncBooks', 'ingestBookEvents', 'getBooksStatus', 'getAccounts', 'getAccountRules', 'getTaxCodes', 'getGLEntries', 'getGLTrialBalance', 'getBooksInbox', 'recordFieldCollection', 'recordNotCollected', 'acknowledgeFieldCollection', 'undoFieldCollection', 'uploadCollectionPhoto', 'getCollectorQueue', 'getFieldCollectionNotices',
   // A325 — the commission reads that carried every rep's pay to an unsigned GET
