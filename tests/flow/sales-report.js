@@ -290,7 +290,7 @@ const log = run('_srLogRows()');
 ok('my log: a line without a link says "No link — add one"', /No link — add one/.test(log) && /data-addlink=/.test(log));
 ok('  the old page\'s call is grey, marked as in the portal\'s log', /CALL-1 · in the portal&#39;s log|CALL-1 · in the portal's log/.test(log));
 ok('  edit and void on each live line, never delete', /data-edit=/.test(log) && /data-void=/.test(log) && !/data-del/.test(log));
-const keepLink = run('_srLinkOptionsHtml("dr|DR-0207", "DR-0207")');
+const keepLink = run('_srPickerHtml("dr|DR-0207", "DR-0207")');
 {
   const keep = run('SR_UI.ix');
   run('SR_UI.ix = IXC;');
@@ -305,10 +305,48 @@ const keepLink = run('_srLinkOptionsHtml("dr|DR-0207", "DR-0207")');
   ok('  the other line dialogs\' company fields pick from the same list', (fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8').match(/name="company" list="srBookCos"/g) || []).length === 5);   // A371 — Other task too
   C.__keepIx = keep; run('SR_UI.ix = __keepIx;');
 }
-ok('editing a line keeps its own link on offer, chosen, even when it is not in today\'s lists (a DR number)', /<option value="dr\|DR-0207" selected>Keep: DR-0207<\/option>/.test(keepLink), keepLink.slice(0, 200));
+ok('editing a line keeps its own link, chosen, even when it is not in today\'s lists (a DR number)', /<input type="hidden" name="link" value="dr\|DR-0207">/.test(keepLink) && /<span class="sr-pickt">Keep: DR-0207<\/span>/.test(keepLink) && /data-keep="dr\|DR-0207"/.test(keepLink), keepLink.slice(0, 400));
 {
-  const h = run('(function () { var k = SR_UI.ix; SR_UI.ix = IXB; var h = _srLinkOptionsHtml(""); SR_UI.ix = k; return h; })()');
-  ok('A350: Link to has a "Clients (Client Book)" group', /<optgroup label="Clients \(Client Book\)"><option value="client\|CB-0001">Philcement Corp\. \(Quotation sent\)<\/option>/.test(h), h.slice(-400));
+  const h = JSON.parse(run('JSON.stringify(srLinkPick(srLinkItems(IXB, ME, "2026-10-20", [], []), {}).sections.filter(function (s) { return s.key === "client"; })[0])'));
+  ok('A350: Link to has a Client Book section, the rep\'s own client first', h && h.label === 'Client Book' && h.items[0].value === 'client|CB-0001' && h.items[0].title === 'Philcement Corp.' && /Quotation sent/.test(h.items[0].sub), h);
+
+  /* A373 — Neil, 26 Oct: "redesign it so that the open quotations, prs, client book, and emails are properly and cleanly
+     organize in that dropdown, can be easily found". */
+  C.__sentL = [{ messageId: 'mS', subject: 'Quotation Q-D7', sentAt: '2026-10-20T09:15:00+08:00', name: 'Plant B buyer', company: 'Plant B Inc' }];
+  run('var LI = srLinkItems(IXB, ME, "2026-10-20", __sentL, __in);');
+  const P = (o) => JSON.parse(run('JSON.stringify(srLinkPick(LI, ' + JSON.stringify(o || {}) + '))'));
+  const all = P();
+  eq('A373: four sections in order, each with its count', all.sections.map(x => [x.label, x.items.length]).map(x => x[0]), ['Open quotations', 'Purchase requests', 'Client Book', 'Emails today']);
+  const q7 = JSON.parse(run('JSON.stringify(LI.quotation.filter(function (x) { return x.id === "Q-D7"; })[0])'));
+  ok('  a quotation reads "Q-D7 · Plant B Inc" over its value and sent day', q7.title === 'Q-D7 · Plant B Inc' && /^₱300,000(\.00)? · sent 13 Oct$/.test(q7.sub) && q7.value === 'quotation|Q-D7', q7);
+  const em = JSON.parse(run('JSON.stringify(LI.email)'));
+  ok('  an email reads its subject over who and when', em[0].title === 'Quotation Q-D7' && em[0].sub === 'Sent 9:15 AM to Plant B buyer · Plant B Inc' && /^Received 10:00 AM from Mine D buyer/.test(em[1].sub), em);
+  const s1 = P({ q: 'plant b' });
+  ok('  the search finds a record by any word of it, in every kind, and the tabs count what it found', s1.sections.some(x => x.key === 'quotation' && x.items.some(i => i.id === 'Q-D7')) &&
+     s1.sections.some(x => x.key === 'email') && s1.counts.email === 1 && !s1.sections.some(x => x.key === 'client'), s1);
+  ok('  a tab shows one kind only', P({ tab: 'client' }).sections.map(x => x.key).join() === 'client');
+  const f = P({ company: 'Plant B Inc' });
+  ok('  for a call, the company\'s own records come first, under "For <company>"', f.sections[0].key === 'for' && f.sections[0].label === 'For Plant B Inc' && f.sections[0].items.map(i => i.type).join() === 'quotation,email', f.sections[0]);
+  ok('  and a link value finds its record', JSON.parse(run('JSON.stringify(srLinkFind(LI, "client|CB-0001").title)')) === 'Philcement Corp.' && run('srLinkFind(LI, "dr|DR-1")') === null);
+  run(`var __inp = { value: 'none|' }, __form = { elements: { company: { value: 'Plant B Inc' } } };
+    var __root = { attrs: { 'data-q': '', 'data-tab': 'all', 'data-keep': '', 'data-keeplabel': '' }, getAttribute: function (k) { return this.attrs[k] === undefined ? null : this.attrs[k]; },
+      setAttribute: function (k, v) { this.attrs[k] = v; }, querySelector: function (s) { return s === 'input[name="link"]' ? __inp : null; }, closest: function () { return __form; } };
+    var __keepIx2 = SR_UI.ix, __keepSent = SR_UI.sent; SR_UI.ix = IXB; SR_UI.sent = __sentL;`);
+  const panel = run('_srPickPanelHtml(__root)');
+  ok('the panel: a search, the tabs with their counts, then "No link", the company\'s own records, and each kind under its heading',
+     /<input type="search" class="sr-in sr-pickq" placeholder="Search quotations, PRs, clients and emails"/.test(panel) && /data-picktab="all">All <span>\d+<\/span>/.test(panel) && /data-picktab="client">Clients <span>2<\/span>/.test(panel) &&
+     /data-pickval="none\|"><span class="t">No link \(new contact\)<\/span>/.test(panel) && /<p class="sr-pickhead">For Plant B Inc <span>2<\/span><\/p>/.test(panel) &&
+     /<p class="sr-pickhead">Open quotations <span>\d+<\/span><\/p>/.test(panel) && /<p class="sr-pickhead">Emails today <span>2<\/span><\/p>/.test(panel), panel.slice(0, 900));
+  ok('  each record is a button on two lines, its kind tagged under "For …"', /<button type="button" class="sr-pickopt" role="option" aria-selected="false" data-pickval="quotation\|Q-D7"><span class="t">Q-D7 · Plant B Inc<\/span><span class="k">Quotation<\/span><span class="s">/.test(panel));
+  run('__root.attrs["data-q"] = "zzz";');
+  ok('  a search that finds nothing says so', /Nothing matches "zzz"\./.test(run('_srPickListHtml(__root)')));
+  run('__inp.value = "client|CB-0001"; __root.attrs["data-q"] = "";');
+  ok('  the chosen record is marked', /class="sr-pickopt on" role="option" aria-selected="true" data-pickval="client\|CB-0001"/.test(run('_srPickListHtml(__root)')));
+  const btn = run('_srPickBtnInner(_srPickCurrent("client|CB-0001"))');
+  ok('  and the button shows it with its kind', /<span class="sr-pickkind">Client<\/span><span class="sr-pickt">Philcement Corp\.<\/span>/.test(btn), btn);
+  run('SR_UI.ix = __keepIx2; SR_UI.sent = __keepSent;');
+  const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+  ok('the call form, the line dialog and Add a link all use the picker (no long dropdown left)', (SRC.match(/_srPickerHtml\(/g) || []).length >= 4 && !/name="link" id="srCallLink"/.test(SRC) && !/_srLinkOptionsHtml/.test(SRC));
   const cl = run('(function () { var k = SR_UI.state; SR_UI.state = srBlank(); SR_UI.state.lines.push(srNewLine({ type: "Call", company: "Philcement Corp.", linkType: "client", linkId: "CB-0001", linkLabel: "Philcement Corp. (Quotation sent)" }, "Gerald Lucena", "2026-10-20T05:00:00.000Z")); var h = _srLogRows(); SR_UI.state = k; return h; })()');
   ok('  a line linked to a client opens that client in the Client Book', /<a href="director-client-book\.html\?client=CB-0001">Philcement Corp\. \(Quotation sent\)<\/a>/.test(cl), cl.slice(0, 600));
 }
