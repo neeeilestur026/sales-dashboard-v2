@@ -421,16 +421,16 @@ function _srCallLookup(f, changed) {
    form reads it as before. ─────────────────────────────────────────────────────────────────────────────────────── */
 function _srLinkItemsNow() { return srLinkItems(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received); }
 function _srLinkTags() { const t = {}; SR_LINK_KINDS.forEach(([k, , tag]) => { t[k] = tag; }); return t; }
-/** The chosen record as the button shows it: { title, sub, kind } ("Keep: …" for a link not in today's lists). */
+/** The chosen record as the button shows it: { title, sub, tag } ("Keep: …" for a link not in today's lists). */
 function _srPickCurrent(value, keepLabel) {
   const v = String(value || 'none|');
-  if (v.indexOf('none|') === 0 || v === 'none') return { title: 'No link (new contact)', sub: '', kind: '' };
+  if (v.indexOf('none|') === 0 || v === 'none') return { title: 'No link (new contact)', sub: '', tag: '' };
   const hit = srLinkFind(_srLinkItemsNow(), v);
-  if (hit) return { title: hit.title, sub: hit.sub, kind: _srLinkTags()[hit.type] };
-  return { title: 'Keep: ' + (keepLabel || v.split('|')[1] || v), sub: 'not in today\'s lists', kind: '', keep: true };
+  if (hit) return { title: hit.title, sub: hit.sub, tag: _srLinkTags()[hit.type] };
+  return { title: 'Keep: ' + (keepLabel || v.split('|')[1] || v), sub: 'not in today\'s lists', tag: '', keep: true };
 }
 function _srPickBtnInner(cur) {
-  return '<span class="sr-pickval">' + (cur.kind ? '<span class="sr-pickkind">' + _srE(cur.kind) + '</span>' : '') + '<span class="sr-pickt">' + _srE(cur.title) + '</span></span>' +
+  return '<span class="sr-pickval">' + (cur.tag ? '<span class="sr-pickkind">' + _srE(cur.tag) + '</span>' : '') + '<span class="sr-pickt">' + _srE(cur.title) + '</span></span>' +
     '<svg class="sr-pickchev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 /** The picker for a form: the hidden "link" field, the button, and its (closed) panel. `keepLabel` names a line's own
