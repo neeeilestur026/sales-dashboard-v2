@@ -519,6 +519,62 @@ function srLinkOptions(ix, me, day, sent, received) {
   };
 }
 
+/* ── A373 · the Link to picker ────────────────────────────────────────────────────────────────
+   Neil, 26 Oct 2026: the Link to list "looks like a long list when i press the dropdown, redesign it so that the open
+   quotations, prs, client book, and emails are properly and cleanly organize in that dropdown, can be easily found".
+   One entry per record, in two lines (what it is; the figure, status or time that tells it apart), under four kinds
+   with their counts, a search over all of it, and — for a call — the records of the company being called first. */
+const SR_LINK_KINDS = [['quotation', 'Open quotations', 'Quotation'], ['pr', 'Purchase requests', 'PR'], ['client', 'Client Book', 'Client'], ['email', 'Emails today', 'Email']];
+function _srShortDay(v) { const d = _srDate(v); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? Number(d.slice(8)) + ' ' + SR_MONTHS[Number(d.slice(5, 7)) - 1] : ''; }
+/** Every record a line can link to, each as { value: 'type|id', type, id, title, sub, company, label, hay }. `label` is
+ *  what the line keeps (as srLinkOptions names it), `hay` what the search looks in. */
+function srLinkItems(ix, me, day, sent, received) {
+  const o = srLinkOptions(ix, me, day, sent, received), qs = {}, cs = {};
+  srOpenQuotes(ix, me, day).forEach(q => { qs[_srS(q.quotationNo)] = q; });
+  ix.book.clients.forEach(c => { cs[_srS(c.clientNo)] = c; });
+  const sentBy = {}, gotBy = {};
+  (sent || []).forEach(e => { sentBy[_srS(e.messageId)] = e; });
+  (received || []).forEach(e => { gotBy[_srS(e.messageId)] = e; });
+  const item = (type, x, title, sub) => ({ value: type + '|' + x.id, type, id: x.id, title, sub, company: _srS(x.company), label: x.label,
+    hay: [x.id, title, sub, x.company].join(' ').toLowerCase() });
+  return {
+    quotation: o.quotation.map(x => { const q = qs[x.id] || {};
+      return item('quotation', x, x.id + ' · ' + (_srS(q.customer) || '—'), [srMoney(_srNet(q)), _srShortDay(q.sentAt) ? 'sent ' + _srShortDay(q.sentAt) : ''].filter(Boolean).join(' · ')); }),
+    pr: o.pr.map(x => { const p = ix.prs[x.id] || {}, c = ix.prCreated[x.id];
+      return item('pr', x, x.id + ' · ' + (_srS(p.customer) || '—'), [_srS(p.status), _srShortDay(c ? c.ts : p.date) ? 'made ' + _srShortDay(c ? c.ts : p.date) : ''].filter(Boolean).join(' · ')); }),
+    client: o.client.map(x => { const c = cs[x.id] || {};
+      return item('client', x, _srS(c.company) || x.label, [c.tier, c.sector, _srS(c.status) || _srS(c.accreditation), c.owner && !_srSame(c.owner, me.name) ? c.owner + '\'s client' : ''].filter(Boolean).join(' · ')); }),
+    email: o.email.map(x => { const e = sentBy[x.id], g = e ? null : gotBy[x.id], m = e || g || {};
+      return item('email', x, _srS(m.subject) || '(no subject)', (e ? 'Sent ' + srClock(m.sentAt) + (m.name || m.recipient ? ' to ' + _srS(m.name || m.recipient) : '')
+        : 'Received ' + srClock(m.date || m.sentAt) + (m.name || m.from ? ' from ' + _srS(m.name || m.from) : '')) + (x.company ? ' · ' + x.company : '')); })
+  };
+}
+/** What the picker shows: { counts: {kind: n}, sections: [{ key, label, items }] }. q: what is typed (every word must
+ *  be found); tab: 'all' or one kind; company: the call's company — its records come first, under "For <company>". */
+function srLinkPick(items, opts) {
+  const o = opts || {}, words = _srS(o.q).toLowerCase().split(/\s+/).filter(Boolean), tab = o.tab || 'all';
+  const hit = (x) => words.every(w => x.hay.indexOf(w) >= 0);
+  const counts = {}, sections = [];
+  SR_LINK_KINDS.forEach(([k]) => { counts[k] = (items[k] || []).filter(hit).length; });
+  const co = _srCo(o.company);
+  if (tab === 'all' && !words.length && co.length >= 3) {
+    const mine = [];
+    SR_LINK_KINDS.forEach(([k]) => (items[k] || []).forEach(x => { const c = _srCo(x.company); if (c && (c === co || c.indexOf(co) === 0 || co.indexOf(c) === 0)) mine.push(x); }));
+    if (mine.length) sections.push({ key: 'for', label: 'For ' + _srS(o.company), items: mine.slice(0, 8) });
+  }
+  SR_LINK_KINDS.forEach(([k, label]) => {
+    if (tab !== 'all' && tab !== k) return;
+    const list = (items[k] || []).filter(hit);
+    if (list.length) sections.push({ key: k, label, items: list });
+  });
+  return { counts, sections };
+}
+/** The record a link value names, or null. */
+function srLinkFind(items, value) {
+  const k = _srS(value).split('|')[0];
+  return ((items || {})[k] || []).find(x => x.value === value) || null;
+}
+
 /* ── A356 · the call form picks the company and the person from the Client Book ──────────────── */
 
 function _srCo(name) { return _srS(name).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
@@ -574,7 +630,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
-                     srPlanned, srDayType, srOpenQuotes, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
+                     srPlanned, srDayType, srOpenQuotes, SR_LINK_KINDS, srLinkItems, srLinkPick, srLinkFind, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };
 }

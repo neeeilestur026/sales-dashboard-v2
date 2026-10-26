@@ -382,7 +382,7 @@ function _srCallForm() {
       SR_CALL_RESULTS.map(r => '<label class="sr-pill' + (r === 'Booked' ? ' goal' : '') + '"><input type="radio" name="result" value="' + r + '"' + (r === 'Reached' ? ' checked' : '') + '>' +
         '<span>' + (r === 'Call back' ? 'Call back on…' : r) + '</span></label>').join('') + '</fieldset>' +
     '<div class="sr-grid2"><label>Next step date<input type="date" class="sr-in" name="nextDate"></label>' +
-      '<label>Link to<select class="sr-in" name="link" id="srCallLink"></select></label></div>' +
+      _srPickerHtml('none|') + '</div>' +   // A373 — the Link to picker
     '<label>What happened (one line)<input type="text" class="sr-in" name="note" maxlength="200" placeholder="Decision on 3 Nov"></label>' +
     '<div class="sr-formfoot"><span class="sr-help">Log within 15 minutes of the call. The time is set when you save.</span>' +
       '<button type="submit" class="btn-sm primary">Log call</button></div></form>';
@@ -409,37 +409,145 @@ function _srCallLookup(f, changed) {
     const dl = _srId('srBookPeople');
     if (dl) dl.innerHTML = r.people.map(p => '<option value="' + _srE(srContactLabel(p) || (p.emails || [])[0] || (p.phones || [])[0]) + '">' +
       _srE((p.primary ? 'Main contact · ' : '') + ((p.phones || [])[0] || (p.emails || [])[0] || '')) + '</option>').join('');
-    const sel = f.elements.link, cur = sel ? sel.value : '';
-    if (r.link && sel && (!cur || cur === 'none|' || f.dataset.autolink)) {
-      const v = 'client|' + r.link.linkId;
-      if (Array.prototype.some.call(sel.options, o => o.value === v)) { sel.value = v; f.dataset.autolink = '1'; }
-    } else if (!r.link && sel && f.dataset.autolink) { sel.value = 'none|'; delete f.dataset.autolink; }
+    const pk = f.querySelector('[data-picker]'), cur = f.elements.link ? f.elements.link.value : '';
+    if (r.link && pk && (!cur || cur === 'none|' || f.dataset.autolink)) { _srPickSet(pk, 'client|' + r.link.linkId); f.dataset.autolink = '1'; }
+    else if (!r.link && pk && f.dataset.autolink) { _srPickSet(pk, 'none|'); delete f.dataset.autolink; }
   }
   const hint = _srId('srCallHint');
   if (hint) hint.innerHTML = _srCallHintHtml(r, f.elements.company.value);
 }
-function _srLinkOptionsHtml(selected, selectedLabel) {
-  const o = srLinkOptions(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received);
-  const opt = (type, x) => '<option value="' + type + '|' + _srE(x.id) + '"' + (selected === type + '|' + x.id ? ' selected' : '') + '>' + _srE(x.label) + '</option>';
-  /* A line's own link stays on offer even when it is not in today's lists (a DR number, a client PO, yesterday's email),
-     so editing a line never drops its link without the person choosing to. */
-  const listed = Object.keys(o).some(type => o[type].some(x => selected === type + '|' + x.id));
-  const own = selected && selected.indexOf('none|') !== 0 && !listed
-    ? '<option value="' + _srE(selected) + '" selected>' + _srE('Keep: ' + (selectedLabel || selected.split('|')[1])) + '</option>' : '';
-  return own + '<option value="none|">No link (new contact)</option>' +
-    (o.quotation.length ? '<optgroup label="My open quotations">' + o.quotation.map(x => opt('quotation', x)).join('') + '</optgroup>' : '') +
-    (o.pr.length ? '<optgroup label="My recent PRs">' + o.pr.map(x => opt('pr', x)).join('') + '</optgroup>' : '') +
-    (o.client.length ? '<optgroup label="Clients (Client Book)">' + o.client.map(x => opt('client', x)).join('') + '</optgroup>' : '') +
-    (o.email.length ? '<optgroup label="Today\'s emails">' + o.email.map(x => opt('email', x)).join('') + '</optgroup>' : '');
+/* ── A373 · the Link to picker: a button that opens a panel — search, the four kinds as tabs with their counts, and each
+   record on two lines; for a call, the company's own records first. The value stays in a hidden "link" field, so every
+   form reads it as before. ─────────────────────────────────────────────────────────────────────────────────────── */
+function _srLinkItemsNow() { return srLinkItems(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received); }
+function _srLinkTags() { const t = {}; SR_LINK_KINDS.forEach(([k, , tag]) => { t[k] = tag; }); return t; }
+/** The chosen record as the button shows it: { title, sub, kind } ("Keep: …" for a link not in today's lists). */
+function _srPickCurrent(value, keepLabel) {
+  const v = String(value || 'none|');
+  if (v.indexOf('none|') === 0 || v === 'none') return { title: 'No link (new contact)', sub: '', kind: '' };
+  const hit = srLinkFind(_srLinkItemsNow(), v);
+  if (hit) return { title: hit.title, sub: hit.sub, kind: _srLinkTags()[hit.type] };
+  return { title: 'Keep: ' + (keepLabel || v.split('|')[1] || v), sub: 'not in today\'s lists', kind: '', keep: true };
+}
+function _srPickBtnInner(cur) {
+  return '<span class="sr-pickval">' + (cur.kind ? '<span class="sr-pickkind">' + _srE(cur.kind) + '</span>' : '') + '<span class="sr-pickt">' + _srE(cur.title) + '</span></span>' +
+    '<svg class="sr-pickchev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+/** The picker for a form: the hidden "link" field, the button, and its (closed) panel. `keepLabel` names a line's own
+ *  link that is not in today's lists, so editing a line never drops it without the person choosing to. */
+function _srPickerHtml(value, keepLabel) {
+  const v = String(value || 'none|');
+  return '<div class="sr-pickfield"><span class="sr-pickcap">Link to</span><div class="sr-pick" data-picker data-keep="' + _srE(v.indexOf('none|') === 0 ? '' : v) + '" data-keeplabel="' + _srE(keepLabel || '') + '">' +
+    '<input type="hidden" name="link" value="' + _srE(v) + '">' +
+    '<button type="button" class="sr-in sr-pickbtn" data-pickopen aria-haspopup="dialog" aria-expanded="false">' + _srPickBtnInner(_srPickCurrent(v, keepLabel)) + '</button>' +
+    '<div class="sr-pickpanel" role="dialog" aria-label="Link to" hidden></div></div></div>';
+}
+function _srPickInput(root) { return root && root.querySelector ? root.querySelector('input[name="link"]') : null; }
+/** Set a picker's value (and its button) from code: the call form's Client Book match, a prefilled follow-up, a reset. */
+function _srPickSet(root, value) {
+  const inp = _srPickInput(root);
+  if (!inp) return;
+  inp.value = String(value || 'none|');
+  const b = root.querySelector('[data-pickopen]');
+  if (b) b.innerHTML = _srPickBtnInner(_srPickCurrent(inp.value, root.getAttribute('data-keeplabel')));
+}
+/** The panel's list for what is typed and the tab chosen. */
+function _srPickListHtml(root) {
+  const items = _srLinkItemsNow(), form = root.closest ? root.closest('form') : null, tags = _srLinkTags();
+  const q = root.getAttribute('data-q') || '', tab = root.getAttribute('data-tab') || 'all', cur = (_srPickInput(root) || {}).value || 'none|';
+  const company = form && form.elements && form.elements.company ? form.elements.company.value : '';
+  const r = srLinkPick(items, { q, tab, company });
+  const opt = (x, tag) => '<button type="button" class="sr-pickopt' + (x.value === cur ? ' on' : '') + '" role="option" aria-selected="' + (x.value === cur) + '" data-pickval="' + _srE(x.value) + '">' +
+    '<span class="t">' + _srE(x.title) + '</span>' + (tag ? '<span class="k">' + _srE(tag) + '</span>' : '') + (x.sub ? '<span class="s">' + _srE(x.sub) + '</span>' : '') + '</button>';
+  const keep = root.getAttribute('data-keep'), isNone = cur.indexOf('none|') === 0;
+  const top = q ? '' : '<button type="button" class="sr-pickopt none' + (isNone ? ' on' : '') + '" role="option" aria-selected="' + isNone + '" data-pickval="none|"><span class="t">No link (new contact)</span></button>' +
+    (keep && !srLinkFind(items, keep) ? opt({ value: keep, title: 'Keep: ' + (root.getAttribute('data-keeplabel') || keep.split('|')[1]), sub: 'this line\'s own link, not in today\'s lists' }, '') : '');
+  const body = r.sections.map(sec => '<div class="sr-picksec" role="group" aria-label="' + _srE(sec.label) + '"><p class="sr-pickhead">' + _srE(sec.label) + ' <span>' + sec.items.length + '</span></p>' +
+    sec.items.map(x => opt(x, sec.key === 'for' ? tags[x.type] : '')).join('') + '</div>').join('');
+  const none = r.sections.length ? '' : '<p class="sr-pickempty">' + (q ? 'Nothing matches "' + _srE(q) + '".' : tab === 'all' ? 'Nothing to link to yet today.' : 'None of these today.') + '</p>';
+  return top + body + none;
+}
+const SR_PICK_TABS = { quotation: 'Quotations', pr: 'PRs', client: 'Clients', email: 'Emails' };
+function _srPickTabsHtml(root) {
+  const counts = srLinkPick(_srLinkItemsNow(), { q: root.getAttribute('data-q') || '' }).counts, tab = root.getAttribute('data-tab') || 'all';
+  const total = Object.keys(counts).reduce((t, k) => t + counts[k], 0);
+  return [['all', 'All', total]].concat(SR_LINK_KINDS.map(([k]) => [k, SR_PICK_TABS[k], counts[k]])).map(([k, l, n]) =>
+    '<button type="button" role="tab" aria-selected="' + (tab === k) + '" data-picktab="' + k + '"' + (n || k === 'all' ? '' : ' disabled') + '>' + _srE(l) + ' <span>' + n + '</span></button>').join('');
+}
+function _srPickPanelHtml(root) {
+  return '<input type="search" class="sr-in sr-pickq" placeholder="Search quotations, PRs, clients and emails" aria-label="Search what to link to" value="' + _srE(root.getAttribute('data-q') || '') + '" autocomplete="off">' +
+    '<div class="sr-picktabs" role="tablist" aria-label="Show">' + _srPickTabsHtml(root) + '</div>' +
+    '<div class="sr-picklist" role="listbox" aria-label="Records">' + _srPickListHtml(root) + '</div>';
+}
+function _srPickOpen(root) {
+  document.querySelectorAll('[data-picker] .sr-pickpanel:not([hidden])').forEach(p => { const r = p.closest('[data-picker]'); if (r !== root) _srPickClose(r, false); });
+  const panel = root.querySelector('.sr-pickpanel'), btn = root.querySelector('[data-pickopen]');
+  root.setAttribute('data-q', ''); root.setAttribute('data-tab', 'all');
+  panel.innerHTML = _srPickPanelHtml(root);
+  panel.hidden = false;
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+  const q = panel.querySelector('.sr-pickq');
+  if (q && q.focus) q.focus();
+}
+function _srPickClose(root, focusBtn) {
+  if (!root) return;
+  const panel = root.querySelector('.sr-pickpanel'), btn = root.querySelector('[data-pickopen]');
+  if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+  if (btn) { btn.setAttribute('aria-expanded', 'false'); if (focusBtn && btn.focus) btn.focus(); }
+}
+function _srPickChoose(root, value) {
+  _srPickSet(root, value);
+  const form = root.closest ? root.closest('form') : null;
+  if (form && form.id === 'srCallForm') delete form.dataset.autolink;   // A356 — a link chosen by hand stays
+  _srPickClose(root, true);
+}
+/** Once per page: the pickers live in the call form and in the dialogs, so they listen on the document. */
+function _srPickWire() {
+  if (SR_UI.pickWired) return;
+  SR_UI.pickWired = true;
+  document.addEventListener('click', ev => {
+    const t = ev.target, root = t && t.closest ? t.closest('[data-picker]') : null;
+    document.querySelectorAll('[data-picker] .sr-pickpanel:not([hidden])').forEach(p => { const r = p.closest('[data-picker]'); if (r !== root) _srPickClose(r, false); });
+    if (!root) return;
+    const b = t.closest('button');
+    if (!b) return;
+    if (b.hasAttribute('data-pickopen')) { if (root.querySelector('.sr-pickpanel').hidden) _srPickOpen(root); else _srPickClose(root, false); }
+    else if (b.hasAttribute('data-picktab')) {
+      const k = b.getAttribute('data-picktab');
+      root.setAttribute('data-tab', k);
+      root.querySelector('.sr-picktabs').innerHTML = _srPickTabsHtml(root);
+      root.querySelector('.sr-picklist').innerHTML = _srPickListHtml(root);
+      const tb = root.querySelector('[data-picktab="' + k + '"]');
+      if (tb && tb.focus) tb.focus();
+    } else if (b.hasAttribute('data-pickval')) _srPickChoose(root, b.getAttribute('data-pickval'));
+  });
+  document.addEventListener('input', ev => {
+    const t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('sr-pickq')) return;
+    const root = t.closest('[data-picker]');
+    root.setAttribute('data-q', t.value);
+    root.querySelector('.sr-picktabs').innerHTML = _srPickTabsHtml(root);
+    root.querySelector('.sr-picklist').innerHTML = _srPickListHtml(root);
+  });
+  /* the keys: arrows move through the records, Enter takes one (it is a button), Escape closes the panel only */
+  document.addEventListener('keydown', ev => {
+    const t = ev.target, root = t && t.closest ? t.closest('[data-picker]') : null;
+    if (!root || root.querySelector('.sr-pickpanel').hidden) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); _srPickClose(root, true); return; }
+    if (ev.key === 'Enter' && t.classList && t.classList.contains('sr-pickq')) { ev.preventDefault(); const first = root.querySelector('.sr-picksec .sr-pickopt'); if (first) _srPickChoose(root, first.getAttribute('data-pickval')); return; }
+    if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+    const opts = Array.prototype.slice.call(root.querySelectorAll('.sr-pickopt'));
+    if (!opts.length) return;
+    ev.preventDefault();
+    const i = opts.indexOf(document.activeElement), n = ev.key === 'ArrowDown' ? (i < 0 ? 0 : Math.min(opts.length - 1, i + 1)) : (i <= 0 ? -1 : i - 1);
+    if (n < 0) { const q = root.querySelector('.sr-pickq'); if (q) q.focus(); } else opts[n].focus();
+  }, true);
 }
 function _srRefreshLinkSelect() {
   const cos = _srId('srBookCos');
   if (cos) cos.innerHTML = _srBookCosHtml();
-  const sel = _srId('srCallLink');
-  if (!sel || document.activeElement === sel) return;
-  const keep = sel.value;
-  sel.innerHTML = _srLinkOptionsHtml(keep);
-  if (keep && Array.prototype.some.call(sel.options, o => o.value === keep)) sel.value = keep;
+  const f = _srId('srCallForm'), pk = f && f.querySelector ? f.querySelector('[data-picker]') : null;   // A373 — the picker reads the lists as it opens
+  if (pk && pk.querySelector('.sr-pickpanel').hidden) _srPickSet(pk, (_srPickInput(pk) || {}).value);
 }
 function _srLinkLabel(value) {
   const [type, id] = String(value || 'none|').split('|');
@@ -582,6 +690,7 @@ async function _srWeekMail(days) {
 
 function _srWire() {
   const head = _srId('srHead'), body = _srId('srBody');
+  _srPickWire();   // A373
   if (!head.dataset.wired) {
     head.dataset.wired = '1';
     head.addEventListener('click', ev => {
@@ -627,7 +736,6 @@ function _srWire() {
   body.addEventListener('change', ev => {
     const t = ev.target;
     if (t && t.id === 'srBlocker') _srOneLine(t);
-    if (t && t.id === 'srCallLink' && t.form) delete t.form.dataset.autolink;   // A356 — a link chosen by hand stays
     if (t && t.id === 'srFuPick' && t.value && !SR_UI.ro) { const no = t.value; t.value = ''; t.blur(); _srPrefillCall(no); }   // A367
   });
   body.addEventListener('input', ev => {           // the one-line answers live in the report as they are typed; saved on change
@@ -676,7 +784,7 @@ function _srPrefillCall(qno) {
   f.elements.company.value = q.customer || '';
   _srRefreshLinkSelect();
   _srCallLookup(f, 'company');
-  f.elements.link.value = 'quotation|' + qno;
+  _srPickSet(f.querySelector('[data-picker]'), 'quotation|' + qno);
   delete f.dataset.autolink;
   f.dataset.followup = qno;
   if (f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
@@ -692,6 +800,7 @@ function _srLogCall(f) {
                                          result, nextDate: f.elements.nextDate.value }, link), SR_UI.me.name, _srNowIso());
   SR_UI.state.lines.push(line);
   f.reset();
+  _srPickSet(f.querySelector('[data-picker]'), 'none|');   // A373
   delete f.dataset.followup;
   delete f.dataset.autolink;
   if (_srId('srBookPeople')) _srId('srBookPeople').innerHTML = '';
@@ -794,7 +903,7 @@ function _srLineDialog(type, editId, back) {
       '<label>Person and position<input type="text" class="sr-in" name="person" value="' + _srE(v.person) + '"></label></div>' +
       '<div class="sr-grid2"><label>Result<input type="text" class="sr-in" name="result" value="' + _srE(v.result) + '"></label>' +
       '<label>Next step date<input type="date" class="sr-in" name="nextDate" value="' + _srE(v.nextDate) + '"></label></div>' +
-      '<label>Link to<select class="sr-in" name="link">' + _srLinkOptionsHtml(linkVal, v.linkLabel) + '</select></label>' +
+      _srPickerHtml(linkVal || 'none|', v.linkLabel) +   // A373
       '<label>What happened (one line)<input type="text" class="sr-in" name="note" value="' + _srE(v.note) + '"></label>';
   }
   if (line) fields += '<label>Why are you changing it?<input type="text" class="sr-in" name="why" required placeholder="Wrong company"></label>';
@@ -839,7 +948,7 @@ function _srLinkDialog(id, back) {
   const line = SR_UI.state.lines.find(l => l.id === id);
   if (!line) return;
   _srDialog('Add a link', 'A link is what makes a line easy to check: the quotation, PR or email it is about.',
-    '<form class="sr-form"><label>Link to<select class="sr-in" name="link">' + _srLinkOptionsHtml('') + '</select></label>' +
+    '<form class="sr-form">' + _srPickerHtml('none|') +   // A373
     '<label>Or a DR number<input type="text" class="sr-in" name="dr" placeholder="DR-0207"></label>' +
     '<div class="sr-formfoot"><span></span><button type="submit" class="btn-sm primary">Add the link</button></div></form>', back,
     (form) => {
