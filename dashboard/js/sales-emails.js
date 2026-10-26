@@ -691,6 +691,7 @@ async function seDoLink(quotationNo, m) {
 /** A message that does not need dismissing. The page has no flow-msg element and one banner at the
  *  top would be invisible with the dialog open over it. */
 function seToast(text, ok) {
+  if (typeof window.hxToast === 'function') { window.hxToast(text, { tone: ok ? 'ok' : 'error' }); return; }   // A375 — the portal's own toast
   let t = document.getElementById('seToast');
   if (!t) {
     t = document.createElement('div');

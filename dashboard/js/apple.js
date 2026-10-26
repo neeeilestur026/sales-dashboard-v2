@@ -86,7 +86,9 @@
   }
 
   /* ── bottom sheets: drag a dialog down to dismiss it (phones) ────────────────────────────── */
-  var OVERLAYS = '.flow-modal-overlay, .modal-overlay', SHEETS = '.flow-modal, .modal';
+  /* A375 — and the other dialogs: director home, client visits, banks, payables, the classic .modal-box, shipments */
+  var OVERLAYS = '.flow-modal-overlay, .modal-overlay, .dh-overlay, .bk-modal-bg, .dp-modal-bg, .sm-overlay:not(.sm-pdf), .sh-overlay',
+      SHEETS = '.flow-modal, .modal, .modal-box, .dh-modal, .bk-modal, .dp-modal, .sm-dialog, .sh-modal';
   function closeControl(sheet) {
     var list = sheet.querySelectorAll('button, a, [role="button"]');
     for (var i = 0; i < list.length; i++) {
@@ -104,7 +106,8 @@
     sheet.addEventListener('pointerdown', function (e) {
       if (!phone() || e.button > 0 || (e.target.closest && e.target.closest('input, select, textarea, button, a, label, [contenteditable]'))) return;
       var top = e.clientY - sheet.getBoundingClientRect().top;
-      if (sheet.scrollTop > 0 && top > 44) return;          // inside scrolled content: that is a scroll, not a drag
+      var scroller = sheet.scrollHeight > sheet.clientHeight + 1 ? sheet : overlay;   // A375 — a shipments sheet scrolls its overlay
+      if (scroller.scrollTop > 0 && top > 44) return;       // inside scrolled content: that is a scroll, not a drag
       drag = { id: e.pointerId, y0: e.clientY, from: spring.raf ? spring.x : 0, moved: false, t: tracker() };
     });
     sheet.addEventListener('pointermove', function (e) {

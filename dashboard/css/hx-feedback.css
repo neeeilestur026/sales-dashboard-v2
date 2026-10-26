@@ -1,0 +1,70 @@
+/* hx-feedback.css — A375 · toasts and the snackbar (js/hx-feedback.js), on every page in both looks. Tokens only.
+   Toasts drop in at the top and leave the way they came, up; the snackbar rises at the bottom and leaves down. Under the
+   Apple look both are translucent material (blur 20px, saturate 180%) — the snackbar the heavier, inverted one, as it
+   carries an action. The colour sits on the solid icon, never on the glass. Text is a step heavier over glass. */
+.hx-toasts { position: fixed; top: max(.75rem, env(safe-area-inset-top)); left: 1rem; right: 1rem; z-index: 10050; width: min(26rem, calc(100vw - 2rem));
+  margin: 0 auto; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
+.hx-toast { pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: .625rem; padding: .7rem .5rem .7rem .8rem;
+  border-radius: 14px; background: var(--hx-glass-solid); color: var(--hx-ink); border: 1px solid var(--hx-hair); box-shadow: var(--hx-sh-3);
+  font: 500 .845rem/1.42 var(--hx-text); letter-spacing: .004em; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; will-change: transform;
+  animation: hx-t-in .42s cubic-bezier(.2, .9, .25, 1) both; }
+.hx-toast:active { cursor: grabbing; }
+.hx-ttext { min-width: 0; padding-top: .1rem; white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; }
+.hx-ticon svg, .hx-tclose svg, .hx-sclose svg { display: block; width: 1.3rem; height: 1.3rem; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.hx-ticon { color: var(--hx-navy-text); }
+.hx-ok .hx-ticon { color: var(--hx-ok); }
+.hx-warn .hx-ticon { color: var(--hx-warn); }
+.hx-error .hx-ticon { color: var(--hx-red); }
+.hx-tcount { align-self: center; padding: 0 .4rem; border-radius: 999px; background: var(--hx-hair); color: var(--hx-ink-2); font: 700 .69rem/1.5 var(--hx-text); font-variant-numeric: tabular-nums; }
+.hx-tcount[hidden] { display: none; }
+.hx-tclose, .hx-sclose { display: grid; place-items: center; width: 1.85rem; height: 1.85rem; margin: -.2rem 0; padding: 0; border: 0; border-radius: 999px; background: transparent;
+  color: var(--hx-ink-3); cursor: pointer; transition: transform 100ms ease-out; }
+.hx-tclose svg, .hx-sclose svg { width: 1rem; height: 1rem; }
+.hx-tclose:hover { background: var(--hx-hair); color: var(--hx-ink); }
+.hx-tclose:active, .hx-sclose:active, .hx-sact:active { transform: scale(.97); }
+.hx-tclose:focus-visible, .hx-sclose:focus-visible, .hx-sact:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+.hx-toast.hx-out { animation: hx-t-out .22s cubic-bezier(.4, 0, .9, .4) both; pointer-events: none; }
+@keyframes hx-t-in { from { opacity: 0; transform: translate3d(0, -14px, 0) scale(.96); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes hx-t-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, -14px, 0) scale(.96); filter: blur(4px); } }
+
+.hx-snack { position: fixed; left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom)); z-index: 10040; width: fit-content; max-width: min(36rem, calc(100vw - 2rem));
+  margin: 0 auto; display: flex; align-items: center; gap: .75rem; padding: .55rem .45rem .55rem 1rem; border-radius: 14px; background: var(--hx-ink); color: var(--hx-card);
+  box-shadow: var(--hx-sh-3); font: 500 .845rem/1.42 var(--hx-text); letter-spacing: .004em; touch-action: none; user-select: none; -webkit-user-select: none; will-change: transform;
+  animation: hx-s-in .42s cubic-bezier(.2, .9, .25, 1) both; }
+.hx-stext { min-width: 0; padding: .2rem 0; overflow-wrap: anywhere; }
+.hx-sact { flex: none; padding: .4rem .85rem; border: 1px solid color-mix(in srgb, var(--hx-card) 40%, transparent); border-radius: 999px; background: transparent; color: inherit;
+  font: 700 .8rem/1.2 var(--hx-text); cursor: pointer; transition: transform 100ms ease-out; }
+.hx-sact:hover { background: color-mix(in srgb, var(--hx-card) 14%, transparent); }
+.hx-sclose { color: color-mix(in srgb, var(--hx-card) 72%, transparent); }
+.hx-snack.hx-warn .hx-stext::before { content: ''; display: inline-block; width: .5rem; height: .5rem; margin-right: .5rem; border-radius: 50%; background: var(--hx-warn); vertical-align: .05em; }
+.hx-snack.hx-out { animation: hx-s-out .22s cubic-bezier(.4, 0, .9, .4) both; pointer-events: none; }
+@keyframes hx-s-in { from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes hx-s-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 18px, 0) scale(.97); } }
+
+/* the Apple look: translucent material, the snackbar the heavier, inverted one */
+html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--a-mat-pop); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
+  border: 1px solid var(--a-mat-edge); box-shadow: var(--l-p-shadow-pop); font-family: var(--l-sans); }
+html[data-skin="ledger"][data-look="apple"] .hx-snack { background: color-mix(in srgb, var(--hx-ink) 86%, transparent); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur);
+  box-shadow: var(--l-p-shadow-pop); font-family: var(--l-sans); }
+
+@media (max-width: 640px) {
+  .hx-toasts { width: auto; }
+  .hx-snack { width: auto; justify-content: space-between; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-toast, .hx-snack { animation: hx-fade .18s ease-out both; }
+  .hx-toast.hx-out, .hx-snack.hx-out { animation: hx-fade-out .18s ease-in both; }
+  .hx-tclose:active, .hx-sclose:active, .hx-sact:active { transform: none; }
+}
+html[data-motion="off"] .hx-toast, html[data-motion="off"] .hx-snack { animation: none; }
+@keyframes hx-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hx-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-transparency: reduce) {
+  html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--hx-glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  html[data-skin="ledger"][data-look="apple"] .hx-snack { background: var(--hx-ink); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .hx-toast, html[data-skin="ledger"][data-look="apple"] .hx-toast { background: var(--hx-card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--hx-ink-2); }
+  .hx-snack, html[data-skin="ledger"][data-look="apple"] .hx-snack { background: var(--hx-ink); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--hx-card); }
+}
+@media print { .hx-toasts, .hx-snack { display: none; } }

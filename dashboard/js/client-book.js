@@ -584,7 +584,10 @@ function cbDetail(no, back) {
       }
       const v = (b.getAttribute('data-link') || b.getAttribute('data-unlink')).split('|'), kind = v[0], ref = v.slice(1).join('|');
       if (b.hasAttribute('data-link')) send(b, 'linkClientBookRecords', { clientNo: no, records: JSON.stringify([{ kind, no: ref }]) }, () => 'Connected ' + ref + '.');
-      else send(b, 'unlinkClientBookRecord', { kind, no: ref }, () => ref + ' was taken off this client. It can be connected again below.');
+      else send(b, 'unlinkClientBookRecord', { kind, no: ref }, () => {
+        if (typeof window.hxSnackbar === 'function') window.hxSnackbar(ref + ' was taken off ' + c.company + '.', { action: 'Undo', onAction: () => cbPost(null, 'linkClientBookRecords', { clientNo: no, records: JSON.stringify([{ kind, no: ref }]) }) });   // A375
+        return ref + ' was taken off this client. It can be connected again below.';
+      });
     });
     const find = recs.querySelector('[data-find]'), found = recs.querySelector('[data-found]');
     find.addEventListener('input', () => {
@@ -625,7 +628,10 @@ function cbDetail(no, back) {
     else {
       const reason = arch.elements.reason.value.trim();
       if (!reason) { arch.elements.reason.focus(); cbMsg(arch, 'Say why first.', true); return; }
-      cbPost(arch, 'archiveClientBookClient', { clientNo: no, reason });
+      /* A375 — undo from a snackbar rather than a confirm first */
+      cbPost(arch, 'archiveClientBookClient', { clientNo: no, reason }).then(r => {
+        if (r && r.success && typeof window.hxSnackbar === 'function') window.hxSnackbar('Archived ' + c.company + '.', { action: 'Undo', onAction: () => cbPost(null, 'archiveClientBookClient', { clientNo: no, restore: true }) });
+      });
     }
   });
 }

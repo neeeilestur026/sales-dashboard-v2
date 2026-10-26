@@ -152,4 +152,12 @@
     document.addEventListener('dh:theme', reflect);
     document.addEventListener('DOMContentLoaded', function () { reflect(); setTimeout(reflect, 400); });
   }
+  /* A375 — toasts, the snackbar and alert() as a toast, on every page and in both looks (js/hx-feedback.js). */
+  try {
+    var fh = document.head;
+    if (fh && typeof document.createElement === 'function' && !window.hxToast) {
+      var fl = document.createElement('link'); fl.rel = 'stylesheet'; fl.href = 'css/hx-feedback.css'; fh.appendChild(fl);
+      var fj = document.createElement('script'); fj.src = 'js/hx-feedback.js'; fh.appendChild(fj);
+    }
+  } catch (e) {}
 })();
