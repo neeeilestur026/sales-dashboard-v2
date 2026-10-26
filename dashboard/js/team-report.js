@@ -153,7 +153,7 @@ async function _trWeekMail(S, days) {
     await Promise.all(days.slice(i, i + 3).map(d => _trMailRead(S, who, d).then(m => { if (S.person === who) S.weekMail[d] = m.state === 'ok' ? m.emails : null; })));
   }
   S.weekBusy = false;
-  if (S.person === who) _trRenderWeek(S);
+  if (S.person === who) _trRefresh(S);   // A371 — the earlier days' mail also numbers today's collection follow-ups
 }
 async function _trQueueLoad(S) {
   const who = S.person, day = S.day;
@@ -252,7 +252,8 @@ function _trSetState(S) {
 
 function _trNums(S) {
   const t = trTiles(S.role, S.ix, S.person, S.day, _trNowMin());
-  const mail = S.cfg.mail ? trMail(S.role, S.ix, S.mail.emails, S.state.mailMarks, S.state.mailPrs) : [];
+  const mail = S.cfg.mail ? trMail(S.role, S.ix, S.mail.emails, S.state.mailMarks, S.state.mailPrs, S.state.mailArs) : [];
+  if (S.cfg.mail && S.cfg.mail.ar) trFollowUps(mail, S.day, trCollectEarlier(S.ix, S.day, S.saved, S.weekMail));   // A371 — which follow-up each one is
   return { portal: (S.cfg.mail ? trMailTiles(S.role, mail, S.mail.state) : []).concat(t.portal), weekly: t.weekly, mail,
            mine: trMineTiles(S.role, S.state, S.day), linked: trLinked(S.role, S.state, S.day) };
 }
@@ -287,7 +288,8 @@ function _trBodyHtml(S) {
       (S.cfg.weekly ? '<p class="sr-rowlab ok">This week so far</p><div class="sr-tiles" data-tiles="weekly"></div>' : '') +
       '<p class="sr-rowlab mine">From the typed lines</p><div class="sr-tiles" data-tiles="mine"></div></section>' +
     (S.day === S.today ? '<section class="sr-block"><h3>Waiting on ' + _trE(who) + ' now</h3><p class="dh-meta">' + _trE(who) + '\'s own home-page list, read live.</p><div data-queue></div></section>' : '') +
-    (S.cfg.mail ? '<section class="sr-block"><h3>Emails sent — ' + _trE(who) + '\'s mailbox</h3><p class="dh-meta">' + _trE(S.cfg.mail.help) +
+    (S.cfg.mail ? '<section class="sr-block"><div class="sr-bar"><h3>Emails sent — ' + _trE(who) + '\'s mailbox</h3>' +
+      (S.cfg.mail.ar ? '<div class="sr-pills" role="group" aria-label="Sort the emails" data-mailsorts></div>' : '') + '</div><p class="dh-meta">' + _trE(S.cfg.mail.help) +
       (S.ro ? '' : ' Press a button to correct one; your choice is kept with the report.') + '</p><div data-mail></div></section>' : '') +
     '<section class="sr-block"><div class="sr-bar"><h3>' + (S.ro ? _trE(who) + '\'s log' : 'My log') + '</h3>' + (S.ro ? '' : '<div class="sr-quick">' +
       S.cfg.lines.map(x => '<button type="button" class="dh-btn" data-new="' + _trE(x.type) + '">+ ' + _trE(x.type) + '</button>').join('') + '</div>') + '</div>' +
@@ -327,6 +329,8 @@ function _trRefresh(S) {
   S.el.querySelectorAll('.sr-bar-track > i[data-w]').forEach(i => { if (i.style && i.style.setProperty) i.style.setProperty('--sr-w', i.getAttribute('data-w')); });
   _trQ(S, '[data-log]').innerHTML = _trLogRows(S);
   if (_trQ(S, '[data-mail]')) _trQ(S, '[data-mail]').innerHTML = _trMailHtml(S, n.mail);
+  if (_trQ(S, '[data-mailsorts]')) _trQ(S, '[data-mailsorts]').innerHTML = [['time', 'By time'], ['customer', 'Collection follow-ups by customer']].map(([k, l]) =>
+    '<button type="button" data-mailsort="' + k + '" aria-pressed="' + ((S.mailSort || 'time') === k) + '">' + _trE(l) + '</button>').join('');   // A371
   _trRenderFeed(S);
   /* Never redrawn under a field being typed in; a focused button (Submit, just clicked) is no reason to wait. */
   const pm = _trQ(S, '[data-pm]'), a = document.activeElement;
@@ -362,12 +366,19 @@ function _trMailHtml(S, rows) {
   /* A365 — the PR an email is linked to (from its subject, or picked); a price request without one waits for it */
   const prLine = (r) => !cfg.pr ? '' : r.pr ? '<span class="sr-sub">PR <a href="flow-pricing-request.html?pr=' + encodeURIComponent(r.pr) + '">' + _trE(r.pr) + '</a>' + (r.prHow === 'subject' ? ' — from the subject' : '') + '</span>'
     : r.needsPr ? '<span class="sr-sub"><span class="sr-chip watch">Needs its PR to count</span></span>' : '';
+  /* A371 — the receivable an email is linked to (picked, or the customer's past-due one), and which follow-up it is */
+  const arLine = (r) => !cfg.ar ? '' : (r.ar ? '<span class="sr-sub">Receivable <a href="flow-ar-aging.html">' + _trE(r.ar) + '</a>' + (r.arHow === 'guess' ? ' — the customer\'s past-due one' : '') + '</span>' : '') +
+    (r.fu ? '<span class="sr-sub tr-fu' + (r.fu.n > 1 || r.reply ? ' more' : '') + '">' + _trE(trFollowUpText(r)) + '</span>' : '');
   const btns = (r) => !r.id || S.ro ? '<span></span>' : '<span class="tr-mailbtns"><button type="button" class="sr-mini' + (r.price ? ' on' : '') + '" data-mailmark="' + _trE(r.id) + '">' + _trE(r.price ? cfg.none : 'Count as ' + cfg.tag.toLowerCase()) + '</button>' +
-    (cfg.pr ? '<button type="button" class="sr-mini" data-mailpr="' + _trE(r.id) + '">' + (r.pr ? 'Change PR' : 'Link a PR') + '</button>' : '') + '</span>';
-  return '<ul class="sr-feed tr-mail">' + rows.map(r => '<li class="' + (r.counted ? 'on' : '') + '"><span class="tm">' + _trE(r.time || '—') + '</span>' +
-    '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref && !cfg.pr ? ' · ' + _trE(r.ref) : '') + '</span>' + prLine(r) +
+    (cfg.pr ? '<button type="button" class="sr-mini" data-mailpr="' + _trE(r.id) + '">' + (r.pr ? 'Change PR' : 'Link a PR') + '</button>' : '') +
+    (cfg.ar ? '<button type="button" class="sr-mini" data-mailar="' + _trE(r.id) + '">' + (r.arHow === 'picked' ? 'Change receivable' : 'Link a receivable') + '</button>' : '') + '</span>';
+  const li = (r) => '<li class="' + (r.counted ? 'on' : '') + '"><span class="tm">' + _trE(r.time || '—') + '</span>' +
+    '<span class="x"><b>' + _trE(r.subject || '(no subject)') + '</b><span class="sr-sub">to ' + _trE(r.to) + (r.org ? ' — ' + _trE(r.org) : '') + (r.ref && !cfg.pr && !cfg.ar ? ' · ' + _trE(r.ref) : '') + '</span>' + prLine(r) + arLine(r) +
       '<span class="sr-sub">' + (r.counted ? '<span class="sr-chip ok">' + _trE(cfg.tag) + '</span> ' : '') + _trE(r.marked ? (r.price ? 'counted by you' : 'not counted, by you') : r.why) + '</span></span>' +
-    btns(r) + '</li>').join('') + '</ul>';
+    btns(r) + '</li>';
+  if (cfg.ar && S.mailSort === 'customer') return trMailGroups(rows).map(g => '<h4 class="tr-sub">' + _trE(g.label) + ' <span class="sr-dim">' + g.rows.length + ' email' + (g.rows.length === 1 ? '' : 's') + '</span></h4>' +
+    '<ul class="sr-feed tr-mail">' + g.rows.map(li).join('') + '</ul>').join('');
+  return '<ul class="sr-feed tr-mail">' + rows.map(li).join('') + '</ul>';
 }
 
 /** A line's link: the record's own page when it has one. */
@@ -439,7 +450,7 @@ function _trWire(S) {
   S.el.addEventListener('click', ev => {
     const b = ev.target.closest ? ev.target.closest('button') : null;
     if (!b) return;
-    if (S.ro && !b.hasAttribute('data-step') && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed')) return;   // A363 — reading, not writing
+    if (S.ro && !b.hasAttribute('data-step') && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed') && !b.hasAttribute('data-mailsort')) return;   // A363 — reading, not writing
     if (b.hasAttribute('data-step')) _trStep(S, Number(b.getAttribute('data-step')));
     else if (b.hasAttribute('data-rec')) _trRecordsOpen(S, b.getAttribute('data-rec'), b);
     else if (b.hasAttribute('data-new')) _trLineDialog(S, b.getAttribute('data-new'), null, b);
@@ -449,6 +460,8 @@ function _trWire(S) {
     else if (b.hasAttribute('data-submitpm')) _trSubmitPm(S);
     else if (b.hasAttribute('data-mailmark')) _trMailMark(S, b.getAttribute('data-mailmark'));
     else if (b.hasAttribute('data-mailpr')) _trMailPrDialog(S, b.getAttribute('data-mailpr'), b);   // A365
+    else if (b.hasAttribute('data-mailar')) _trMailArDialog(S, b.getAttribute('data-mailar'), b);   // A371
+    else if (b.hasAttribute('data-mailsort')) { S.mailSort = b.getAttribute('data-mailsort'); _trRefresh(S); }
   });
   S.el.addEventListener('change', ev => {
     const t = ev.target;
@@ -491,6 +504,27 @@ function _trMailPrDialog(S, id, back) {
       const v = String(form.elements.pr.value || '').trim().toUpperCase();
       S.state.mailPrs = S.state.mailPrs || {};
       if (v === row.subjPr) delete S.state.mailPrs[id]; else S.state.mailPrs[id] = v;
+      _trClose(); _trRefresh(S); _trSave(S);
+    });
+}
+/** A371 — link a sent email to a receivable: the open ones, past due first. A linked email counts as a collection
+ *  follow-up and is numbered with that customer's others; "No receivable" takes even the guessed one off. */
+function _trMailArDialog(S, id, back) {
+  const row = ((S.nums && S.nums.mail) || []).find(r => r.id === id);
+  if (!row) return;
+  const open = trLinkOptions('accounting', S.ix).ar, cur = row.ar;
+  const past = open.filter(o => o.due && o.due < S.ix.today), rest = open.filter(o => !(o.due && o.due < S.ix.today));
+  const opt = (o) => '<option value="' + _trE(o.id) + '"' + (o.id === cur ? ' selected' : '') + '>' + _trE(o.label) + '</option>';
+  _trDialog(S, row.arHow === 'picked' ? 'Change the receivable' : 'Link a receivable', '"' + (row.subject || '(no subject)') + '" — to ' + row.to,
+    '<form class="sr-form"><label>Receivable<select class="sr-in" name="ar"><option value=""' + (cur ? '' : ' selected') + '>No receivable</option>' +
+      (cur && !open.some(o => o.id === cur) ? '<option value="' + _trE(cur) + '" selected>' + _trE(cur) + '</option>' : '') +
+      (past.length ? '<optgroup label="Past due">' + past.map(opt).join('') + '</optgroup>' : '') +
+      (rest.length ? '<optgroup label="Not due yet">' + rest.map(opt).join('') + '</optgroup>' : '') + '</select></label>' +
+    '<p class="sr-help">A linked email counts as a collection follow-up, and is numbered with that customer\'s other follow-ups.</p>' +
+    '<div class="sr-formfoot"><span></span><button type="submit" class="btn-sm primary">Save</button></div></form>', back,
+    (form) => {
+      S.state.mailArs = S.state.mailArs || {};
+      S.state.mailArs[id] = String(form.elements.ar.value || '').trim();
       _trClose(); _trRefresh(S); _trSave(S);
     });
 }

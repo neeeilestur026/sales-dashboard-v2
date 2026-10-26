@@ -177,7 +177,7 @@ eq('quotes within 48 h: Q-NEW, 25 h from PR-A', [t(A, 'within48').text, t(A, 'wi
 eq('open quotations: his Sent ones, not won, lost, Kim\'s or demo (400k+300k+200k+50k+60k+100k+250k)', [t(A, 'openQuotes').value, t(A, 'openQuotes').status], [1360000, 'red']);
 const mine = (rep, now) => JSON.parse(run('JSON.stringify(srMineTiles(IX, ME, "2026-10-20", ' + rep + ', ' + (now || '17 * 60') + '))'));
 const withCalls = (n) => 'Object.assign(srBlank(), { lines: Array.from({ length: ' + n + ' }, (_, i) => srNewLine({ type: "Call", company: "C" + i }, "G", "2026-10-20T0" + (i % 9) + ":00:00.000Z")) })';
-eq('row B in the prompt\'s order', mine('REP').map(x => x.key), ['calls', 'followUps', 'booked', 'visits']);
+eq('row B in the prompt\'s order, and A371 Other tasks last', mine('REP').map(x => x.key), ['calls', 'followUps', 'booked', 'visits', 'otherTasks']);
 eq('calls: 13 lines + 1 on the old page = 14 on a finished day is red', [t(mine(withCalls(13)), 'calls').value, t(mine(withCalls(13)), 'calls').status], [14, 'red']);
 eq('  15 is not red', t(mine(withCalls(14)), 'calls').status, 'watch');
 eq('  20 is on pace', t(mine(withCalls(19)), 'calls').status, 'ok');
@@ -302,7 +302,7 @@ const keepLink = run('_srLinkOptionsHtml("dr|DR-0207", "DR-0207")');
   ok('  before a contact is picked, how many there are', /2 contacts to pick from/.test(run('_srCallHintHtml(srCallLookup(IXC, ME, "Philcement Corp.", ""), "Philcement Corp.")')));
   ok('  and a new company says it is not in the book', run('_srCallHintHtml(srCallLookup(IXC, ME, "Some New Plant", ""), "Some New Plant")') === 'Not in the Client Book.');
   ok('  a company typed in another case is logged as the book spells it', /company: book\.client \? book\.client\.company : company/.test(fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8')));
-  ok('  the other line dialogs\' company fields pick from the same list', (fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8').match(/name="company" list="srBookCos"/g) || []).length === 4);
+  ok('  the other line dialogs\' company fields pick from the same list', (fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8').match(/name="company" list="srBookCos"/g) || []).length === 5);   // A371 — Other task too
   C.__keepIx = keep; run('SR_UI.ix = __keepIx;');
 }
 ok('editing a line keeps its own link on offer, chosen, even when it is not in today\'s lists (a DR number)', /<option value="dr\|DR-0207" selected>Keep: DR-0207<\/option>/.test(keepLink), keepLink.slice(0, 200));
@@ -311,6 +311,21 @@ ok('editing a line keeps its own link on offer, chosen, even when it is not in t
   ok('A350: Link to has a "Clients (Client Book)" group', /<optgroup label="Clients \(Client Book\)"><option value="client\|CB-0001">Philcement Corp\. \(Quotation sent\)<\/option>/.test(h), h.slice(-400));
   const cl = run('(function () { var k = SR_UI.state; SR_UI.state = srBlank(); SR_UI.state.lines.push(srNewLine({ type: "Call", company: "Philcement Corp.", linkType: "client", linkId: "CB-0001", linkLabel: "Philcement Corp. (Quotation sent)" }, "Gerald Lucena", "2026-10-20T05:00:00.000Z")); var h = _srLogRows(); SR_UI.state = k; return h; })()');
   ok('  a line linked to a client opens that client in the Client Book', /<a href="director-client-book\.html\?client=CB-0001">Philcement Corp\. \(Quotation sent\)<\/a>/.test(cl), cl.slice(0, 600));
+}
+{
+  /* A371 — Neil, 26 Oct: "add other tasks". */
+  const ot = run(`(function () { var k = SR_UI.state; SR_UI.state = srBlank();
+    SR_UI.state.lines.push(srNewLine({ type: "Other task", note: "Prepared the accreditation forms", company: "Philcement Corp.", result: "Done" }, "Gerald Lucena", "2026-10-20T05:00:00.000Z"));
+    SR_UI.state.lines.push(srNewLine({ type: "Call", company: "Zeta Mining", result: "Reached" }, "Gerald Lucena", "2026-10-20T05:10:00.000Z"));
+    var t = srMineTiles(IX, ME, "2026-10-20", SR_UI.state, 17 * 60).filter(function (x) { return x.key === "otherTasks"; })[0], h = _srLogRows(), lk = srLinked(SR_UI.state, "2026-10-20");
+    SR_UI.state = k; return JSON.stringify({ t: t, h: h, lk: lk, type: SR_LINE_TYPES.indexOf("Other task") >= 0 }); })()`);
+  const O = JSON.parse(ot);
+  ok('A371: a rep can log an Other task; it is its own tile', O.type && O.t.label === 'Other tasks' && O.t.value === 1 && O.t.items[0].what === 'Prepared the accreditation forms', O.t);
+  ok('  in the log, what was done comes first, the company under it, and it asks for no link', /<td>Other task<\/td><td><b>Prepared the accreditation forms<\/b><span class="sr-sub">Philcement Corp\.<\/span>/.test(O.h) && (O.h.match(/No link — add one/g) || []).length === 1, O.h.slice(0, 700));
+  ok('  and it does not count against "lines with a link"', O.lk.total === 1);
+  ok('  the log offers + Other task', /data-new="Other task">\+ Other task</.test(fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8')));
+  const dlg = run(`(function () { var h = ''; var keep = _srDialog; _srDialog = function (t, s, inner) { h = t + '|' + inner; }; _srLineDialog("Other task", null, null); _srDialog = keep; return h; })()`);
+  ok('  its form: what you did (required), and the company and result if any', /^Other task\|/.test(dlg) && /What you did \(one line\)<input type="text" class="sr-in" name="note" required/.test(dlg) && /Company \(if any\)<input type="text" class="sr-in" name="company" list="srBookCos" value="">/.test(dlg) && !/name="link"/.test(dlg), dlg.slice(0, 500));
 }
 const desk = run('_srVisitsHtml(srDayType(IX, ME, "2026-10-20", srBlank()))');
 ok('a desk day: the slim card, no visit form', /none booked today/.test(desk) && /Log an unplanned visit/.test(desk) && !/srVisitForm/.test(desk));

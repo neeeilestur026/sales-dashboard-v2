@@ -276,7 +276,8 @@ function _srRenderDay() {
     '<section class="sr-block"><div class="sr-bar"><h3>' + (ro ? _srE(me.first) + '\'s log today' : 'My log today') + '</h3>' + (ro ? '' : '<div class="sr-quick">' +
       '<button type="button" class="dh-btn" data-new="Quote result">+ Quote result</button>' +
       '<button type="button" class="dh-btn" data-new="Performance call">+ Performance call</button>' +
-      '<button type="button" class="dh-btn" data-new="Sales order">+ Sales order</button></div>') + '</div>' +
+      '<button type="button" class="dh-btn" data-new="Sales order">+ Sales order</button>' +
+      '<button type="button" class="dh-btn" data-new="Other task">+ Other task</button></div>') + '</div>' +   // A371
       '<div class="sr-scroll"><table class="sr-table sr-log"><thead><tr><th scope="col">Time</th><th scope="col">Type</th><th scope="col">Company, person, what happened</th>' +
         '<th scope="col">Result</th><th scope="col">Link</th><th scope="col"><span class="sr-sr">Change</span></th></tr></thead><tbody id="srLog"></tbody></table></div></section>' +
 
@@ -455,9 +456,10 @@ function _srLogRows() {
     const link = l.linkType && l.linkType !== 'none' && l.linkId
       ? '<span class="sr-link">' + (l.linkType === 'quotation' || l.linkType === 'pr' ? _srRef(l.linkId)
           : l.linkType === 'client' ? '<a href="director-client-book.html?client=' + encodeURIComponent(l.linkId) + '">' + _srE(l.linkLabel || l.linkId) + '</a>' : _srE(l.linkLabel || l.linkId)) + '</span>'
-      : (l.voidedAt ? '—' : SR_UI.ro ? '<span class="sr-dim">No link</span>' : '<button type="button" class="sr-nolink" data-addlink="' + l.id + '">No link — add one</button>');
+      : (l.voidedAt || l.type === 'Other task' ? '—' : SR_UI.ro ? '<span class="sr-dim">No link</span>' : '<button type="button" class="sr-nolink" data-addlink="' + l.id + '">No link — add one</button>');
     return '<tr class="' + (l.voidedAt ? 'void' : '') + '"><td class="tm">' + _srE(srClock(l.loggedAt)) + '</td><td>' + _srE(l.type) + '</td>' +
-      '<td><b>' + _srE(l.company || '—') + '</b>' + (l.person ? ' · ' + _srE(l.person) : '') + (l.note ? '<span class="sr-sub">' + _srE(l.note) + '</span>' : '') +
+      (l.type === 'Other task' ? '<td><b>' + _srE(l.note || '—') + '</b>' + (l.company ? '<span class="sr-sub">' + _srE(l.company) + '</span>' : '')   // A371 — what was done comes first
+        : '<td><b>' + _srE(l.company || '—') + '</b>' + (l.person ? ' · ' + _srE(l.person) : '') + (l.note ? '<span class="sr-sub">' + _srE(l.note) + '</span>' : '')) +
         (l.voidedAt ? '<span class="sr-sub">Voided ' + _srE(srClock(l.voidedAt)) + ': ' + _srE(l.voidReason) + '</span>' : '') +
         (l.editedAt && !l.voidedAt ? '<span class="sr-sub">Edited ' + _srE(srClock(l.editedAt)) + ': ' + _srE(l.editReason) + '</span>' : '') + '</td>' +
       '<td>' + _srE(l.result || '—') + (l.reason ? '<span class="sr-sub">' + _srE(l.reason) + '</span>' : '') + (l.nextDate ? '<span class="sr-sub">next ' + _srE(l.nextDate) + '</span>' : '') + '</td>' +
@@ -752,7 +754,7 @@ function _srClose() {
   if (SR_UI.back && SR_UI.back.focus) SR_UI.back.focus();
 }
 
-/** + Quote result / + Performance call / + Sales order, and Edit on any line. */
+/** + Quote result / + Performance call / + Sales order / + Other task, and Edit on any line. */
 function _srLineDialog(type, editId, back) {
   const line = editId ? SR_UI.state.lines.find(l => l.id === editId) : null;
   const t = line ? line.type : type, v = line || {};
@@ -776,6 +778,10 @@ function _srLineDialog(type, editId, back) {
       '<label>If a problem, owner<input type="text" class="sr-in" name="reason" value="' + _srE(v.reason) + '" placeholder="Who fixes it"></label></div>' +
       '<label>What happened (one line)<input type="text" class="sr-in" name="note" value="' + _srE(v.note) + '" placeholder="Pump working, next shutdown in Feb"></label>' +
       '<p class="sr-help">A performance call is made 7 days after a delivery.</p>';
+  } else if (t === 'Other task') {   // A371 — anything else done today: what, and for whom when it was for a client
+    fields = '<label>What you did (one line)<input type="text" class="sr-in" name="note" required maxlength="200" value="' + _srE(v.note) + '" placeholder="Prepared the accreditation forms for Philcement"></label>' +
+      '<div class="sr-grid2"><label>Company (if any)<input type="text" class="sr-in" name="company" list="srBookCos" value="' + _srE(v.company) + '"></label>' +
+      '<label>Result (if any)<input type="text" class="sr-in" name="result" value="' + _srE(v.result) + '" placeholder="Done"></label></div>';
   } else if (t === 'Sales order') {
     fields = '<div class="sr-grid2"><label>Company<input type="text" class="sr-in" name="company" list="srBookCos" required value="' + _srE(v.company) + '"></label>' +
       '<label>Client PO no.<input type="text" class="sr-in" name="result" required value="' + _srE(v.result) + '" placeholder="4500-0000"></label></div>' +

@@ -176,6 +176,8 @@ body.dh .tr-mail .x b { font-weight:600; color:var(--dh-ink); }
 body.dh .tr-mail .sr-chip { margin-right:4px; }
 body.dh .tr-mail .tr-mailbtns { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }   /* A365 — count it, link its PR */
 body.dh .tr-mail .x a { color:var(--dh-ink); }
+body.dh .tr-mail .tr-fu { color:var(--dh-ink-2); font-weight:600; }   /* A371 — first email, or which follow-up */
+body.dh .tr-mail .tr-fu.more { color:var(--dh-navy-text); }
 @media (max-width: 760px) {
   body.dh .tr-pick { flex-direction:column; align-items:stretch; gap:4px; width:100%; }
   body.dh .tr-pick .sr-in { min-width:0; width:100%; }

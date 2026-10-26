@@ -112,7 +112,7 @@ sec('2 · lead gen');
   ok('  and red once the day has ended (4:30)', tile(late.portal, 'conversations').status === 'red' && tile(late.portal, 'suppliers').status === 'red' && tile(late.portal, 'attempts').status === 'ok');
   ok('the end-of-day report is not a tile (the 4:30 report is)', !day.portal.some(t => t.key === 'eod'));
   eq('this week so far: leads, suppliers handed off, presentations, reply rate', day.weekly.map(t => [t.key, t.text, t.status]),
-     [['w_leads', '4', 'none'], ['w_suppliersHandedOff', '30', 'ok'], ['w_meetings', '1', 'none'], ['w_replyRate', '8.5%', 'none']]);
+     [['w_leads', '4', 'none'], ['w_suppliersHandedOff', '30', 'ok'], ['w_replyRate', '8.5%', 'none']]);   // A371 — Presentations booked removed
   const none = J('trTiles("leadgen", trIndex({ today: "2026-10-22" }), "Lea Gen", "2026-10-22", 600)');
   ok('without the counts, the tiles say so instead of showing zeros', none.portal.every(t => t.text === '—' && t.status === 'nr'));
   const links = J('trLinkOptions("leadgen", IX)');
@@ -153,14 +153,15 @@ sec('4 · typed lines, the snapshot, the queue');
   run('trVoidLine(REP.lines[1], "Logged by mistake", "2026-10-22T06:00:00.000Z");');
   ok('  struck through, never deleted', J('REP.lines.length') === 3 && J('REP.lines[1].voidReason') === 'Logged by mistake');
   const mine = J('trMineTiles("accounting", REP, "2026-10-22")');
-  eq('the typed tiles count each type, voided lines left out', mine.map(t => [t.label, t.value]), [['Collection call', 1], ['Collection email', 0], ['Billing', 1], ['Bank reconciliation', 0], ['Month check', 0], ['Travel report', 0], ['Other tasks', 0]]);
+  eq('the typed tiles count each type, voided lines left out', mine.map(t => [t.label, t.value]), [['Collection call', 1], ['Collection email', 0], ['Billing', 1], ['Bank reconciliation', 0], ['Month check', 0], ['Travel report', 0], ['Accounting records', 0], ['Other tasks', 0]]);
   eq('lines with a link: of the lines that can take one', J('trLinked("accounting", REP, "2026-10-22")'), { linked: 1, total: 1 });
   const T = J('trTiles("accounting", IX, "Rojan Leo Francisco", "2026-10-22", 600)').portal;
   const snap = J('trSnapshot(' + JSON.stringify(T) + ', trMineTiles("accounting", REP, "2026-10-22"), "2026-10-22", "Rojan Leo Francisco")');
   ok('the snapshot keeps every number, and whose records they were', snap.person === R && snap.invoices.text === '2 · ₱150,000' && snap.m_Collectioncall.value === 1, snap);
   eq('the queue: urgent first, then overdue, to do, ready', J('trQueue([{ text: "a", tone: "ok" }, { text: "b", tone: "urgent" }, { text: "c", tone: "info" }, { text: "d", tone: "warn" }]).map(function (q) { return q.text; })'), ['b', 'd', 'c', 'a']);
   eq('a saved report is read safely, with its person, only true/false email marks, and only PR numbers (or "none") as email links', J('trFill({ person: "X", lines: [{ id: "a" }, null, {}], pm: { blocker: " no blocker " }, mailMarks: { m1: true, m2: false, m3: "yes" }, mailPrs: { m1: "pr-202610-067", m2: "", m3: "nonsense", m4: 7, m5: "PR-2025-014" } }, "admin", "Y")'),
-     { v: 1, kind: 'admin', person: 'X', lines: [{ id: 'a' }], pm: { blocker: 'no blocker' }, mailMarks: { m1: true, m2: false }, mailPrs: { m1: 'PR-202610-067', m2: '', m5: 'PR-2025-014' } });
+     { v: 1, kind: 'admin', person: 'X', lines: [{ id: 'a' }], pm: { blocker: 'no blocker' }, mailMarks: { m1: true, m2: false }, mailPrs: { m1: 'PR-202610-067', m2: '', m5: 'PR-2025-014' }, mailArs: {} });
+  eq('A371: and only receivable numbers (or "none") as an email\'s receivable', J('trFill({ mailArs: { m1: "AR-202608-009", m2: "", m3: "<script>", m4: 7, m5: "AR 126" } }, "accounting", "Y").mailArs'), { m1: 'AR-202608-009', m2: '', m5: 'AR 126' });
 }
 
 sec('4b · A352: the sent mail — collection follow-ups (accounting), price requests to suppliers (admin)');
@@ -212,6 +213,34 @@ sec('4b · A352: the sent mail — collection follow-ups (accounting), price req
   const Wa = J('trWeek("admin", IXM, "Ana Admin", "2026-10-22", { "2026-10-20": { report: { mailPrs: { w2: "PR-202610-067" } } } }, __wa)');
   const Wb = J('trWeek("admin", IXM, "Ana Admin", "2026-10-22", {}, __wa)');
   eq('A365: the week\'s price-request column counts a day\'s request only with the PR linked that day', [Wa.rows[1].vals[Wa.heads.length - 1], Wb.rows[1].vals[Wb.heads.length - 1]], [1, 0]);
+
+  /* A371 — Neil, 26 Oct: "allow to link or connect collection email to email sent" and "make sure collection follow-up
+     emails can identify follow up on the email sent or sort the follow up emails". */
+  const Al = J('trMail("accounting", IXM, __acctMail, { a4: false }, null, { a3: "AR-1", a4: "AR-1", a2: "" })');
+  eq('A371: an email linked to a receivable counts (its customer, why), unless marked not to; "none" unlinks the guess', Al.map(r => [r.id, r.counted, r.ar, r.arHow]),
+     [['a1', true, '', ''], ['a2', true, '', ''], ['a3', true, 'AR-1', 'picked'], ['a4', false, 'AR-1', 'picked'], ['a5', true, 'AR-2', 'guess']]);
+  eq('  the linked one is the receivable\'s customer, and says why', [Al[2].org, Al[2].why, Al[3].org], ['Philcement Corp', 'linked to receivable AR-1', 'Philcement Corp']);
+  eq('  a subject\'s thread, and whether it is a reply', J('["Re: Fwd: SOA October", "RE[2]: SOA  October", "SOA October", "Follow-up"].map(function (s) { return [trThread(s), TR_REPLY_RE.test(s)]; })'),
+     [['soa october', true], ['soa october', true], ['soa october', false], ['follow-up', false]]);
+  C.__fuMail = [mail('f1', 'SOA October', 'ap@zetamining.com', '09:00'), mail('f2', 'Re: SOA October', 'ap@zetamining.com', '15:00'), mail('f3', 'Reminder: balance', 'ap@unknownbuyer.com', '10:00'),
+                mail('f4', 'Lunch', 'friend@gmail.com', '12:00'), mail('f5', 'Payment', 'buyer@philcement.ph', '11:00')];
+  C.__fuWeek = { '2026-10-20': [mail('e1', 'SOA September', 'ap@zetamining.com', '09:00')], '2026-10-21': [mail('e2', 'Reminder: balance', 'ap@unknownbuyer.com', '09:00')] };
+  C.__fuSaved = { '2026-10-08': { report: { mailArs: { old1: 'AR-2', old2: '' } } }, '2026-10-20': { report: { mailArs: { e1: 'AR-2' } } } };
+  run('var FU = trFollowUps(trMail("accounting", IXM, __fuMail, {}, null, { f5: "AR-1" }), "2026-10-22", trCollectEarlier(IXM, "2026-10-22", __fuSaved, __fuWeek));');
+  eq('each collection email says which follow-up it is: Zeta\'s third and fourth (one on 8 Oct, one this Tuesday), the unknown buyer\'s second by its thread, Philcement\'s first',
+     J('FU.map(function (r) { return [r.id, r.fu ? r.fu.n : null, r.fu ? r.fu.first : null]; })'),
+     [['f1', 3, '2026-10-08'], ['f3', 2, '2026-10-21'], ['f5', 1, ''], ['f4', null, null], ['f2', 4, '2026-10-08']]);
+  eq('  in words', J('FU.filter(function (r) { return r.fu; }).map(trFollowUpText)'), ['Follow-up 3 to Zeta Mining — first sent Thu 8 Oct', 'Follow-up 2 — first sent Wed 21 Oct', 'First email to Philcement Corp', 'Follow-up 4 to Zeta Mining — first sent Thu 8 Oct']);
+  ok('  a reply with nothing before it in what was read still says it follows up', /^Follow-up to Zeta Mining — a reply in an earlier thread$/.test(J('trFollowUpText(trFollowUps(trMail("accounting", IXM, [__fuMail[1]], {}), "2026-10-22", [])[0])')));
+  eq('sorted by customer: each customer\'s follow-ups together in time order (A to Z), the other emails after', J('trMailGroups(FU).map(function (g) { return [g.label, g.rows.map(function (r) { return r.id; })]; })'),
+     [['Philcement Corp', ['f5']], ['Reminder: balance', ['f3']], ['Zeta Mining', ['f1', 'f2']], ['Other emails', ['f4']]]);
+  C.__wl = { '2026-10-21': [mail('w1', 'Hello', 'buyer@philcement.ph')] };
+  eq('  the week column counts a day\'s linked email too', J('trWeek("accounting", IXM, "Rojan Leo Francisco", "2026-10-22", { "2026-10-21": { report: { mailArs: { w1: "AR-1" }, mailMarks: {} } } }, __wl).rows[2].vals[3]'), 1);
+  ok('A371: accounting can log an entry made in the accounting Google sheet', J('TR_ROLES.accounting.lines.map(function (l) { return l.type; })').indexOf('Accounting record') >= 0 &&
+     /accounting Google sheet/.test(J('TR_ROLES.accounting.typedNote')) && J('trMineTiles("accounting", trBlank("accounting", "X"), "2026-10-22").map(function (t) { return t.label; })').indexOf('Accounting records') >= 0);
+  ok('A371: lead gen no longer has Rep request (an old line stays editable) nor Presentations booked', J('TR_ROLES.leadgen.lines.map(function (l) { return l.type; })').join() === 'Accreditation,Other task' &&
+     J('TR_ROLES.leadgen.retired.map(function (l) { return l.type; })').join() === 'Rep request' && !J('TR_ROLES.leadgen.weekly.map(function (w) { return w[0]; })').includes('meetings') &&
+     !J('trMineTiles("leadgen", trBlank("leadgen", "X"), "2026-10-22").map(function (t) { return t.label; })').includes('Rep request'));
 }
 
 sec('5 · the page');
@@ -351,6 +380,30 @@ async function boot(roleKey, o) {
   const ms2 = await boot('accounting', { mail: 'setup' });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   ok('a mailbox that is not connected says so, and the tiles show "—"', /mailbox is not connected/.test(ms2.part('[data-mail]').innerHTML) && /Collection follow-up emails<\/span><span class="v">—<\/span>/.test(ms2.part('[data-tiles="portal"]').innerHTML));
+  /* A371 — Link a receivable, which follow-up each one is, and the by-customer order */
+  const mr = await boot('accounting', { own: true, mailToday: [{ messageId: 'm1', subject: 'SOA as of October', recipient: 'ap@zetamining.com', name: 'Zeta AP', sentAt: '2026-10-22T09:15:00+08:00' },
+    { messageId: 'm2', subject: 'Re: SOA as of October', recipient: 'ap@zetamining.com', name: 'Zeta AP', sentAt: '2026-10-22T14:00:00+08:00' },
+    { messageId: 'm3', subject: 'Hello', recipient: 'buyer@philcement.ph', name: 'Philcement buyer', sentAt: '2026-10-22T10:00:00+08:00' }] });
+  for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  const mlr = mr.part('[data-mail]').innerHTML;
+  ok('A371: every email offers Link a receivable; a guessed one shows the customer\'s past-due receivable', /data-mailar="m3">Link a receivable</.test(mlr) && /Receivable <a href="flow-ar-aging\.html">AR-2<\/a> — the customer's past-due one/.test(mlr), mlr.slice(0, 900));
+  ok('  each collection email says which it is: the first email to Zeta, then its follow-up', /First email to Zeta Mining/.test(mlr) && /<span class="sr-sub tr-fu more">Follow-up 2 to Zeta Mining — first sent earlier today<\/span>/.test(mlr), mlr);
+  const dlgAr = mr.run(`(function () { var h = '', f = null; _trDialog = function (S, t, s, inner, back, onSubmit) { h = inner; f = onSubmit; }; _trMailArDialog(TR_UI.accounting, 'm3', null);
+    f({ elements: { ar: { value: 'AR-1' } } }); return h; })()`);
+  ok('  Link a receivable: "No receivable", then past due, then not due yet', /<option value="" selected>No receivable<\/option><optgroup label="Past due"><option value="AR-2">AR-2 — Zeta Mining/.test(dlgAr) && /<optgroup label="Not due yet"><option value="AR-1">AR-1 — Philcement Corp/.test(dlgAr), dlgAr.slice(0, 600));
+  await mr.run('TR_UI.accounting.chain');
+  const svAr = mr.run('__posts.filter(function (x) { return x.a === "saveProofReport"; }).pop()');
+  ok('  picking one saves it with the report, and the email counts with its receivable', svAr && JSON.parse(svAr.p.reportJson).mailArs.m3 === 'AR-1' &&
+     /Collection follow-up emails<\/span><span class="v">3<\/span>/.test(mr.part('[data-tiles="portal"]').innerHTML) && /data-mailar="m3">Change receivable</.test(mr.part('[data-mail]').innerHTML), svAr && svAr.p.reportJson);
+  ok('  the list can be sorted by time or by customer', /data-mailsort="time" aria-pressed="true">By time/.test(mr.part('[data-mailsorts]').innerHTML) && /data-mailsort="customer" aria-pressed="false">Collection follow-ups by customer/.test(mr.part('[data-mailsorts]').innerHTML));
+  mr.run('TR_UI.accounting.mailSort = "customer"; _trRefresh(TR_UI.accounting);');
+  const grp = mr.part('[data-mail]').innerHTML;
+  ok('  by customer: each customer\'s emails together, A to Z', /<h4 class="tr-sub">Philcement Corp <span class="sr-dim">1 email<\/span><\/h4>/.test(grp) && /<h4 class="tr-sub">Zeta Mining <span class="sr-dim">2 emails<\/span><\/h4>/.test(grp) &&
+     grp.indexOf('Philcement Corp <span') < grp.indexOf('Zeta Mining <span'), grp.slice(0, 600));
+  const mrd = await boot('accounting');
+  for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  ok('  the director\'s read-only view can sort, but has no Link a receivable', !/data-mailar/.test(mrd.part('[data-mail]').innerHTML) && /data-mailsort="customer"/.test(mrd.part('[data-mailsorts]').innerHTML));
+  ok('  and the log offers + Accounting record', /data-new="Accounting record">\+ Accounting record</.test(mr.run('_trBodyHtml(TR_UI.accounting)')));
   const ma = await boot('admin', { own: true, mailToday: [{ messageId: 'q1', subject: 'RFQ: torque wrench', recipient: 'sales@enerpac.com', name: 'Enerpac', sentAt: '2026-10-22T09:00:00+08:00' }] });
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
   ok('admin: reads the supplier list; a price request without its PR does not count yet, and nothing offers to type one', ma.run('__reads.map(function (r) { return r.a; })').indexOf('getSuppliers') >= 0 &&
