@@ -1,0 +1,58 @@
+/* A377 — the Hi-Escorp app (Neil, 27 Oct 2026: "the cheapest … one time payment only but should be mobile app"):
+   a Trusted Web Activity. It opens https://hi-escorp-portal-wufz.onrender.com full screen — no address bar, once the
+   portal serves /.well-known/assetlinks.json naming this app and its signing key — so every push to Render is in the
+   app at once. Staff install the signed app file directly; no store, no fee.
+   The signing key lives OUTSIDE the repo (~/Documents/app/CRM/HiEscorp-App-Signing-Key/key.properties, or the file
+   HX_KEY_PROPERTIES names). Keep it: every later version must be signed with the same key to install over the first. */
+plugins {
+    id 'com.android.application'
+}
+
+def keyProps = new Properties()
+def keyFile = file(System.getenv('HX_KEY_PROPERTIES') ?: "${System.getProperty('user.home')}/Documents/app/CRM/HiEscorp-App-Signing-Key/key.properties")
+if (keyFile.exists()) { keyFile.withInputStream { keyProps.load(it) } }
+
+def host = 'hi-escorp-portal-wufz.onrender.com'
+
+android {
+    namespace 'com.hiescorp.portal'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.hiescorp.portal'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        manifestPlaceholders = [hostName: host, defaultUrl: "https://${host}/"]
+        resValue 'string', 'appName', 'Hi-Escorp'
+        resValue 'string', 'assetStatements', "[{ \\\"relation\\\": [\\\"delegate_permission/common.handle_all_urls\\\"], \\\"target\\\": { \\\"namespace\\\": \\\"web\\\", \\\"site\\\": \\\"https://${host}\\\" } }]"
+    }
+
+    signingConfigs {
+        release {
+            if (keyProps['storeFile']) {
+                storeFile file(keyProps['storeFile'])
+                storePassword keyProps['storePassword']
+                keyAlias keyProps['keyAlias']
+                keyPassword keyProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

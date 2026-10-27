@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.hiescorp.portal",
+      "sha256_cert_fingerprints": ["C5:6F:C3:CC:80:EC:BD:5F:77:F2:BA:CA:48:5C:B6:66:66:69:23:B6:E2:2D:F6:D5:F2:B8:AB:29:BC:D0:1D:CF"]
+    }
+  }
+]

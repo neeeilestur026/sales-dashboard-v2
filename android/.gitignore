@@ -1,0 +1,10 @@
+# A377 — build output and this machine's paths; the signing key never lives in the repo
+.gradle/
+build/
+app/build/
+local.properties
+*.keystore
+*.jks
+key.properties
+*.apk
+*.aab

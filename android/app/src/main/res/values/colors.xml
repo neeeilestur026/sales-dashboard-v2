@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the portal's own colours: the navy of the logo above, white below and behind the splash -->
+<resources>
+    <color name="statusBar">#1B2461</color>
+    <color name="navigationBar">#FFFFFF</color>
+    <color name="background">#FFFFFF</color>
+    <color name="iconBackground">#FFFFFF</color>
+</resources>

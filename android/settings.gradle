@@ -1,0 +1,10 @@
+// A377 — the Hi-Escorp Android app: a Trusted Web Activity that opens the live portal full screen.
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = 'HiEscorpPortal'
+include ':app'
