@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   _cbId('cbTable').addEventListener('keydown', cbListKeys);
   if (typeof window.addEventListener === 'function') window.addEventListener('resize', cbOnResize);
   await cbLoad();
+  if (typeof hxDeepLink === 'function') hxDeepLink(() => { const b = _cbId('cbAdd'); if (b && !b.disabled) cbAddDialog(b); });   // A378 — the phone app's + button
 });
 
 /* ── load ─────────────────────────────────────────────────────────────────────────────────────── */

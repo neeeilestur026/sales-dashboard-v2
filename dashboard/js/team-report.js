@@ -21,7 +21,8 @@ function _trE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s 
 function _trNowMin() { const d = new Date(); return ((d.getUTCHours() + 8) % 24) * 60 + d.getUTCMinutes(); }   // Manila, UTC+8
 function _trNowIso() { return new Date().toISOString(); }
 function _trName(u) { return String((u && (u.fullName || u.name || u.username)) || '').trim(); }
-function _trFirst(name) { return String(name || '').split(/\s+/)[0] || 'them'; }
+/* A378 — with nobody in the roster yet the report's own name stands in ("Accounting's mailbox"), never "them's" */
+function _trFirst(name, noun) { return String(name || '').split(/\s+/)[0] || noun || 'This person'; }
 function _trQ(S, sel) { return S.el.querySelector(sel); }
 function _trPickGet(role) { try { return localStorage.getItem('hx_tr_person:' + role) || ''; } catch (e) { return ''; } }
 function _trPickPut(role, name) { try { localStorage.setItem('hx_tr_person:' + role, name); } catch (e) {} }
@@ -175,7 +176,7 @@ async function _trOpenDay(S, day) {
   const savedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) || 0 : 0;
   S.state = trFill(draft && draft.t > savedAt ? draft.report : saved ? saved.report : null, S.role, S.person);
   S.unsaved = !!(draft && draft.t > savedAt);
-  S.body.innerHTML = '<div class="dh-empty">Reading ' + _trE(_trFirst(S.person)) + '\'s day…</div>';
+  S.body.innerHTML = '<div class="dh-empty">Reading ' + _trE(_trFirst(S.person, S.cfg.noun)) + '\'s day…</div>';
   await _trPersonLoad(S);
   if (seq !== S.seq) return;
   _trRender(S);
@@ -188,7 +189,7 @@ async function teamReportShow(roleKey, person, day) {
   if (_srSame(S.person, name)) { if (day && day !== S.day) await _trOpenDay(S, day); return; }
   const seq = S.seq = (S.seq || 0) + 1;
   S.person = name; S.people = [name]; S.viewUser = String(person.username || ''); S.weekMail = {}; S.weekMailFor = '';
-  S.body.innerHTML = '<div class="dh-empty">Reading ' + _trE(_trFirst(name)) + '\'s report…</div>';
+  S.body.innerHTML = '<div class="dh-empty">Reading ' + _trE(_trFirst(name, S.cfg.noun)) + '\'s report…</div>';
   const r = S.v179 && typeof postFlow === 'function' ? await postFlow('getProofReports', { kind: S.role, from: srAddDays(S.today, -42), to: S.today, user: name }).catch(() => null) : null;
   if (seq !== S.seq) return;
   S.backend = !!(r && r.success); S.backendMsg = r && !r.success ? String(r.message || '') : '';
@@ -275,7 +276,7 @@ function _trHeadHtml(S) {
     '<div class="sr-chips" data-chips></div>';
 }
 function _trBodyHtml(S) {
-  const who = _trFirst(S.person), notes = [];
+  const who = _trFirst(S.person, S.cfg.noun), notes = [];
   if (!S.backend) notes.push('<div class="dh-banner warn">' + (S.ro ? 'Each person\'s saved report needs the FlowAPI update (version ' + (S.view ? '185' : '184') + ') before it can be read here.' : 'Saving needs the FlowAPI update (version ' + (S.own ? '184' : '179') + '). Until it is pasted, what you type is kept on this computer only.') +
     (S.backendMsg && !/Unknown action|not a secured action|one of: sales/i.test(S.backendMsg) ? ' (' + _trE(S.backendMsg) + ')' : '') + '</div>');
   if (S.failed.length) notes.push('<div class="dh-banner warn">Could not read: ' + _trE(S.failed.join(', ')) + '. The numbers that need them may be short — reload the page.</div>');
@@ -344,12 +345,12 @@ function _trRenderQueue(S) {
   box.innerHTML = _trQueueHtml(S);
 }
 function _trQueueHtml(S) {
-  if (S.queue === null) return '<p class="dh-empty">Reading ' + _trE(_trFirst(S.person)) + '\'s list…</p>';
+  if (S.queue === null) return '<p class="dh-empty">Reading ' + _trE(_trFirst(S.person, S.cfg.noun)) + '\'s list…</p>';
   const tone = { urgent: 'red', warn: 'watch', info: '', ok: 'ok' };
   const rows = S.queue.map(q => '<li><span class="sr-chip ' + (tone[q.tone] || '') + '">' + _trE(q.tone === 'urgent' ? 'Urgent' : q.tone === 'warn' ? 'Overdue' : q.tone === 'ok' ? 'Ready' : 'To do') + '</span>' +
     '<a href="' + _trE(q.link) + '">' + _trE(q.text) + '</a><span class="amt">' + (q.amt ? _trE(srMoney(q.amt)) : '') + '</span></li>').join('');
   const fu = S.role === 'leadgen' ? S.ix.lg.followups.slice(0, 12) : [];
-  return (rows ? '<ul class="tr-queue">' + rows + '</ul>' : '<p class="dh-empty">Nothing waiting on ' + _trE(_trFirst(S.person)) + ' right now.</p>') +
+  return (rows ? '<ul class="tr-queue">' + rows + '</ul>' : '<p class="dh-empty">Nothing waiting on ' + _trE(_trFirst(S.person, S.cfg.noun)) + ' right now.</p>') +
     (fu.length ? '<h4 class="tr-sub">Follow-ups due today' + (S.ix.lg.followups.length > fu.length ? ' (first ' + fu.length + ' of ' + S.ix.lg.followups.length + ')' : '') + '</h4><ul class="tr-queue">' +
       fu.map(f => '<li><span class="sr-chip">' + _trE(f.stage || 'Follow-up') + '</span><span>' + _trE([f.name, f.company].filter(Boolean).join(', ')) +
         '<span class="sr-sub">' + _trE(f.action || '') + (f.overdue > 0 ? ' — ' + f.overdue + ' day' + (f.overdue === 1 ? '' : 's') + ' late' : '') + '</span></span><span></span></li>').join('') + '</ul>' : '');
@@ -357,7 +358,7 @@ function _trQueueHtml(S) {
 
 /** A352 — the day's sent mail: each email, whether it counts and why, and a button to correct it. */
 function _trMailHtml(S, rows) {
-  const who = _trFirst(S.person), st = S.mail.state, cfg = S.cfg.mail;
+  const who = _trFirst(S.person, S.cfg.noun), st = S.mail.state, cfg = S.cfg.mail;
   if (st === 'loading') return '<p class="dh-empty">Reading ' + _trE(who) + '\'s sent mail…</p>';
   if (st === 'setup') return '<p class="dh-empty">' + _trE(who) + '\'s mailbox is not connected to the portal, so their emails cannot be counted. Type them in My log meanwhile.</p>';
   if (st === 'none') return '<p class="dh-empty">There is no login to read a mailbox for.</p>';
@@ -410,7 +411,7 @@ function _trRenderFeed(S) {
   _trQ(S, '[data-feedlist]').innerHTML = shown.length ? '<ul class="sr-feed">' + shown.map(x => '<li><span class="tm">' + _trE(x.time || '—') + '</span>' +
     '<span class="sr-type">' + _trE(x.module) + '</span><span class="x">' + (x.ref ? '<b>' + _trE(x.ref) + '</b> ' : '') + _trE(x.action) + (x.text ? ' — ' + _trE(x.text) : '') + '</span>' +
     '<span class="amt">' + (x.amount ? _trE(srMoney(x.amount)) : '') + '</span></li>').join('') + '</ul>'
-    : '<p class="dh-empty">' + (S.ix.activity.length || S.role === 'leadgen' ? 'Nothing logged for ' + _trE(_trFirst(S.person)) + ' on this day.' : 'The activity log could not be read.') + '</p>';
+    : '<p class="dh-empty">' + (S.ix.activity.length || S.role === 'leadgen' ? 'Nothing logged for ' + _trE(_trFirst(S.person, S.cfg.noun)) + ' on this day.' : 'The activity log could not be read.') + '</p>';
 }
 
 function _trPmHtml(S, n, saved) {

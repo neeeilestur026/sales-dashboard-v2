@@ -1639,6 +1639,29 @@ function flowFormToggleInit(label, onChange, cardId) {
   if (onChange) onChange();
 }
 
+/* A378 — an empty list, said in one designed box (.flow-empty; the Apple look draws its tray) and, where the person can
+   add the first one, the way to: act = [label, the form's first field] opens this page's form (flowOpenNew). The
+   button shows only while that form is on the page for this person. text is the page's own literal words. */
+function flowEmpty(text, act) {
+  let btn = '';
+  if (act) {
+    const f = document.getElementById(act[1]), card = (f && f.closest('.chart-card')) || document.getElementById('formCard');
+    if (card && card.offsetParent !== null) btn = '<button type="button" class="btn btn-sm btn-primary primary flow-empty-act" onclick="flowOpenNew(\'' + flowEsc(act[1]) + '\')">' + flowEsc(act[0]) + '</button>';
+  }
+  return '<div class="flow-empty"><p>' + text + '</p>' + btn + '</div>';
+}
+
+/* A378 — ?new=1 (the phone app's + button): this page's entry form, open, in view, the cursor in its first field.
+   Nothing happens where the person's role cannot see the form (its card is hidden). */
+function flowOpenNew(focusId) {
+  const f = focusId ? document.getElementById(focusId) : null;
+  const card = (f && f.closest('.chart-card')) || document.getElementById('formCard');
+  if (!card || card.offsetParent === null) return;
+  if (document.getElementById('formBody')) flowFormToggle(true);
+  card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (f && typeof f.focus === 'function') setTimeout(() => { try { f.focus({ preventScroll: true }); } catch (e) {} }, 350);
+}
+
 function flowFormToggle(force, onChange) {
   const body = document.getElementById('formBody');
   const btn = document.getElementById('formToggle');

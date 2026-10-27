@@ -22,6 +22,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (kind === 'sales') {
     document.getElementById('proof').hidden = false;
     await salesReport('proof', { own: true });
+    if (typeof hxDeepLink === 'function') hxDeepLink((v) => {   // A378 — "Log a call" from the phone app's + button
+      const f = v === 'call' ? document.getElementById('srCallForm') : null, inp = f && f.querySelector('[name="company"]');
+      if (!f) return;
+      f.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
+    });
   } else {
     document.getElementById('myReport').hidden = false;
     await teamReport('myReport', kind, { own: true });

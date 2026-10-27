@@ -247,7 +247,7 @@ function render() {
        the one case that matters: an invoice WAS issued and produced nothing. The banner runs first,
        so if that is what happened the reader is told so instead of being sent to do it again. */
     c.innerHTML = arReconcileBanner() +
-      '<p style="color:var(--hx-ink-3);">No receivables recorded' +
+      '<p class="flow-empty">No receivables recorded' +
       (arInvoices && arInvoices.length ? ' — even though there are invoices on the book.' : ' yet.') +
       '</p>';
     updateKpis([]); return;
@@ -262,7 +262,7 @@ function render() {
 
   const openTable = open.length
     ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}${flowLedgerGroupedBody(open, rowHtml, { due: r => r.dueDate, owed: r => flowNum(r.outstanding), cols: 11, foot: arFoot(open) })}</table>`
-    : '<p style="color:var(--hx-ink-3);">No open receivables in this period.</p>';
+    : '<p class="flow-empty">No open receivables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table flow-items" style="min-width:880px;">${arHead()}<tbody>${history.map(rowHtml).join('')}</tbody></table>` : '';
 

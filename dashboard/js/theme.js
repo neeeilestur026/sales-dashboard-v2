@@ -66,6 +66,7 @@
     var q = new URLSearchParams(location.search), look = q.get('look'), sk = q.get('skin'), mo = q.get('motion');
     if (look === 'classic') put('hx_look', 'classic'); else if (look === 'new' || look === 'apple') put('hx_look', 'apple');
     if (mo === 'on' || mo === 'off') put('hx_lg_motion', mo);
+    var ph = q.get('phone'); if (ph === 'off') put('hx_phone', 'off'); else if (ph === 'on') put('hx_phone', null);   // A378 — the phone layout, off for one person
     if (sk === 'off') put('hx_skin_pv', 'off'); else if ((sk === 'on' || sk === 'ledger') && local) put('hx_skin_pv', 'on'); else if (sk === 'reset') put('hx_skin_pv', null);
     put('hx_lg_me', null); put('hx_lg_pv', null); put('hx_lg_look', null);   // A345 — the Ledger-period keys, forgotten
   } catch (e) {}
@@ -85,6 +86,11 @@
       else { var vt = document.createElement('style'); vt.textContent = '@view-transition{navigation:auto}'; hd.appendChild(vt); }
       var js = document.createElement('script'); js.src = 'js/ledger.js'; hd.appendChild(js);
       var aj = document.createElement('script'); aj.src = 'js/apple.js'; hd.appendChild(aj);
+      /* A378 — the phone app (a tab bar, sheets, the + button, short homes) and the empty states: css/apple-phone.css,
+         js/apple-phone.js. The stylesheet holds the first paint, so a phone never shows the desktop order first. */
+      if (get('hx_phone', ['off']) !== 'off') h.setAttribute('data-phone', 'on');
+      var pc = document.createElement('link'); pc.rel = 'stylesheet'; pc.href = 'css/apple-phone.css'; pc.setAttribute('blocking', 'render'); hd.appendChild(pc);
+      var pj = document.createElement('script'); pj.src = 'js/apple-phone.js'; hd.appendChild(pj);
     } catch (e) {}
   } else if (loginPage() && sw() !== 'off') {
     try { document.documentElement.setAttribute('data-look', 'apple'); if (still) document.documentElement.setAttribute('data-motion', 'off'); } catch (e) {}

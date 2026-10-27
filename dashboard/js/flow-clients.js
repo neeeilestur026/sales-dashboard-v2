@@ -46,7 +46,7 @@ function render() {
   const c = document.getElementById('container');
   const q = (document.getElementById('cSearch').value || '').toLowerCase();
   const rows = cliData.filter(x => !q || String(x.customer).toLowerCase().includes(q) || String(x.contactPerson).toLowerCase().includes(q));
-  if (!rows.length) { c.innerHTML = `<p style="color:var(--hx-ink-3);">No clients yet.${cliViewer ? '' : ' Add one above (or it fills in when you save a purchase request).'}</p>`; return; }
+  if (!rows.length) { c.innerHTML = `<p class="flow-empty">No clients yet.${cliViewer ? '' : ' Add one above (or it fills in when you save a purchase request).'}</p>`; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:820px;"><thead><tr>
     <th>Customer</th><th>Contact</th><th>Email</th><th>Phone</th><th>Terms</th>${cliSg ? '<th>VAT</th><th>EWT</th>' : ''}<th></th></tr></thead><tbody>${rows.map(x => `
     <tr>

@@ -23,6 +23,19 @@ function hxToday() {
   try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
   catch (e) { const d = new Date(Date.now() + 8 * 3600000); return d.toISOString().slice(0, 10); }
 }
+/* A378 — a page's ?new=… link (the phone app's + button): fn(value) runs once, after the page's own start, and the
+   parameter leaves the address so a reload or Back does not open the form again. The + button on the same page asks
+   through the hx:new event instead of reloading. */
+function hxDeepLink(fn) {
+  const run = (v) => { try { fn(String(v || '')); } catch (e) {} };
+  window.hxDeepLinkReady = true;
+  document.addEventListener('hx:new', (e) => run(e.detail));
+  let v = null;
+  try { v = new URLSearchParams(location.search).get('new'); } catch (e) {}
+  if (!v || !/^[a-z0-9-]{1,20}$/i.test(v)) return;
+  try { const u = new URL(location.href); u.searchParams.delete('new'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) {}
+  setTimeout(() => run(v), 0);
+}
 /* A CSS token at draw time — Chart.js paints on a canvas and needs a real colour, not var(). */
 function hxToken(name, fallback) {
   try { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); if (v) return v; } catch (e) {}

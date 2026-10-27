@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // the prices were quoted from. Only an identifier travels in the URL, per the house convention.
   const focusPr = new URLSearchParams(location.search).get('pr');
   if (focusPr) prFocusRow(focusPr);
+  hxDeepLink(() => flowOpenNew('customer'));   // A378 — the phone app's + button
 });
 
 /** A267 — scroll to one request in the list and flash it, so arriving from a deep link lands on the
@@ -644,13 +645,13 @@ function renderAdminAllGrouped(rows) {
   const other = active.filter(r => !known.includes(r.status));
   html += prGroupSection('Other', other, { open: true });
   html += prGroupSection('Migrated / Old History', migrated, { history: true });
-  return html || '<p style="color:var(--hx-ink-3);">Nothing here.</p>';
+  return html || '<p class="flow-empty">Nothing here.</p>';
 }
 
 function renderList() {
   const c = document.getElementById('listContainer');
   const rows = filteredList();
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">Nothing here.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p class="flow-empty">Nothing here.</p>'; return; }
   // Admin "All": organize by stage + separate migrated/old history.
   if (prRole === 'admin' && !prFilter) { c.innerHTML = renderAdminAllGrouped(rows); return; }
   if (prOversight) {

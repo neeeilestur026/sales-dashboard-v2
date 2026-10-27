@@ -601,7 +601,7 @@ function soViewItems(no) {
     (cd ? ` · recorded COGS ${flowMoney(cd.totalCOGS, 'PHP')}` : '');
   const body = document.getElementById('soItemsBody');
   if (!items.length) {
-    body.innerHTML = '<p style="color:var(--hx-ink-3);">This order has no line items recorded.</p>';
+    body.innerHTML = '<p class="flow-empty">This order has no line items recorded.</p>';
   } else {
     let total = 0;
     const rows = items.map((it, i) => {
@@ -720,8 +720,8 @@ function renderSOs() {
   const meta = document.getElementById('soFilterMeta');
   if (meta) meta.textContent = `${rows.length} of ${soList.length} sales order${soList.length === 1 ? '' : 's'}`;
   setTimeout(soFitList, 0);   // A266: after the rows exist
-  if (!soList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No sales orders yet.</p>'; return; }
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No sales orders match the filters.</p>'; return; }
+  if (!soList.length) { c.innerHTML = '<p class="flow-empty">No sales orders yet.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p class="flow-empty">No sales orders match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>SO No</th><th>Quotation</th><th>Date</th><th>PO received</th><th>Customer</th><th>Status</th><th>Process</th><th>Supplier</th><th class="num">Total</th><th class="num">COGS</th><th>Items</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr><td><button class="link-btn" style="font-weight:600;" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${flowEsc(s.soNo)}</button>${!soHasPO[String(s.soNo)] ? ` <span class="flow-badge" style="background:var(--hx-warn-line);color:var(--hx-warn);" title="No purchase order raised for this sales order yet">no PO</span>` : ''}</td><td>${flowEsc(s.quotationNo)}</td><td>${flowDate(s.date)}</td><td>${soReceivedCell(s)}</td><td>${flowEsc(s.customer)}</td>
     <td>${soStatusBadge(s.status)}</td><td>${(p => `<span class="flow-badge ${p.cls}" title="${flowEsc(p.title)}">${p.label}</span>`)(soProcessState(s.soNo))}${soDispatchBadge(s.soNo)}</td><td>${soTypeBadge(s.supplierType)}</td><td class="num">${flowMoney(s.total, 'PHP')}</td><td class="num">${soCogsCell(s)}</td><td><button class="link-btn" title="See the items and each price" onclick='soViewItems("${flowEsc(s.soNo)}")'>${s.items.length}</button></td>

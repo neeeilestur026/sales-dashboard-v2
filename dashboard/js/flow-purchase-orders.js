@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addRow();
   }
   await loadPOs(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  hxDeepLink(() => flowOpenNew('supplier'));   // A378 — the phone app's + button
 });
 
 // Most recent sales order first (by date, then SO number).
@@ -344,7 +345,7 @@ async function loadPOs() {
     poList = (res && res.data) || [];
     const poReceived = {};
     ((rcRes && rcRes.data) || []).forEach(m => { if (m.poNo) poReceived[String(m.poNo)] = true; });
-    if (!poList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No purchase orders yet.</p>'; return; }
+    if (!poList.length) { c.innerHTML = flowEmpty('No purchase orders yet.', ['New purchase order', 'supplier']); return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>PO No</th><th>SO</th><th>Date</th><th>Supplier</th><th>Cur</th><th class="num">Total (FC)</th><th>Status</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${poList.map(p => {
       const st = p.status || 'Draft';
       const noteTip = (st === 'Rejected' && p.approvalNote) ? ` title="Reason: ${flowEsc(p.approvalNote)}"` : '';

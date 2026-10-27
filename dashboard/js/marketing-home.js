@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('metricsBtn').addEventListener('click', openMetModal);
   buildTabs();
   await loadAll();
+  hxDeepLink(() => { if (mCanEdit) openRecModal('leads', null); });   // A378 — the phone app's + button
 });
 
 async function loadAll() {

@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date').value = flowToday();
   await Promise.all([loadPOOptions(), loadAP()]);
   await loadReceiving(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  hxDeepLink(() => flowOpenNew('loadPO'));   // A378 — the phone app's + button
 });
 
 async function loadPOOptions() {
@@ -283,7 +284,7 @@ async function loadReceiving() {
   try {
     const res = await fetchFlow('getReceiving');
     const list = (res && res.data) || [];
-    if (!list.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No receiving records yet.</p>'; return; }
+    if (!list.length) { c.innerHTML = flowEmpty('No receiving records yet.', ['Receive goods', 'loadPO']); return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>MR No</th><th>PO</th><th>Date</th><th>Supplier</th><th class="num">VAT (PHP)</th><th class="num">Shipping (PHP)</th><th>Items</th><th></th></tr></thead><tbody>${list.map(m => `
       <tr><td>${flowEsc(m.mrNo)}</td><td>${flowEsc(m.poNo)}</td><td>${flowDate(m.date)}</td><td>${flowEsc(m.supplier)}</td>
       <td class="num">${flowMoney(m.vat, 'PHP')}</td><td class="num">${flowMoney(m.totalShipping, 'PHP')}</td><td>${m.items.length}</td>

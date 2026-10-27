@@ -102,7 +102,7 @@ function render() {
   const rows = invData.filter(r => !q || String(r.itemNo).toLowerCase().includes(q) || String(r.description).toLowerCase().includes(q));
   const c = document.getElementById('container');
   const fit = () => setTimeout(() => flowFitScroll('container'), 0);   // A273
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No items.</p>'; fit(); return; }
+  if (!rows.length) { c.innerHTML = '<p class="flow-empty">No items.</p>'; fit(); return; }
   /* A274 — two column sets, because the Catalog and the Stocks hold different things. Measured on
      the live 994: every one of the Catalog's 896 rows has zero balance, zero cost and zero total,
      so showing it five money columns was five columns of blanks on 90% of the table — and that,

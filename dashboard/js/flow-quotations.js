@@ -164,7 +164,7 @@ async function loadQuotations() {
     });
     try { qCanClose = await flowVersionAtLeast(91); } catch (e) { qCanClose = false; }  // A152: Close/Reopen need v91
     try { qCanTrack = await flowVersionAtLeast(113); } catch (e) { qCanTrack = false; } // A208
-    if (!qList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No quotations yet.</p>'; return; }
+    if (!qList.length) { c.innerHTML = '<p class="flow-empty">No quotations yet.</p>'; return; }
     qBuildMonthOptions();
     renderQuotationList();
   } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
@@ -569,7 +569,7 @@ function renderQuotationList() {
       : `0 of ${qList.length} quotation(s)`;
   }
   if (!rows.length) {
-    c.innerHTML = `<p style="color:var(--hx-ink-3);">No quotations match this filter${
+    c.innerHTML = `<p class="flow-empty">No quotations match this filter${
       month ? ` — nothing in ${flowEsc(qMonthLabel(month))}` : ''}.</p>`;
     return;
   }
