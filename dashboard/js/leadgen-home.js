@@ -147,6 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (location.hash) { const t = location.hash.slice(1); if (LG_UI[t]) { lgActiveTab = t; render(); } scrollToHash(); }
   const poll = setInterval(() => { if (document.visibilityState === 'visible') { loadCounts(); loadFollowups(); } }, 60000);
   window.addEventListener('pagehide', () => clearInterval(poll));
+  hxDeepLink(() => openDock());   // A378 — the phone app's + button (openDock does nothing for a read-only viewer)
 });
 
 function scrollToHash() {

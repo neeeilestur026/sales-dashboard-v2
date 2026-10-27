@@ -27,6 +27,10 @@
 .flow-items .num input { text-align: right; }
 
 .flow-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+/* A378 — an empty list (flowEmpty in js/flow-api.js); the Apple look draws it as a tile with its tray (css/apple-phone.css) */
+.flow-empty { color: var(--hx-ink-3); }
+div.flow-empty > p { margin: 0 0 .75rem; }
+div.flow-empty > p:last-child { margin-bottom: 0; }
 .flow-msg { display: none; padding: 8px 12px; border-radius: var(--hx-r-sm); font: 600 12.5px/1.4 var(--hx-text); margin-top: 10px; }
 .flow-msg.ok { background: var(--hx-ok-soft); color: var(--hx-ok); }
 .flow-msg.bad { background: var(--hx-red-soft); color: var(--hx-red); }

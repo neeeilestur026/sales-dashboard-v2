@@ -10,6 +10,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!session) return;
   renderNavbar('hr-memos');
   await loadMemos();
+  hxDeepLink(() => {   // A378 — the phone app's + button: the form, open and in view
+    const s = document.getElementById('formSection');
+    if (s && !s.classList.contains('open')) toggleForm();
+    if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 });
 
 function esc(str) { return hxEscBlank(str); }

@@ -1,0 +1,292 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   apple-phone.css — A378 · the phone app for the Apple look (js/apple-phone.js), every office role.
+
+   Neil, 27 Oct 2026: "redesign the organization in the mobile app in all user dashboards — use apple design
+   skill to its utmost", with a tab bar, a navigation bar, sheets, a + button, toasts as on the web and designed
+   empty states. Loaded by js/theme.js beside css/apple.css whenever the look is on.
+
+   - Phones only (640 px or less) and only while html[data-phone="on"] (theme.js; ?phone=off turns it off for
+     one person). The bars and the + button exist once js/apple-phone.js has drawn them (html.ap-shell), so a
+     page that cannot draw them keeps the sidebar drawer.
+   - The home screens are re-ordered here, never in their HTML: the deck's rail and column melt into one list
+     (display: contents) and their children take an order — the date and the large title, today's numbers, what
+     needs the person, the short cards, then the rows that open the long sections as screens of their own.
+   - Empty states, at every width: js/apple-phone.js marks an empty list ap-none, one still loading ap-wait and
+     one that failed ap-fail, from their words; each reads differently.
+
+   The rules css/apple.css keeps (tests/flow/apple-phone.js checks them here too): every selector starts
+   html[data-skin="ledger"][data-look="apple"], everything sits in @media screen, colours are written only in
+   tokens, no !important, blur only on the chrome (the tab bar, a screen's bar), keyframes move only transform and
+   opacity, press feedback at .97, and the person's settings (reduced motion, reduced transparency, more
+   contrast) each have their block.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+@media screen {
+
+/* ─── 1 · Tokens ────────────────────────────────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] {
+  --ap-tab-h: 50px;
+  --ap-fab-shadow: 0 8px 22px rgba(0,113,227,.30), 0 2px 6px rgba(0,0,0,.14);
+  --ap-row-down: rgba(120,120,128,.16);
+  --ap-tray: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='22 12 16 12 14 15 10 15 8 12 2 12'/%3E%3Cpath d='M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'/%3E%3C/svg%3E");
+  --ap-done: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='7.5 12.5 10.5 15.5 16.5 9'/%3E%3C/svg%3E");
+  --ap-alert: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' y1='8' x2='12' y2='12.5'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E");
+}
+html[data-skin="ledger"][data-look="apple"][data-theme="dark"] {
+  --ap-fab-shadow: 0 8px 22px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.08);
+  --ap-row-down: rgba(120,120,128,.28);
+}
+
+/* ─── 2 · Empty, loading and failed lists (every width) ──────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"] .ap-none, html[data-skin="ledger"][data-look="apple"] .ap-wait, html[data-skin="ledger"][data-look="apple"] .ap-fail {
+  text-align: center; padding: 26px 16px 24px; font: 500 .9375rem/1.45 var(--l-sans); letter-spacing: -.006em;
+}
+html[data-skin="ledger"][data-look="apple"] .ap-none { color: var(--l-p-ink-2); }
+html[data-skin="ledger"][data-look="apple"] .ap-none:not(:has(> svg))::before, html[data-skin="ledger"][data-look="apple"] .ap-fail::before {
+  content: ""; display: block; width: 34px; height: 34px; margin: 0 auto 10px; background: var(--l-p-ink-3); opacity: .55;
+  -webkit-mask: var(--ap-tray) center / contain no-repeat; mask: var(--ap-tray) center / contain no-repeat;
+}
+html[data-skin="ledger"][data-look="apple"] .ap-fail { color: var(--l-p-late); }
+html[data-skin="ledger"][data-look="apple"] .ap-fail::before { width: 28px; height: 28px; background: var(--l-p-late); opacity: .8; -webkit-mask-image: var(--ap-alert); mask-image: var(--ap-alert); }
+/* "You're all caught up": nothing waiting is good news — a green check, not the empty tray */
+html[data-skin="ledger"][data-look="apple"] .fa-empty.ap-none { color: var(--l-p-ok); }
+html[data-skin="ledger"][data-look="apple"] .fa-empty.ap-none::before { width: 30px; height: 30px; background: var(--l-p-ok); opacity: .85; -webkit-mask-image: var(--ap-done); mask-image: var(--ap-done); }
+/* still loading: the shape of what is coming, quiet and still (no shimmer loop), the words under it */
+html[data-skin="ledger"][data-look="apple"] .ap-wait { color: var(--l-p-ink-3); font-weight: 400; font-size: .875rem; }
+html[data-skin="ledger"][data-look="apple"] .ap-wait::before {
+  content: ""; display: block; width: min(240px, 72%); height: 30px; margin: 0 auto 12px;
+  background: linear-gradient(var(--a-fill), var(--a-fill)) 0 0 / 100% 10px no-repeat, linear-gradient(var(--a-fill-2), var(--a-fill-2)) 0 20px / 64% 10px no-repeat;
+  border-radius: 5px;
+}
+html[data-skin="ledger"][data-look="apple"] td.ap-none, html[data-skin="ledger"][data-look="apple"] td.ap-wait, html[data-skin="ledger"][data-look="apple"] td.ap-fail { padding: 28px 16px; }
+/* a box in a small card: the words, quieter, without the tile */
+html[data-skin="ledger"][data-look="apple"] .ap-small.ap-none, html[data-skin="ledger"][data-look="apple"] .ap-small.ap-wait, html[data-skin="ledger"][data-look="apple"] .ap-small.ap-fail { padding: 10px 6px; font-size: .8125rem; font-weight: 400; }
+html[data-skin="ledger"][data-look="apple"] .ap-small.ap-none::before, html[data-skin="ledger"][data-look="apple"] .ap-small.ap-wait::before, html[data-skin="ledger"][data-look="apple"] .ap-small.ap-fail::before { display: none; }
+/* showEmpty() (js/api.js): its own icon, a title and a line under it */
+html[data-skin="ledger"][data-look="apple"] .empty-state.ap-none > svg { display: block; width: 34px; height: 34px; margin: 0 auto 10px; color: var(--l-p-ink-3); opacity: .55; }
+html[data-skin="ledger"][data-look="apple"] .empty-state.ap-none > h3 { margin: 0 0 4px; font: 600 1rem/1.3 var(--l-sans); letter-spacing: -.01em; color: var(--l-p-ink); }
+html[data-skin="ledger"][data-look="apple"] .empty-state.ap-none > p { margin: 0; font: 400 .875rem/1.45 var(--l-sans); color: var(--l-p-ink-3); }
+/* a flow list's empty state, and the way to add its first record (flowEmpty, js/flow-api.js) */
+html[data-skin="ledger"][data-look="apple"] div.flow-empty.ap-none > p { margin: 0; }
+html[data-skin="ledger"][data-look="apple"] div.flow-empty.ap-none > .flow-empty-act { margin-top: 14px; }
+
+/* everything below waits for js/apple-phone.js: nothing of the shell shows on a computer */
+html[data-skin="ledger"][data-look="apple"] .a-tabbar, html[data-skin="ledger"][data-look="apple"] .ap-fab, html[data-skin="ledger"][data-look="apple"] .ap-morehere { display: none; }
+
+@media (max-width: 640px) {
+
+/* ─── 3 · The navigation bar: a back chevron, a centred title once the large one has gone by ─ */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .navbar { padding: 0 6px 0 4px; gap: 2px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .a-menu, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .navbar .theme-toggle.nav-theme { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .l-search { margin-left: auto; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .l-crumbs {
+  position: absolute; left: 50%; top: 0; bottom: 0; max-width: calc(100% - 236px); transform: translateX(-50%); justify-content: center; pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .l-crumbs b { font: 600 1.0625rem/1.2 var(--l-sans); letter-spacing: -.012em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .navbar.ap-big .l-crumbs { opacity: 0; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-back {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 40px; height: 40px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent;
+  color: var(--l-p-accent); font: 400 1.0625rem/1 var(--l-sans); letter-spacing: -.01em; cursor: pointer; transition: transform 100ms ease-out, opacity 100ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-back svg { width: 12px; height: 20px; flex: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-back.ap-down { transform: scale(.97); opacity: .6; }
+
+/* ─── 4 · The tab bar ──────────────────────────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body { padding-bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 12px); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell.ap-fab-on body { padding-bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 84px); }   /* the last row clears the + button */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .a-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1002; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  height: calc(var(--ap-tab-h) + env(safe-area-inset-bottom)); padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
+  background: var(--a-mat-chrome); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur); border-top: 1px solid var(--a-mat-edge);
+  transition: transform var(--a-spring-t) var(--a-spring);
+}
+/* the scroll edge: content fades as it meets the bar, no hard rule */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .a-tabbar::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 14px; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--l-p-page) 55%, transparent), transparent);
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; min-width: 0; padding: 5px 2px 0; border: 0; background: transparent;
+  color: var(--l-p-ink-3); font: 500 .625rem/1.15 var(--l-sans); letter-spacing: .01em; text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms ease-out, color 150ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab:hover { color: var(--l-p-ink-2); text-decoration: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab[aria-current] { color: var(--l-p-accent); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab.ap-down { transform: scale(.97); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab:focus-visible { outline-offset: -3px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-ti { position: relative; display: grid; place-items: center; width: 30px; height: 28px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-ti .ap-i { width: 24px; height: 24px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab[aria-current] .ap-i { stroke-width: 2.2; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-badge {
+  position: absolute; top: -1px; left: 19px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; box-sizing: border-box;
+  background: var(--a-glyph-red); color: var(--a-on-glyph); box-shadow: 0 0 0 2px var(--l-p-page); font: 600 .6875rem/18px var(--l-sans); font-style: normal; text-align: center;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-badge[hidden] { display: none; }
+/* a field has focus: the bar and the + button step aside so the keyboard never sits on a form behind them */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-kb .a-tabbar { transform: translate3d(0, 110%, 0); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-kb body { padding-bottom: 12px; }
+
+/* ─── 5 · The + button ─────────────────────────────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab {
+  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 16px); z-index: 1003;
+  display: grid; place-items: center; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--l-p-solid); color: var(--l-p-on-solid);
+  box-shadow: var(--ap-fab-shadow); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transform: translate3d(0, calc(-1 * var(--ap-dock, 0px)), 0); transition: transform var(--a-spring-t) var(--a-spring), opacity 200ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab:hover { background: var(--l-p-solid-hover); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab svg { width: 26px; height: 26px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab.ap-down { transform: translate3d(0, calc(-1 * var(--ap-dock, 0px)), 0) scale(.97); transition-duration: 100ms, 200ms; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab.ap-away,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-kb .ap-fab,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-locked .ap-fab { opacity: 0; pointer-events: none; transform: translate3d(0, calc(16px - var(--ap-dock, 0px)), 0) scale(.6); }
+
+/* ─── 6 · Toasts, the snackbar and the pages' own bottom bars sit above the tab bar ──────── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-toasts { bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 10px); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .fc-toasts, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .toast,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell #tm-toast, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.lg #msg.lg-toast { bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 12px); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .cv-bulk { bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 8px); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-kb .hx-toasts { bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+/* ─── 7 · Sheets: a section's pages, More, Create ─────────────────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-locked body { overflow: hidden; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-scrim { position: fixed; inset: 0; z-index: 1015; background: var(--l-p-scrim); opacity: 0; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1016; display: flex; flex-direction: column; max-height: 88dvh; box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom); border-radius: 14px 14px 0 0; background: var(--l-p-page); box-shadow: var(--l-p-shadow-pop);
+  will-change: transform; outline: none;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet.ap-tall { height: 88dvh; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-grab { flex: none; width: 36px; height: 5px; margin: 6px auto 4px; border-radius: 3px; background: var(--l-p-ink-3); opacity: .45; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-grab, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-h { touch-action: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-h { flex: none; display: flex; align-items: center; gap: 12px; padding: 4px 16px 8px 20px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-h h2 { flex: 1; min-width: 0; margin: 0; font: 700 1.375rem/1.2 var(--l-display); letter-spacing: -.016em; color: var(--l-p-ink); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-x {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--a-fill); color: var(--l-p-ink-2); cursor: pointer;
+  transition: transform 100ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-x svg { width: 13px; height: 13px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-x.ap-down { transform: scale(.97); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-b { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 4px 16px 20px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-b > .ap-group:first-child { margin-top: 4px; }
+
+/* inset grouped lists (sheets and a home's "More on this page") */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-gh { margin: 22px 16px 7px; font: 400 .8125rem/1.3 var(--l-sans); letter-spacing: 0; color: var(--l-p-ink-3); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet-b > .ap-all > .ap-gh:first-child, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-found > .ap-gh:first-child { margin-top: 14px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-group { overflow: hidden; border-radius: 12px; background: var(--l-p-panel); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row {
+  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; box-sizing: border-box; margin: 0; padding: 6px 14px 6px 16px;
+  border: 0; border-radius: 0; background: transparent; color: var(--l-p-ink); font: 400 1.0625rem/1.25 var(--l-sans); letter-spacing: -.012em; text-align: left;
+  text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color 100ms ease-out;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row:hover { text-decoration: none; color: var(--l-p-ink); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row.ap-down { background: var(--ap-row-down); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row:focus-visible { outline-offset: -3px; border-radius: 12px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row[hidden] { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row + .ap-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--a-sep); transform: scaleY(.5); transform-origin: 0 0; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row + .ap-row:has(> .ap-ri)::before { left: 58px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-ri { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--l-p-accent-soft); color: var(--l-p-accent); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-ri .ap-i { width: 18px; height: 18px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow-wrap: anywhere; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-rt small { font: 400 .8125rem/1.3 var(--l-sans); letter-spacing: 0; color: var(--l-p-ink-3); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-rt small:empty { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-row[aria-current="page"] .ap-rt { color: var(--l-p-accent); font-weight: 600; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-chev { flex: none; width: 13px; height: 13px; color: var(--l-p-ink-3); opacity: .75; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tick { flex: none; width: 17px; height: 17px; color: var(--l-p-accent); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-out .ap-rt { align-items: center; color: var(--l-p-late); }
+/* the appearance switch */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-switch { position: relative; flex: none; width: 51px; height: 31px; border-radius: 16px; background: var(--a-fill-3); transition: background-color 200ms ease-out; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: var(--a-on-glyph); box-shadow: var(--a-thumb-shadow);
+  transition: transform var(--a-bounce-t) var(--a-bounce);
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] [aria-checked="true"] > .ap-switch { background: var(--a-glyph-green); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] [aria-checked="true"] > .ap-switch::after { transform: translateX(20px); }
+/* the search in More */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-search { display: flex; align-items: center; gap: 6px; height: 38px; margin: 2px 0 0; padding: 0 10px; border-radius: 10px; background: var(--a-fill); color: var(--l-p-ink-3); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-search:focus-within { box-shadow: 0 0 0 3px var(--l-p-ring); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-search-i .ap-i { display: block; width: 17px; height: 17px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--l-p-ink); font: 400 1.0625rem/1 var(--l-sans); outline: none; box-shadow: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-search input::placeholder { color: var(--l-p-ink-3); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-found[hidden], html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-all[hidden] { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-none-found { margin: 28px 8px; text-align: center; font: 400 .9375rem/1.45 var(--l-sans); color: var(--l-p-ink-3); }
+
+/* ─── 8 · A long section, opened as its own screen (in from the right, out the same way) ─── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push {
+  position: fixed; inset: 0; z-index: 1001; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box;
+  padding-bottom: calc(var(--ap-tab-h) + env(safe-area-inset-bottom) + 24px); background: var(--l-p-page); box-shadow: var(--l-p-shadow-pop); will-change: transform;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-bar {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; height: var(--l-bar); padding: 0 8px 0 4px;
+  background: var(--a-mat-chrome); -webkit-backdrop-filter: var(--a-blur); backdrop-filter: var(--a-blur); border-top: 1px solid var(--a-mat-edge);
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-bar b {
+  position: absolute; left: 50%; max-width: calc(100% - 196px); transform: translateX(-50%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 1.0625rem/1.2 var(--l-sans); letter-spacing: -.012em; color: var(--l-p-ink);
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-body { padding: 8px 12px 0; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-body > * { margin-top: 0; margin-bottom: 0; }
+
+/* ─── 9 · Home screens: one list, in the order a phone reads ───────────────────────────────── */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-rail, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-rail, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col { display: contents; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-rail > *, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col > *,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-rail > *, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col > * { order: 5; min-width: 0; max-width: 100%; margin-top: 0; margin-bottom: 0; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-rail > .hx-rail-date, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-rail > .dh-rail-date { display: none; }   /* the line under the large title already says the date */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col > .hx-mast, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col > .dh-mast { order: 1; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-rail > .hx-slab, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-rail > .dh-slab { order: 2; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col > #inbox, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col > #inbox { order: 3; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col > .ap-morehere, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col > .ap-morehere { order: 9; }
+/* the tab bar takes over from the rail's "on this page" list */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck .hx-rail-nav, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-rail-nav { display: none; }
+/* the large title */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast { display: flex; flex-flow: row wrap; align-items: center; gap: 12px 8px; padding: 0 4px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast > *, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast > div { flex: 1 0 100%; min-width: 0; }   /* the title takes its own line; the director's buttons share the next */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast h1, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast h1,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.lg #greeting { margin: 0; font: 700 2.125rem/1.12 var(--l-display); letter-spacing: -.022em; color: var(--l-p-ink); }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast h1 span { color: inherit; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast p, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast p { margin: 4px 0 0; font: 400 .9375rem/1.4 var(--l-sans); color: var(--l-p-ink-2); }
+/* shortcuts: the home's own header buttons, one sideways row of rounded chips */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast .hx-actions, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast .dh-actions {
+  display: flex; flex-wrap: nowrap; gap: 8px; margin: 0 -16px; padding: 0 16px 2px; overflow-x: auto; scrollbar-width: none; scroll-padding: 16px;
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast .hx-actions::-webkit-scrollbar { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-mast .hx-actions > .btn, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast > .dh-btn,
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-mast .dh-actions > * { flex: none; height: 34px; padding: 0 14px; border-radius: 17px; font: 500 .875rem/1 var(--l-sans); white-space: nowrap; }
+/* today's numbers: the figure, then its facts as one sideways row of tiles */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck .hx-facts { display: flex; gap: 8px; margin: 12px -16px 0; padding: 12px 16px 2px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding: 16px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck .hx-facts::-webkit-scrollbar { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck .hx-facts > div { flex: 0 0 auto; min-width: 7.5rem; max-width: 11rem; padding: 10px 12px; border-radius: 10px; background: var(--l-p-inset); scroll-snap-align: start; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck .hx-slab { padding-bottom: 14px; overflow: hidden; }
+/* "More on this page": the long sections, each a row that opens its own screen */
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-morehere { display: block; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-morehere[hidden] { display: none; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-morehere > .ap-gh { margin-top: 6px; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.lg .ap-morehere { margin: 16px 0 0; }
+
+}
+
+/* ─── 10 · The person's settings ───────────────────────────────────────────────────────── */
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-scrim { animation: ap-fade 200ms ease-out both; }
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .a-tabbar, html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .ap-fab { transition: opacity 200ms ease-out; }
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-switch::after { transition: none; }
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab.ap-down, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-x.ap-down, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-back.ap-down { transform: none; }
+}
+html[data-skin="ledger"][data-look="apple"][data-phone="on"][data-motion="off"] .ap-sheet, html[data-skin="ledger"][data-look="apple"][data-phone="on"][data-motion="off"] .ap-push, html[data-skin="ledger"][data-look="apple"][data-phone="on"][data-motion="off"] .ap-scrim { animation: ap-fade 200ms ease-out both; }
+html[data-skin="ledger"][data-look="apple"][data-phone="on"][data-motion="off"] .ap-fading { animation: ap-fade-out 200ms ease-in both; }
+@media (prefers-reduced-transparency: reduce) {
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .a-tabbar, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-bar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--l-p-panel); }
+}
+@media (prefers-contrast: more) {
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .a-tabbar, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-push-bar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--l-p-panel); border-top: 1px solid var(--l-p-ink-3); }
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-group, html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-sheet { border: 1px solid var(--l-p-ink-3); }
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"] .ap-tab { color: var(--l-p-ink-2); }
+  html[data-skin="ledger"][data-look="apple"] .ap-none, html[data-skin="ledger"][data-look="apple"] .ap-wait { color: var(--l-p-ink); }
+}
+@keyframes ap-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ap-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+}

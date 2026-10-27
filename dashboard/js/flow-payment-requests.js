@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   await prInitPayGate();   // A156: Mark Paid only once the backend is v92
   await loadPRs();
+  hxDeepLink(() => flowOpenNew('loadPO'));   // A378 — the phone app's + button
 });
 
 // A145: supplier master → auto-fill bank details on the payment request.
@@ -571,14 +572,14 @@ function renderPRs() {
   const c = document.getElementById('listContainer');
   if (!c) return;
   flowLedgerInjectCss();
-  if (!prList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  if (!prList.length) { c.innerHTML = flowEmpty('No payment requests yet.', ['New payment request', 'loadPO']); prUpdateKpis([]); return; }
   flowLedgerBuildPeriod(prList, 'createdAt', 'prYear', 'prMonth');
   const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'prYear', 'prMonth');
   const { open, history } = flowLedgerSplit(rows, prIsOpen);
 
   const openTable = open.length
     ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], PR_COLS)}</tbody></table>`
-    : '<p style="color:var(--hx-ink-3);">No open payment requests in this period.</p>';
+    : '<p class="flow-empty">No open payment requests in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
 

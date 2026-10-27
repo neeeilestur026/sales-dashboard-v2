@@ -157,7 +157,7 @@ function _renderLists() {
   // ── Receivables — invoice status ──
   const arC = document.getElementById('arContainer');
   if (!ars.length) {
-    arC.innerHTML = '<p style="color:var(--hx-ink-3);">No receivables match the filters. Issue an invoice to create one.</p>';
+    arC.innerHTML = '<p class="flow-empty">No receivables match the filters. Issue an invoice to create one.</p>';
   } else {
     const tAmt = ars.reduce((s, a) => s + flowNum(a.amountPHP), 0);
     const tCol = ars.reduce((s, a) => s + flowNum(a.collectedPHP), 0);
@@ -175,7 +175,7 @@ function _renderLists() {
 
   // ── Collection ledger ──
   const c = document.getElementById('container');
-  if (!cols.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No collections match the filters.</p>'; return; }
+  if (!cols.length) { c.innerHTML = '<p class="flow-empty">No collections match the filters.</p>'; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:880px;"><thead><tr>
     <th>Collection No</th><th>Date</th><th>AR / INV</th><th>SO</th><th>Customer</th>
     <th class="num">Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th></th></tr></thead><tbody>${cols.map(r => `

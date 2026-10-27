@@ -103,14 +103,14 @@ function renderPRs() {
   const c = document.getElementById('listContainer');
   if (!c) return;
   flowLedgerInjectCss();
-  if (!prList.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No payment requests yet.</p>'; prUpdateKpis([]); return; }
+  if (!prList.length) { c.innerHTML = '<p class="flow-empty">No payment requests yet.</p>'; prUpdateKpis([]); return; }
   flowLedgerBuildPeriod(prList, 'createdAt', 'opYear', 'opMonth');
   const rows = flowLedgerFilterPeriod(prList, 'createdAt', 'opYear', 'opMonth');
   const { open, history } = flowLedgerSplit(rows, prIsOpen);
 
   const openTable = open.length
     ? `<table class="flow-table">${prHead()}<tbody>${open.map(prRow).join('')}${flowLedgerFootRow([{ at: 3, value: flowMoney(open.reduce((t, r) => t + flowNum(r.amount), 0), 'PHP') }], 8)}</tbody></table>`
-    : '<p style="color:var(--hx-ink-3);">No open payables in this period.</p>';
+    : '<p class="flow-empty">No open payables in this period.</p>';
   const histTable = history.length
     ? `<table class="flow-table">${prHead()}<tbody>${history.map(prRow).join('')}</tbody></table>` : '';
 

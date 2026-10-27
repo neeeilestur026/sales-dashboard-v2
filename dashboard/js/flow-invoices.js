@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date').value = flowToday();
   await Promise.all([loadSOOptions(), loadInventory()]);
   await loadInvoices(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  hxDeepLink(() => flowOpenNew('loadSO'));   // A378 — the phone app's + button
 });
 
 async function loadSOOptions() {
@@ -326,7 +327,7 @@ async function loadInvoices() {
     const res = await fetchFlow('getInvoices');
     const list = (res && res.data) || [];
     ivLive = list.filter(v => !v.voided);   // A331 — the billing panel's "already invoiced"
-    if (!list.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No invoices yet.</p>'; return; }
+    if (!list.length) { c.innerHTML = flowEmpty('No invoices yet.', ['New invoice', 'loadSO']); return; }
     c.innerHTML = `<table class="flow-table"><thead><tr><th>INV No</th><th>SO</th><th>Date</th><th>Customer</th><th class="num">Net Sales</th><th class="num">VAT</th><th class="num">Total Due</th><th class="num">COGS</th><th class="num">Gross Profit</th><th>Items</th><th></th></tr></thead><tbody>${list.map(v => `
       <tr><td>${flowEsc(v.invNo)}</td><td>${flowEsc(v.soNo)}</td><td>${flowDate(v.date)}</td><td>${flowEsc(v.customer)}</td>
       <td class="num">${flowMoney(v.totalSales, 'PHP')}</td>

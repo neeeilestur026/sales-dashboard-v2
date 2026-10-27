@@ -50,7 +50,7 @@ function renderJournal() {
   const src = document.getElementById('srcFilter').value;
   const rows = src ? glJournal.filter(l => l.source === src) : glJournal;
   const c = document.getElementById('journalContainer');
-  if (!rows.length) { c.innerHTML = '<p style="color:var(--hx-ink-3);">No journal entries yet.</p>'; return; }
+  if (!rows.length) { c.innerHTML = '<p class="flow-empty">No journal entries yet.</p>'; return; }
   c.innerHTML = `<table class="flow-table"><thead><tr><th>Entry No</th><th>Date</th><th>Source</th><th>Ref</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th>Memo</th></tr></thead><tbody>${rows.map(l => `
     <tr><td>${flowEsc(l.entryNo)}</td><td>${flowDate(l.date)}</td><td>${flowEsc(l.source)}</td><td>${flowEsc(l.sourceNo)}</td>
     <td>${flowEsc(l.accountCode)} ${flowEsc(l.accountName)}</td>

@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cvLoad();
   const ask = typeof URLSearchParams === 'function' ? new URLSearchParams(location.search).get('visit') : null;
   if (ask && CV.plans.some(v => v.visitPlanNo === ask)) cvDetail(ask);
+  if (typeof hxDeepLink === 'function') hxDeepLink(() => { if (document.querySelector('#cvActions [data-plan]')) cvPlanDlg(null); });   // A378 — the + button, where the page offers planning
 });
 
 /* ── the reads ────────────────────────────────────────────────────────────────────────────────── */

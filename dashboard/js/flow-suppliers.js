@@ -32,7 +32,7 @@ function render() {
   const c = document.getElementById('container');
   const q = (document.getElementById('sSearch').value || '').toLowerCase();
   const rows = supData.filter(s => !q || String(s.supplier).toLowerCase().includes(q) || String(s.bankName).toLowerCase().includes(q));
-  if (!rows.length) { c.innerHTML = `<p style="color:var(--hx-ink-3);">No suppliers yet.${supViewer ? '' : ' Add one above (or it fills in when you save a payment request).'}</p>`; return; }
+  if (!rows.length) { c.innerHTML = `<p class="flow-empty">No suppliers yet.${supViewer ? '' : ' Add one above (or it fills in when you save a payment request).'}</p>`; return; }
   c.innerHTML = `<table class="flow-table" style="min-width:820px;"><thead><tr>
     <th>Supplier</th><th>Bank</th><th>Account Name</th><th>Account No</th><th>Method</th><th>Cur</th><th></th></tr></thead><tbody>${rows.map(s => `
     <tr>

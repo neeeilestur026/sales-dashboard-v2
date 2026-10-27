@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // populate category datalist
   document.getElementById('catList').innerHTML = EXP_CATEGORIES.map(c => `<option value="${flowEsc(c)}">`).join('');
   await loadExpenses(); if (typeof flowRefreshKpis === 'function') flowRefreshKpis();
+  hxDeepLink(() => openExpModal());   // A378 — the phone app's + button
 });
 
 async function loadExpenses() {
