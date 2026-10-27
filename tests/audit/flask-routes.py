@@ -32,6 +32,7 @@ def ok(label, cond, extra=None):
 
 
 OPEN = {"static", "serve_index", "serve_dashboard", "robots_txt", "web_manifest", "service_worker", "collect_manifest",   # A316: the scanner app
+        "asset_links",                                                                        # A377: the Android app's site link
         "po_bp.index", "pr_bp.index", "mro_bp.index", "mi_bp.index",
         "quotation_bp.index", "payment_request_bp.index"}
 
@@ -47,12 +48,24 @@ for rule in app.url_map.iter_rules():
     else:
         unguarded.append(f"{rule.rule} [{rule.endpoint}]")
 ok(f"{guarded} guarded endpoints, 0 unguarded", not unguarded, unguarded)
-ok("the open set is exactly the static pages, robots and the six tool shells",
+ok("the open set is exactly the static pages, robots, the app links and the six tool shells",
    {r.endpoint for r in app.url_map.iter_rules()} & OPEN == OPEN)
 endpoints = {r.rule for r in app.url_map.iter_rules()}
 ok("/flow/secured-actions is gone (no caller)", "/flow/secured-actions" not in endpoints)
 ok("/billing/download-cash-voucher is gone (no caller)", "/billing/download-cash-voucher" not in endpoints)
 ok("/api/session/logout exists", "/api/session/logout" in endpoints)
+
+# A377 — the Android app opens this site full screen only while the site names it and its signing key
+import json as _json                                    # noqa: E402
+_r = app.test_client().get("/.well-known/assetlinks.json")
+_links = _json.loads(_r.data.decode()) if _r.status_code == 200 else []
+_t = (_links[0] if _links else {}).get("target", {})
+_gradle = open(os.path.join(os.path.dirname(__file__), "..", "..", "android", "app", "build.gradle")).read()
+ok("/.well-known/assetlinks.json answers JSON without a session, naming the app and one key fingerprint",
+   _r.status_code == 200 and _r.mimetype == "application/json" and _t.get("package_name") == "com.hiescorp.portal" and len(_t.get("sha256_cert_fingerprints", [])) == 1
+   and len(_t["sha256_cert_fingerprints"][0].split(":")) == 32, (_r.status_code, _links))
+ok("  the app (android/app/build.gradle) is that package and opens this site's Render host",
+   "applicationId 'com.hiescorp.portal'" in _gradle and "def host = 'hi-escorp-portal-wufz.onrender.com'" in _gradle)
 
 print("\n== 2 · the guard refuses without a token and admits with one ==")
 calls = []

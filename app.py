@@ -170,6 +170,12 @@ def create_app():
     def collect_manifest():
         return send_from_directory(DASHBOARD_DIR, "collect.webmanifest", mimetype="application/manifest+json")
 
+    # A377 — the Hi-Escorp Android app (android/) opens this site full screen only when the site names the app and the
+    # fingerprint of the key it is signed with. Public by design: it says which app may open the site, nothing more.
+    @app.route("/.well-known/assetlinks.json")
+    def asset_links():
+        return send_from_directory(os.path.join(DASHBOARD_DIR, ".well-known"), "assetlinks.json", mimetype="application/json")
+
     @app.route("/sw.js")
     def service_worker():
         return send_from_directory(DASHBOARD_DIR, "sw.js", mimetype="application/javascript")
