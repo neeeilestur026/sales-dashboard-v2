@@ -29,12 +29,13 @@ const EXP_TYPE_MAP = {
   'revolving funds': 'General & Administrative',
   'cost of goods sold': 'Other', 'inventory': 'Other', 'interest expense': 'Other', 'interest income': 'Other'
 };
+// A381 (Neil, 28 Oct 2026): Marketing Expense and Subscription Expense added
 const EXP_CATEGORIES = ['Advertising', 'Bank service charge', 'Commission', 'Cost of Goods Sold',
   'Delivery Expense', 'Depreciation expense', 'Employee benefits', 'Interest expense', 'Interest income',
-  'Inventory', 'Janitorial', 'Legal fees', 'Load allowances', 'Medical expenses', 'Miscellaneous',
+  'Inventory', 'Janitorial', 'Legal fees', 'Load allowances', 'Marketing Expense', 'Medical expenses', 'Miscellaneous',
   'Permits and licenses', 'Postage and communication', 'Professional fees', 'Rent expense',
   'Repairs and maintenance', 'Representation', 'Revolving fund', 'Salaries and wages', 'Statutory benefits',
-  'Supplies expense', 'Tools and equipment', 'Transportation and travel', 'Utilities'];
+  'Subscription Expense', 'Supplies expense', 'Tools and equipment', 'Transportation and travel', 'Utilities'];
 
 function expTypeFor(cat) { return EXP_TYPE_MAP[String(cat || '').trim().toLowerCase()] || 'Operating'; }
 
