@@ -661,6 +661,7 @@ SECURED_ACTIONS = [
     "sendQuotation", "setCollectionMeta", "setCommissionRate", "setFlowDriveFolder", "setFlowSettings",
     "setMgmtPricing", "setOpeningBalance", "setPricingRequestSalesperson", "setQuotationEmailReply", "setQuotationFollowUp",
     "setQuotationSalesperson", "setSOSupplierType", "setTravelFloat", "setupFlowDrive", "snoozeQuotation",
+    "setQuotationResult",   # A382 — quotation status
     "submitCommissionRequest", "submitDailyReport", "submitForPricing", "submitPOApproval", "submitPaymentRequest",
     "submitQuotationApproval", "submitTravelReplenishment", "submitWeeklyItinerary", "unlinkQuotationEmail", "updateAPAging",
     "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",

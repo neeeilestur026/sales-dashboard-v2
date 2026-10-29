@@ -92,8 +92,8 @@ console.log('== THE WIDTH TRAP — checked before anything else ==');
 
   // A276 appended Type · Service Kind, so 27 became 29. The number is asserted rather than derived
   // on purpose: it is what makes anyone widening this sheet come here and check the writers.
-  eq('the schema is 29 wide', SCHEMA.Quotations.length, 29);
-  eq('Service Kind is the last column', SCHEMA.Quotations[SCHEMA.Quotations.length - 1], 'Service Kind');
+  eq('the schema is 38 wide', SCHEMA.Quotations.length, 38);   // A382 appended the nine result columns after Service Kind
+  eq('Closed From is the last column', SCHEMA.Quotations[SCHEMA.Quotations.length - 1], 'Closed From');
   eq('and Salesperson is still where A218 put it', SCHEMA.Quotations[26], 'Salesperson');
   eq('createQuotation appends exactly that many', countArgs('createQuotation'), SCHEMA.Quotations.length);
   eq('and so does the commission demo seed', countArgs('seedCommissionDemo'), SCHEMA.Quotations.length);

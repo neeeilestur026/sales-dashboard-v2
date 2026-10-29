@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 189;   // A374 — the supplier list: admin's forwarded prices filed under each supplier. History: see CHANGELOG.
+var FLOW_VERSION = 191;   // A382 — quotation status: each rep sets every quotation's result (won, pending, lost). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -84,7 +84,16 @@ var SCHEMA = {
                       and a rate instead of a qty and a unit price. 'Service Kind' narrows it —
                       'Rental' today, with repair and calibration to come. Blank-is-supply is
                       deliberate: it means no migration and no risk to a single live record. */
-                   'Type', 'Service Kind'],
+                   'Type', 'Service Kind',
+                   /* A382 — WHERE EACH QUOTATION STANDS, as its rep says. 'Result' is '' | 'Pending' | 'Won' and sits
+                      BESIDE Status, never in it: three statuses already begin "Pending" (the approval chain), and every
+                      page that reads Status keeps meaning what it meant. Lost is still the close (Status = Lost / Not
+                      Pursued / Cancelled), with its reason code in 'Result Reason' and the status it was closed from in
+                      'Closed From', so changing it back restores exactly that. 'Last Follow Up' (yyyy-MM-dd), 'Follow Up
+                      Via' (Email / Call / Viber / Visit) and 'Follow Up Status' are the rep's own record of the chase.
+                      Written only through _setQuotationCells / setQuotationResult; the two positional writers append blanks. */
+                   'Result', 'Result At', 'Result By', 'Result Reason', 'Result Note',
+                   'Last Follow Up', 'Follow Up Via', 'Follow Up Status', 'Closed From'],
   //    A145: 'Supplier VAT' carries the per-item VAT-Incl/Excl note from the pricing request.
   //    A172: 'Line Key' is a per-line id that survives reordering. Row position can't identify a line
   //    once lines move, and Item ID isn't unique when a quote carries two lines of the same product —
@@ -687,6 +696,11 @@ function _sheet(name) {
     }
   } else if (sh.getLastColumn() > 0 && sh.getLastColumn() < headers.length) {
     // The schema grew since this tab was created (e.g. Inventory 'Type') — label the new columns.
+    /* A382 — a range past the tab's last column throws, so a tab with fewer columns than the schema (Quotations
+       goes from 29 to 38) is widened first. */
+    if (typeof sh.getMaxColumns === 'function' && sh.getMaxColumns() < headers.length) {
+      sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+    }
     sh.getRange(1, sh.getLastColumn() + 1, 1, headers.length - sh.getLastColumn())
       .setValues([headers.slice(sh.getLastColumn())]).setFontWeight('bold');
   }
@@ -838,6 +852,7 @@ var _SECURED = {
   sendQuotation: 1, setCollectionMeta: 1, setCommissionRate: 1, setFlowDriveFolder: 1, setFlowSettings: 1, setMgmtPricing: 1,
   setOpeningBalance: 1, setPricingRequestSalesperson: 1, setQuotationEmailReply: 1, setQuotationFollowUp: 1, setQuotationSalesperson: 1, setSOSupplierType: 1,
   setTravelFloat: 1, setupFlowDrive: 1, snoozeQuotation: 1, submitCommissionRequest: 1, submitDailyReport: 1, submitForPricing: 1,
+  setQuotationResult: 1,   // A382 — quotation status (owner or approver, checked inside)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
@@ -1452,6 +1467,12 @@ function getQuotations(p) {
          open in the right mode and the PDF route could not choose the right document. Writing the
          columns without reading them back left the feature half-wired. */
       type: String(q['Type'] || '').trim(), serviceKind: String(q['Service Kind'] || '').trim(),
+      /* A382 — where the rep says it stands. lastFollowUp goes through _dateStr because Sheets turns a typed
+         yyyy-MM-dd into a Date; resultAt is ISO so the page can send it back as the Undo guard. */
+      result: String(q['Result'] || ''), resultAt: _qrIso(q['Result At']), resultBy: String(q['Result By'] || ''),
+      resultReason: String(q['Result Reason'] || ''), resultNote: String(q['Result Note'] || ''),
+      lastFollowUp: _dateStr(q['Last Follow Up'] || ''), followUpVia: String(q['Follow Up Via'] || ''),
+      followUpStatus: String(q['Follow Up Status'] || ''), closedFrom: String(q['Closed From'] || ''),
       items: its.map(function (r) { return {
         itemId: r['Item ID'] || '', itemNo: r['Item No'], itemName: r['Item Name'], qty: _num(r['Quoted Qty']),
         price: _num(r['Quoted Price']), lineTotal: _num(r['Line Total']),
@@ -1692,10 +1713,11 @@ function createQuotation(p) {
     p.salesperson || p.createdBy || '',
     /* A276 — Type · Service Kind. Blank is a supply quotation, which is what every caller that has
        not heard of A276 sends, so nothing about the existing document changes. */
-    String(p.quoteType || '').trim(), String(p.serviceKind || '').trim()]);
+    String(p.quoteType || '').trim(), String(p.serviceKind || '').trim(),
+    '', '', '', '', '', '', '', '', '']);   // A382 Result · At · By · Reason · Note · Last Follow Up · Via · Status · Closed From
                     // trailing: PDF Data JSON / A145 Plant Site / Client Ref No / A151 PR No /
-                    // A172 Layout JSON / A205 Recommended Option / A208 x3 / A215 x3 / A218 x1.
-                    // 27 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
+                    // A172 Layout JSON / A205 Recommended Option / A208 x3 / A215 x3 / A218 x1 / A276 x2 / A382 x9.
+                    // 38 values — this array MUST stay exactly SCHEMA.Quotations.length wide.
   _writeItems('QuotationItems', 'Quotation No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _lineAmount(it),
             it.origItemNo || '', it.origItemName || '', it.vat || '', it.uom || '',
@@ -10153,6 +10175,7 @@ function reviseQuotation(p) {
   _setQuotationCells(p.quotationNo, {
     'Status': 'Draft', 'Approved By': '', 'Approved At': '', 'Approval Note': note,
     'Sent At': '', 'Sent To': '',
+    'Result': '',   // A382 — a revised quotation is a new offer; its follow-up record stays as history
   });
   return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
     message: 'Quotation reopened for revision — it will need approval again before it can be sent.' };
@@ -10184,7 +10207,8 @@ function closeQuotation(p) {
     return { success: false, message: 'This quotation already has a Sales Order — it can\'t be closed as not-pursued.' };
   var who = p.actorName || '';
   var note = 'Closed as ' + outcome + (who ? ' by ' + who : '') + (p.reason ? ' — ' + p.reason : '');
-  _setQuotationCells(p.quotationNo, { 'Status': outcome, 'Approval Note': note });
+  // A382 — and the status it was closed from, so Quotation status can change it back to exactly that
+  _setQuotationCells(p.quotationNo, { 'Status': outcome, 'Approval Note': note, 'Closed From': st });
   return { success: true, quotationNo: p.quotationNo, status: outcome, previousStatus: st,
     message: 'Quotation closed as ' + outcome + '.' };
 }
@@ -10204,9 +10228,198 @@ function reopenQuotation(p) {
     String(q['Created By']) === String(p.actorName) ||
     ['admin', 'management', 'director'].indexOf(role) !== -1;   // sales: their own deals, or ones they filed
   if (!allowed) return { success: false, message: 'You cannot reopen this quotation.' };
-  _setQuotationCells(p.quotationNo, { 'Status': 'Draft', 'Approval Note': 'Reopened from ' + st + (p.actorName ? ' by ' + p.actorName : '') });
+  _setQuotationCells(p.quotationNo, { 'Status': 'Draft', 'Approval Note': 'Reopened from ' + st + (p.actorName ? ' by ' + p.actorName : ''),
+    'Result': '', 'Result Reason': '', 'Closed From': '' });   // A382 — back to Draft is a fresh start
   return { success: true, quotationNo: p.quotationNo, status: 'Draft', previousStatus: st,
     message: 'Quotation reopened to Draft.' };
+}
+
+/* ═══ A382 QUOTATION STATUS — every quotation ends in one state its rep chose ═══════════════════════
+   Neil, 29 Oct 2026: each rep's own list with Won, Pending (the last follow-up: when, how, and where it stands) and
+   Lost (with a reason) — "we just need to have the status of all the quotations". Pending and Won are a RESULT beside
+   Status, never a new status (see the SCHEMA note); Lost is the existing close, its outcome set by the reason. */
+var _QUOTE_LOST_REASONS = [   // [reason, the outcome it means]
+  ['Price', 'Lost'], ['Lead time', 'Lost'], ['Specs did not fit', 'Lost'], ['Went with a competitor', 'Lost'],
+  ['No budget', 'Not Pursued'], ['No reply from the client', 'Not Pursued'],
+  ['Duplicate quotation', 'Cancelled'], ['Other', 'Lost']
+];
+var _QUOTE_FOLLOWUP_STATUSES = ['Waiting for reply', 'Client is evaluating', 'Waiting for budget or approval',
+  'Waiting for their PO', 'Asked for a revised offer', 'Will call back', 'Other'];
+var _QUOTE_FOLLOWUP_VIA = ['Email', 'Call', 'Viber', 'Visit'];
+var _QUOTE_RESULT_MAX = 25;   // per call: Flask waits 60 s, and each row is a handful of cell writes
+
+/** The quotation's owner or the person who typed it (case-insensitive, like _itinMayActOn), or an approver. */
+function _quoMayAct(q, p) {
+  var me = String((p && p.actorName) || '').trim().toLowerCase();
+  if (me && (String(_quoOwner(q) || '').trim().toLowerCase() === me || String(q['Created By'] || '').trim().toLowerCase() === me)) return true;
+  return ['admin', 'management', 'director'].indexOf(String((p && p.actorRole) || '').toLowerCase()) >= 0;
+}
+function _quoLostOutcome(reason) {
+  for (var i = 0; i < _QUOTE_LOST_REASONS.length; i++) if (_QUOTE_LOST_REASONS[i][0] === reason) return _QUOTE_LOST_REASONS[i][1];
+  return '';
+}
+/** What a closed quotation goes back to: the status it was closed from, else what its own dates prove, else nothing. */
+function _quoRestoreStatus(q) {
+  var from = String(q['Closed From'] || '').trim();
+  if (from && _QUOTE_CLOSED.indexOf(from) === -1) return from;
+  if (q['Sent At']) return 'Sent';
+  if (q['Approved At']) return 'Approved';
+  return '';
+}
+/** A timestamp as ISO (blank stays blank) — the exact string the page sends back as its Undo guard. */
+function _qrIso(v) {
+  if (!v) return '';
+  var d = (v && typeof v.getTime === 'function') ? v : new Date(v);
+  return isNaN(d.getTime()) ? String(v) : d.toISOString();
+}
+function _quoResultState(q) {
+  return {
+    quotationNo: String(q['Quotation No']), status: String(q['Status'] || 'Draft'),
+    result: String(q['Result'] || ''), resultAt: _qrIso(q['Result At']), resultBy: String(q['Result By'] || ''),
+    resultReason: String(q['Result Reason'] || ''), resultNote: String(q['Result Note'] || ''),
+    lastFollowUp: _dateStr(q['Last Follow Up'] || ''), followUpVia: String(q['Follow Up Via'] || ''),
+    followUpStatus: String(q['Follow Up Status'] || ''), closedFrom: String(q['Closed From'] || ''),
+    approvalNote: String(q['Approval Note'] || ''), sentAt: q['Sent At'] || ''
+  };
+}
+
+/** setQuotationResult({quotationNo | quotationNos[≤25], result: won|pending|lost|open, reason, note, followUpDate,
+ *  followUpVia, followUpStatus, email, keep, approvalNote, ifResultAt})
+ *  - won: a sent or approved quotation is marked Won (one with a sales order already is: nothing to write).
+ *  - pending: the last follow-up — a picked email (linked here as a follow-up, under the same lock) or a date and how
+ *    (Call / Viber / Visit) — and where it stands.
+ *  - lost: closes it; the reason decides Lost / Not Pursued / Cancelled. The result and follow-up fields are left as
+ *    they were, so undoing it ({result: 'open', keep: true}) restores the row exactly. Several at once.
+ *  - open: back to no result; a closed quotation goes back to the status it was closed from.
+ *  A closed quotation marked won or pending is first restored. Every row is checked before anything is written. */
+function setQuotationResult(p) {
+  p = p || {};
+  var want = String(p.result || '').toLowerCase();
+  if (['won', 'pending', 'lost', 'open'].indexOf(want) === -1) return { success: false, message: 'Say won, pending, lost or open.' };
+  var list = p.quotationNos;
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = [list]; } }
+  if (typeof p.approvalNotes === 'string') { try { p.approvalNotes = JSON.parse(p.approvalNotes); } catch (e) { p.approvalNotes = null; } }
+  var bulk = Array.isArray(list);
+  var nos = (bulk ? list : [p.quotationNo]).map(function (x) { return String(x == null ? '' : x).trim(); })
+    .filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+  if (!nos.length) return { success: false, message: 'quotationNo required.' };
+  if (bulk && !(want === 'lost' || (want === 'open' && p.keep))) return { success: false, message: 'Only closing (and undoing it) can be done to several quotations at once.' };
+  if (nos.length > _QUOTE_RESULT_MAX) return { success: false, message: 'At most ' + _QUOTE_RESULT_MAX + ' quotations at a time.' };
+
+  var note = String(p.note || '').trim().slice(0, 300), reason = String(p.reason || '').trim(), outcome = '';
+  if (want === 'lost') {
+    outcome = _quoLostOutcome(reason);
+    if (!outcome) return { success: false, message: 'Choose why it was lost.' };
+    if (reason === 'Other' && note.length < 3) return { success: false, message: 'Say what happened — "Other" needs a note.' };
+  }
+  var email = null, fuDate = '', fuVia = '', fuStatus = '';
+  if (want === 'pending') {
+    if (bulk) return { success: false, message: 'Set a follow-up on one quotation at a time.' };
+    email = p.email;
+    if (typeof email === 'string') { try { email = JSON.parse(email); } catch (e) { email = null; } }
+    if (email && !_qeNormId(email.messageId)) return { success: false, message: 'That email has no Message-ID, so it cannot be linked.' };
+    fuVia = email ? 'Email' : String(p.followUpVia || '').trim();
+    if (_QUOTE_FOLLOWUP_VIA.indexOf(fuVia) === -1) return { success: false, message: 'Say how you followed up: Email, Call, Viber or Visit.' };
+    fuDate = _dateStr(p.followUpDate || (email ? email.sentAt : '') || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fuDate)) return { success: false, message: 'Give the date of the last follow-up.' };
+    if (fuDate > _dateStr(_now())) return { success: false, message: 'The follow-up date is in the future.' };
+    fuStatus = String(p.followUpStatus || '').trim();
+    if (_QUOTE_FOLLOWUP_STATUSES.indexOf(fuStatus) === -1) return { success: false, message: 'Choose where it stands.' };
+    if (fuStatus === 'Other' && note.length < 3) return { success: false, message: 'Say where it stands — "Other" needs a note.' };
+  }
+
+  var byNo = {};
+  _rows('Quotations').forEach(function (q) { byNo[String(q['Quotation No'])] = q; });
+  var soOf = {};
+  _rows('SalesOrders').forEach(function (s) { var k = String(s['Quotation No'] || '').trim(); if (k && !soOf[k]) soOf[k] = String(s['SO No'] || '') || 'a sales order'; });
+  var who = String(p.actorName || ''), now = _now();
+  var plan = [], results = [], refused = [];
+
+  nos.forEach(function (no) {
+    var q = byNo[no];
+    if (!q) { refused.push({ quotationNo: no, message: 'Quotation ' + no + ' not found.' }); return; }
+    if (!_quoMayAct(q, p)) { refused.push({ quotationNo: no, message: no + ' is ' + (_quoOwner(q) || 'another rep') + '\'s — you can only update your own.' }); return; }
+    if (p.ifResultAt != null && _qrIso(q['Result At']) !== String(p.ifResultAt)) {
+      refused.push({ quotationNo: no, message: no + ' was changed since — reload the page to see it.' }); return;
+    }
+    var st = String(q['Status'] || 'Draft'), closed = _QUOTE_CLOSED.indexOf(st) !== -1, so = soOf[no] || '';
+    var before = _quoResultState(q), cells = {};
+    if (so) {
+      if (want === 'won') { results.push(Object.assign(before, { alreadyWon: true, soNo: so, previous: _quoResultState(q) })); return; }
+      refused.push({ quotationNo: no, message: no + ' already has ' + so + ', so it is won.' }); return;
+    }
+    if (want === 'pending' && _dateStr(q['Date']) && fuDate < _dateStr(q['Date'])) {
+      refused.push({ quotationNo: no, message: 'The follow-up (' + fuDate + ') is before the quotation itself (' + _dateStr(q['Date']) + ').' }); return;
+    }
+    if (want === 'lost') {
+      cells = { 'Status': outcome, 'Result Reason': reason, 'Closed From': closed ? String(q['Closed From'] || '') : st,
+        'Approval Note': 'Closed as ' + outcome + (who ? ' by ' + who : '') + ' — ' + reason + (note ? ': ' + note : '') };
+    } else {
+      var target = st;
+      if (closed) {
+        target = _quoRestoreStatus(q);
+        if (!target) { refused.push({ quotationNo: no, message: no + ' was never sent — reopen it to Draft on Quotations instead.' }); return; }
+      }
+      if (want !== 'open' && target !== 'Sent' && target !== 'Approved') {
+        refused.push({ quotationNo: no, message: no + ' is not approved yet (' + target + '), so it cannot be ' + (want === 'won' ? 'won' : 'pending') + '.' }); return;
+      }
+      if (want === 'open' && !closed && !String(q['Result'] || '')) { results.push(Object.assign(before, { unchanged: true, previous: _quoResultState(q) })); return; }
+      if (closed) {
+        cells['Status'] = target; cells['Closed From'] = ''; cells['Result Reason'] = '';
+        // Undo of a close puts its note back as it was (one note, or one per quotation for a bulk Undo)
+        var kept = (want === 'open' && p.keep) ? (p.approvalNotes && p.approvalNotes[no] != null ? p.approvalNotes[no] : p.approvalNote) : null;
+        cells['Approval Note'] = kept != null ? String(kept).slice(0, 500) : 'Reopened from ' + st + (who ? ' by ' + who : '');
+      }
+      if (want === 'won') { cells['Result'] = 'Won'; cells['Result Note'] = note; }
+      else if (want === 'pending') {
+        cells['Result'] = 'Pending'; cells['Result Note'] = note;
+        cells['Last Follow Up'] = fuDate; cells['Follow Up Via'] = fuVia; cells['Follow Up Status'] = fuStatus;
+      } else if (!p.keep) cells['Result'] = '';
+    }
+    cells['Result At'] = now; cells['Result By'] = who;
+    plan.push({ q: q, cells: cells, before: before });
+  });
+
+  if (!plan.length && !results.length) return { success: false, message: refused.length ? refused[0].message : 'Nothing to update.', refused: refused };
+
+  /* The picked email first: a failed link writes nothing at all. Linked as a follow-up when the quotation has already
+     gone out (a send date or a live link); otherwise as its first email, which is then its send date. */
+  var linkId = '';
+  if (email && plan.length) {
+    var q0 = plan[0].q, live = _qeRows(q0['Quotation No']).some(function (r) { return String(r['Status'] || _QE_ACTIVE) === _QE_ACTIVE; });
+    var linked = linkQuotationEmail({ quotationNo: q0['Quotation No'], messageId: email.messageId, sentAt: email.sentAt || '',
+      subject: email.subject || '', to: email.to || '', threadRoot: email.threadRoot || '', mailboxAddr: email.mailboxAddr || '',
+      kind: (q0['Sent At'] || live) ? 'Follow-up' : '', note: 'Last follow-up (Quotation status)',
+      actorName: p.actorName, actorUsername: p.actorUsername });
+    if (!linked || !linked.success) return { success: false, message: (linked && linked.message) || 'The email could not be linked.' };
+    linkId = linked.linkId || '';
+  }
+
+  var sh = _sheet('Quotations');
+  plan.forEach(function (x) {
+    Object.keys(x.cells).forEach(function (h) {
+      var col = SCHEMA.Quotations.indexOf(h) + 1;
+      if (col > 0) sh.getRange(x.q.rowIndex, col, 1, 1).setValues([[x.cells[h]]]);
+    });
+    var after = {};
+    Object.keys(x.q).forEach(function (k) { after[k] = x.q[k]; });
+    Object.keys(x.cells).forEach(function (k) { after[k] = x.cells[k]; });
+    results.push(Object.assign(_quoResultState(after), { previous: x.before }));
+  });
+
+  var one = !bulk && results.length === 1 ? results[0] : null, say;
+  if (one) {
+    say = one.alreadyWon ? one.quotationNo + ' already has ' + one.soNo + ' — it is won.'
+      : want === 'won' ? one.quotationNo + ' marked won.'
+      : want === 'pending' ? one.quotationNo + ' is pending — last follow-up ' + one.lastFollowUp + ' (' + one.followUpVia.toLowerCase() + ').'
+      : want === 'lost' ? one.quotationNo + ' closed as ' + one.status + ' — ' + reason + '.'
+      : one.unchanged ? one.quotationNo + ' has no status to clear.' : one.quotationNo + ' is back on your list.';
+  } else {
+    say = (want === 'lost' ? 'Closed ' : 'Restored ') + results.length + ' quotation' + (results.length === 1 ? '' : 's') +
+      (refused.length ? '; ' + refused.length + ' could not be changed.' : '.');
+  }
+  return { success: true, quotationNo: one ? one.quotationNo : '', refNo: one ? '' : results.map(function (r) { return r.quotationNo; }).join(', ').slice(0, 200),
+    results: results, refused: refused, linkId: linkId, message: say };
 }
 
 // ── Purchase Order approval (admin creates → management/director approves) ──
@@ -11818,6 +12031,9 @@ function linkQuotationEmail(p) {
   var earliest = _qeEarliestSentAt(p.quotationNo);
   var patch = {};
   var stored = q['Sent At'] ? new Date(q['Sent At']) : null;
+  /* A382 — an email linked AS a follow-up is a chase, not the send: it never writes 'Sent At' or clears its basis
+     (a follow-up on a quotation whose send date is blank would otherwise become that date, estimate flag gone). */
+  if (String(p.kind || '') === 'Follow-up') earliest = null;
   if (earliest && (!stored || isNaN(stored) || earliest < stored)) {
     patch['Sent At'] = earliest;
     /* A230 — the date is now a FACT, so the "estimated" caption must go with it. A215's backfill
@@ -14018,7 +14234,8 @@ function seedCommissionDemo(p) {
     now, 'demo@example.invalid', '',
     '', '', '',
     who,                                   // A218 Salesperson
-    '', ''                                 // A276 Type · Service Kind — 29 values (the width trap:
+    '', '',                                // A276 Type · Service Kind
+    '', '', '', '', '', '', '', '', ''     // A382 the result columns — 38 values (the width trap:
   ]);                                      // this writer and createQuotation must move together)
   _append('QuotationItems', [
     d.quotationNo, d.itemNo, d.itemName, 1, d.exVat, d.exVat,
@@ -15264,6 +15481,7 @@ var _MODULE_MAP = {
   setQuotationEmailReply: ['Quotation', 'Reply Checked'],
   setQuotationFollowUp: ['Quotation', 'Follow-up Set'],
   snoozeQuotation: ['Quotation', 'Parked'],                                         // A215
+  setQuotationResult: ['Quotation', 'Status Updated'],                              // A382
   runQuotationSentAtBackfill: ['Quotation', 'Send Dates Estimated'],
   // A226 — without these two the reattribution leaves no audit row at all.
   runPricingRequestOwnerBackfill: ['Pricing Request', 'Reattributed'],
@@ -20315,6 +20533,7 @@ var HANDLERS = {
   setQuotationEmailReply: setQuotationEmailReply,
   setQuotationFollowUp: setQuotationFollowUp,
   snoozeQuotation: snoozeQuotation,                                                 // A215
+  setQuotationResult: setQuotationResult,                                           // A382
   previewQuotationOwners: previewQuotationOwners, runQuotationOwnerBackfill: runQuotationOwnerBackfill,
   setQuotationSalesperson: setQuotationSalesperson,
   // A226 — the same three for purchase requests: preview, apply, and correct.
@@ -20481,6 +20700,7 @@ var MUTATIONS = {
   // A215 — snoozeQuotation and the backfill both write to Quotations rows; the backfill rewrites
   // history across up to 60 of them, so it takes the lock like every other writer.
   snoozeQuotation: 1, runQuotationSentAtBackfill: 1, runQuotationOwnerBackfill: 1,
+  setQuotationResult: 1,   // A382 — writes Quotations rows (up to 25) and may link an email
   setQuotationSalesperson: 1,
   // A226 — both write attribution; the backfill can touch 315 rows in one call.
   runPricingRequestOwnerBackfill: 1, setPricingRequestSalesperson: 1,
@@ -20539,6 +20759,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A382 QUOTATION STATUS (191; A380 holds 190; A327 takes 192 or later). Neil, 29 Oct 2026: for each sales rep their own list of every quotation, each set to Won, Pending (the last follow-up: a picked email, or a date and Call / Viber / Visit, and where it stands) or Lost with a reason — "we just need to have the status of all the quotations". Quotations gains nine columns (38 wide): Result ('' | Pending | Won, beside Status — never a new status), Result At, Result By, Result Reason, Result Note, Last Follow Up, Follow Up Via, Follow Up Status, Closed From; _sheet widens a tab narrower than its schema; createQuotation and seedCommissionDemo append the blanks. setQuotationResult({quotationNo | quotationNos ≤25, result won|pending|lost|open, reason, note, followUpDate, followUpVia, followUpStatus, email, keep, approvalNote, ifResultAt}) — secured, owner or creator (case-insensitive) or admin / management / director, under the lock, audited (Quotation / Status Updated): won and pending need a sent or approved quotation (a closed one is first restored to the status it was closed from); one with a sales order is won already; lost takes a reason from eight (Price, Lead time, Specs did not fit, Went with a competitor → Lost; No budget, No reply from the client → Not Pursued; Duplicate quotation → Cancelled; Other → Lost, with a note) and leaves the result and follow-up fields alone, so its Undo ({open, keep}) restores the row; a picked email is linked in the same call (as a follow-up once the quotation has gone out). closeQuotation records Closed From; reopenQuotation clears Result, Result Reason and Closed From; reviseQuotation clears Result; linkQuotationEmail never lets an explicit Follow-up write Sent At. getQuotations returns the nine fields.
 A374 THE SUPPLIER LIST (189; A327 takes 190 or later). Neil, 26 Oct 2026: a suppliers list for the admin dashboard (name, several contact people, phones and emails, address, local or international, distributorship, usual delivery, payment terms, usual items), connected to pricing: what admin prices goes under the supplier with the price and the date it was last updated. A new list apart from the old Suppliers tab (bank details, not touched). New tabs SupplierBook (25 wide; SB-; TIN kept as text), SupplierBookLog (9 wide; SBL-) and SupplierPrices (18 wide; SP-; Item No kept as text), and six secured actions, each with its own role check (FlowSettings supplierBookRoles, default admin and director): getSupplierBook (the whole list, prices and log; lite = the live names, spellings and each item's last price, also for accounting, who prices requests too), saveSupplierBookSupplier (a field not sent keeps what it has; Local or International; the distributorship is ours, its brands kept only with it; contact people as in the Client Book; Other delivery needs a note; a second supplier with the same key or a shared spelling is refused unless allowDuplicate; neither a contact nor an address = Needs Details), mergeSupplierBookSupplier (prices, spellings and contact people move to the other supplier, its blanks are filled, the first is archived with a note; dryRun says what would move), archiveSupplierBookSupplier (with a reason; restore) and importSupplierBookHistory (director; dry run by default: past requests' priced lines by supplier, every spelling, pairs that may be one supplier; the real run takes the merges a person confirmed, writes in blocks, skips lines already filed) and importSupplierBookList (director; dry run by default: the company's own supplier file; a supplier already on the list is overwritten with the file's details, its prices, spellings and history kept; one bad row refuses the whole file). submitForPricing now files the lines it forwards (_sbRecordForward, after the status is set and inside a try/catch, so it never stops a forward): one SupplierPrices row per request line, upserted on PR No + Line (a new price or supplier rewrites the row and its date; the same price changes nothing); a supplier not in the list yet is added, flagged as needing details; the response carries recorded {prices, unchanged, newSuppliers}. The price is admin's at the forward; setMgmtPricing still overwrites Supplier Price (FC) afterwards.
 A372 RESTATING WHAT WAS PAID ON A PAYABLE (188; A327 takes 189 or later). Neil, 26 Oct 2026: AP-202607-013 (CON BAN KIAT, PO 2026-44, ₱250,560) said fully paid while its only payment request, PRF-2026-92 CBK, paid half (₱125,280; the books follow the request), so accounting could not raise the request for the other half. restateAPPaid({apNo, expectPaid, reason, dryRun}) — secured, director only, under the lock, audited (AP Aging / Paid restated): Paid (PHP) becomes what the order's paid payment requests settled (debited less bank charge, else the amount), never a typed figure; the status follows (Paid / Partial / Unpaid); the Notes are stamped; the legacy APPAY journal is re-posted at the new figure; a full copy of the row goes to Overrides ('restated-ap-paid'). The books are not touched. Refuses a figure other than expectPaid, a foreign-currency payable, an order with no or several payables, a figure above the payable, or nothing to change.
 A370 A DAY OF CLIENT VISITS (187; A327 takes 188 or later). Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day, then with this itinerary for this day, it will show the estimated travel allowance in the accounting". saveVisitPlan also takes {date, stops: [{clientNo, time, location, address, contactIds, someoneElse, purpose}, …], send}: up to 10 companies on one day, all or none — every stop is checked as a single visit is (a refusal names the visit and its company), a client twice in the list or already visited that day is refused, then one row and one 'created' log row per stop, numbered in order. A single visit and every other action are unchanged; no new columns, no new actions. Accounting's week already reads each rep's day as one row with its estimate.

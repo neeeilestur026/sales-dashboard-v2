@@ -151,16 +151,35 @@ function qemScore(quotation, msg, ctx) {
     score += Math.round(15 * refOverlap); reasons.push('matches your client reference');
   }
 
-  // 5. When it was sent, relative to approval. A quotation cannot be emailed before it exists.
-  const anchor = String(q.approvedAt || q.date || '').slice(0, 10);
   const when = String(m.sentAt || m.date || '').slice(0, 10);
-  const gap = qemDays(anchor, when);
-  if (gap !== null) {
-    if (gap < -1) { score -= 30; reasons.push('sent before the quotation was approved'); }
-    else if (gap <= 1) { score += 20; reasons.push('sent the same day'); }
-    else if (gap <= 3) { score += 12; reasons.push('sent within 3 days'); }
-    else if (gap <= 7) { score += 6; reasons.push('sent within a week'); }
-    else if (gap <= 14) { score += 2; }
+  if (c.followUp) {
+    /* 5b. A382 — picking a quotation's LAST FOLLOW-UP (Quotation status), not the email that carried it. Anchored on
+       the send date: a chase comes after it, so the same-day email is the send itself and earns almost nothing; the
+       thread the quotation went out in is the strongest sign there is; and the more recent, the likelier. Only with
+       ctx.followUp = { sentAt, threads: {threadRoot: true}, today } — the default ranking below is untouched. */
+    const f = c.followUp, sentDay = String(f.sentAt || q.sentAt || q.approvedAt || q.date || '').slice(0, 10);
+    const gapF = qemDays(sentDay, when);
+    if (gapF !== null && gapF < 0) { score -= 30; reasons.push('sent before the quotation went out'); }
+    else if (gapF !== null && gapF <= 1) { score += 2; reasons.push('sent the day it went out'); }
+    const root = String(m.threadRoot || '').toLowerCase();
+    if (root && f.threads && f.threads[root]) { score += 40; reasons.push('in the thread the quotation went out in'); }
+    const ago = qemDays(when, f.today || '');
+    if (ago !== null && ago >= 0) {
+      if (ago <= 7) { score += 14; reasons.push('sent in the last week'); }
+      else if (ago <= 30) { score += 8; reasons.push('sent in the last month'); }
+      else if (ago <= 60) score += 4;
+    }
+  } else {
+    // 5. When it was sent, relative to approval. A quotation cannot be emailed before it exists.
+    const anchor = String(q.approvedAt || q.date || '').slice(0, 10);
+    const gap = qemDays(anchor, when);
+    if (gap !== null) {
+      if (gap < -1) { score -= 30; reasons.push('sent before the quotation was approved'); }
+      else if (gap <= 1) { score += 20; reasons.push('sent the same day'); }
+      else if (gap <= 3) { score += 12; reasons.push('sent within 3 days'); }
+      else if (gap <= 7) { score += 6; reasons.push('sent within a week'); }
+      else if (gap <= 14) { score += 2; }
+    }
   }
 
   /* 6. A218 — WHOSE QUOTATION IS IT, against whose mailbox this message came from.

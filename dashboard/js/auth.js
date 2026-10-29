@@ -337,6 +337,21 @@ function requireClientBookAccess() {
 
 /* A374 — the supplier list (supplier-list.html): admin keeps it, the director too. FlowSettings supplierBookRoles widens
    who the server lets in; the page follows the default. */
+/* A382 — Quotation status: each rep's own quotations, and every rep's for those who oversee them (admin, management,
+   the director). Accounting and lead gen go home: they set no quotation's result. */
+function requireQuotationStatusAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!['sales', 'admin', 'management', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 function requireSupplierListAccess() {
   const session = getSession();
   if (!session) {
@@ -666,7 +681,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -686,6 +701,7 @@ function renderNavbar(activePage) {
             <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
             <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
             <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
+            <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">Quotation Status</a>   <!-- A382 -->
             <a href="admin-import-quotation.html" class="${activePage === 'admin-import-quotation' ? 'active' : ''}">Import Quotation</a>
             <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
             <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
@@ -838,7 +854,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker'];   // A207 · A216 · A217 · A226 · A369
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'];   // A207 · A216 · A217 · A226 · A369
     const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
@@ -866,6 +882,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotation Approvals</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
+          <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">Quotation Status</a>   <!-- A382 -->
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           <a href="flow-purchase-orders.html" class="${activePage === 'flow-purchase-orders' ? 'active' : ''}">PO Approvals</a>
           <a href="flow-payment-requests.html" class="${activePage === 'flow-payment-requests' ? 'active' : ''}">Payment Requests</a>
@@ -959,7 +976,7 @@ function renderNavbar(activePage) {
     const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits'].includes(activePage);   // A216, A366, A369
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
-    const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests'].includes(activePage);   // A217 · A338
+    const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests', 'quotation-status'].includes(activePage);   // A217 · A338
     navLinks = `
       <a href="director-home.html" class="${activePage === 'director-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -987,6 +1004,7 @@ function renderNavbar(activePage) {
           <a href="website-requests.html" class="${activePage === 'website-requests' ? 'active' : ''}">Website Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">All Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
+          <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">Quotation Status</a>   <!-- A382 -->
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
         </div>
       </div>
@@ -1199,7 +1217,7 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
+    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
     const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
     const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
@@ -1220,6 +1238,7 @@ function renderNavbar(activePage) {
           <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
+          <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">My Quotations</a>   <!-- A382 -->
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 — the new itinerary -->

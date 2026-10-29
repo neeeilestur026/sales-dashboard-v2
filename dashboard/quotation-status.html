@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My quotations</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/quotation-status.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content qs-page">
+    <!-- A382 — Quotation status (Neil, 29 Oct 2026): each rep's own quotations, each one set to Won, Pending (the last
+         follow-up and where it stands) or Lost with a reason, so every quotation has a status. Admin, management and the
+         director see each rep's, with a switch. js/quotation-status.js draws it; js/quotation-status-model.js decides. -->
+    <header class="qs-head">
+      <div class="qs-titles">
+        <h1 id="qsTitle">My quotations</h1>
+        <p class="qs-lede" id="qsLede">Every quotation you sent and where it stands: won, pending with its last follow-up, or closed with a reason.</p>
+      </div>
+      <div class="qs-repwrap" id="qsRepWrap" hidden>
+        <label for="qsRep">Rep</label>
+        <select id="qsRep" class="qs-in"></select>
+      </div>
+    </header>
+    <section class="qs-progress" id="qsProgress" aria-live="polite"></section>
+    <div id="qsNotice"></div>
+    <div class="qs-bar">
+      <div class="qs-seg" id="qsSeg" role="tablist" aria-label="Show"></div>
+      <div class="qs-tools">
+        <label class="qs-search"><span class="qs-sr">Search</span><input type="search" id="qsSearch" class="qs-in" placeholder="Search client, number or subject" autocomplete="off"></label>
+        <label class="qs-sortw"><span class="qs-sr">Sort</span>
+          <select id="qsSort" class="qs-in">
+            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest first</option>
+            <option value="biggest">Biggest first</option>
+            <option value="client">By client</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-secondary qs-selbtn" id="qsSelect" aria-pressed="false" hidden>Select</button>
+      </div>
+    </div>
+    <div class="qs-list" id="qsList" role="region" aria-label="Quotations"></div>
+    <div class="qs-bulk" id="qsBulk" role="toolbar" aria-label="Selected quotations" hidden></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-rollup.js"></script>
+  <script src="js/quotation-email-match.js"></script>
+  <script src="js/quotation-status-model.js"></script>
+  <script src="js/quotation-status.js"></script>
+</body>
+</html>

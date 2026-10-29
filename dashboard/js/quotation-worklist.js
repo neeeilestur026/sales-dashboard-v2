@@ -100,7 +100,9 @@ function quotationWorklistStep(q, links, cfg, hasSO, today) {
   };
 
   // Done first — nothing about a won or closed deal is work.
-  if (bucket === 'won') return at('won', 'Order raised', '', null, 0);
+  // A382 — won by hand (Quotation status) is won too; say so, because no sales order is behind it yet
+  if (bucket === 'won') return at('won', hasSO && hasSO[String((q || {}).quotationNo || '')] ? 'Order raised' : 'Marked won, no sales order yet',
+                                   String((q || {}).resultNote || ''), null, 0);
   if (bucket === 'closed') return at('closed', status, String((q || {}).approvalNote || ''), null, 0);
 
   // Rejected outranks the parked flag: a quotation sent back to the rep is theirs to fix now.

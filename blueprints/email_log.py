@@ -9,6 +9,7 @@ Trust model:
   only Flask (not the browser) can fetch encrypted blobs
 """
 
+import json
 import os
 import re
 import time
@@ -55,6 +56,70 @@ _sent_mail_cache: dict = {}            # (username, date) -> { emails, meta, add
 _FEED_TTL = 120                        # inbox/sent — the folders that actually change
 _FEED_TTL_SPAM = 600                   # spam is not time-critical
 _FEED_CACHE_MAX = 200
+
+# A382 — how far back a feed reads, and how many messages it keeps. The Sent folder goes back further (a quotation's
+# last follow-up is often weeks old) and keeps more of it; inbox and spam stay as they were. A search (`match`) reads
+# only the messages to one client or naming one quotation, so it can go back further still with a small cap.
+_FEED_DAYS_MAX = {"sent": 120}
+_FEED_SEARCH_DAYS_MAX = 180
+_FEED_SEARCH_CAP = 200
+# A search on one of these domains would match half the mailbox: only a full address there is a useful term.
+_PUBLIC_MAIL = {"gmail.com", "yahoo.com", "yahoo.com.ph", "ymail.com", "outlook.com", "hotmail.com", "live.com",
+                "icloud.com", "me.com", "aol.com", "gmx.com", "mail.com", "proton.me", "protonmail.com"}
+_TERM_RE = re.compile(r"[^A-Za-z0-9@._ -]")
+
+
+def _feed_window(kind: str, raw) -> tuple:
+    """(days, cap) for a plain feed of `kind`: Sent up to 120 days (keeping 500 past 60), the others 60 and 250."""
+    try:
+        days = int(raw if raw is not None else 14)
+    except (TypeError, ValueError):
+        days = 14
+    days = max(1, min(_FEED_DAYS_MAX.get(kind, 60), days))
+    return days, (500 if kind == "sent" and days > 60 else 250)
+
+
+def _clean_term(t) -> str:
+    """A search term with nothing IMAP could read as syntax: no quotes, backslashes, brackets or line breaks."""
+    return _TERM_RE.sub("", str(t or "")).strip()[:64]
+
+
+def _sent_match(raw) -> dict:
+    """{to: [address or domain, ≤6], subject: [text, ≤4]} cleaned, or {} when nothing usable is left."""
+    if not isinstance(raw, dict):
+        return {}
+    to, subj = [], []
+    for t in (raw.get("to") or [])[:6] if isinstance(raw.get("to"), list) else []:
+        c = _clean_term(t).lower()
+        if len(c) < 3 or ("@" not in c and c in _PUBLIC_MAIL):
+            continue
+        if c not in to:
+            to.append(c)
+    for t in (raw.get("subject") or [])[:4] if isinstance(raw.get("subject"), list) else []:
+        c = _clean_term(t)
+        if len(c) >= 4 and c not in subj:
+            subj.append(c)
+    out = {}
+    if to:
+        out["to"] = to
+    if subj:
+        out["subject"] = subj
+    return out
+
+
+def _sent_criteria(since_str: str, match: dict) -> str:
+    """IMAP SEARCH for sent mail since a date that went to one of `to` (To or Cc) or names one of `subject`."""
+    keys = []
+    for t in (match or {}).get("to", []):
+        keys += [f'TO "{t}"', f'CC "{t}"']
+    for t in (match or {}).get("subject", []):
+        keys.append(f'SUBJECT "{t}"')
+    if not keys:
+        return f"SINCE {since_str}"
+    expr = keys[-1]
+    for k in reversed(keys[:-1]):            # IMAP's OR takes two keys: OR a OR b c
+        expr = f"OR {k} {expr}"
+    return f"SINCE {since_str} ({expr})"
 _feed_cache: dict = {}                 # (username, folder, days) -> { payload, _ts }
 
 
@@ -425,9 +490,10 @@ def _order_newest_first(records: list[dict]) -> list[dict]:
     return ordered
 
 
-def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250) -> list[dict]:
+def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250, match: Optional[dict] = None) -> list[dict]:
     """Fetch recent message headers from a logical folder (inbox/sent/spam) within `days`.
-    Inbox/Spam messages are classified. Returns newest-first, capped at `cap`."""
+    Inbox/Spam messages are classified. Returns newest-first, capped at `cap`. A382: `match` (Sent only, already
+    cleaned by _sent_match) narrows the search to one client's addresses or a quotation's number."""
     my_domain = addr.split("@", 1)[1].lower() if "@" in addr else ""
     conn = _imap_login(addr, pwd)
     try:
@@ -435,7 +501,8 @@ def fetch_folder(addr: str, pwd: str, kind: str, days: int = 14, cap: int = 250)
             raise RuntimeError(f"Could not open {kind} folder")
         since_dt = datetime.now(PH_TZ) - timedelta(days=max(1, int(days)))
         date_str = since_dt.strftime("%d-%b-%Y")
-        typ, data = conn.search(None, f"SINCE {date_str}")
+        criteria = _sent_criteria(date_str, match) if (match and kind == "sent") else f"SINCE {date_str}"
+        typ, data = conn.search(None, criteria)
         if typ != "OK" or not data or not data[0]:
             return []
         ids = data[0].split()
@@ -833,10 +900,15 @@ def email_feed():
     kind = (body.get("folder") or "inbox").strip().lower()
     if kind not in ("inbox", "sent", "spam"):
         return jsonify({"success": False, "message": "Invalid folder"}), 400
-    try:
-        days = max(1, min(60, int(body.get("days", 14))))
-    except (TypeError, ValueError):
-        days = 14
+    match = _sent_match(body.get("match")) if kind == "sent" else {}
+    if match:   # A382 — a search: further back, fewer kept
+        try:
+            days = max(1, min(_FEED_SEARCH_DAYS_MAX, int(body.get("days", 90))))
+        except (TypeError, ValueError):
+            days = 90
+        cap = _FEED_SEARCH_CAP
+    else:
+        days, cap = _feed_window(kind, body.get("days", 14))
     enc_blob = _get_enc_creds(session["username"])
     if not enc_blob:
         return jsonify({"success": True, "needsSetup": True, "emails": [], "folder": kind})
@@ -852,7 +924,7 @@ def email_feed():
     # gunicorn workers keep independent copies, so a user can still get a live fetch on the other
     # worker; that is a smaller problem than every page load being a login.
     force = bool(body.get("force"))
-    ck = (session["username"], kind, days)
+    ck = (session["username"], kind, days, json.dumps(match, sort_keys=True) if match else "")
     ttl = _FEED_TTL_SPAM if kind == "spam" else _FEED_TTL
     if not force:
         hit = _feed_cache.get(ck)
@@ -862,8 +934,10 @@ def email_feed():
             out["fetchedAt"] = hit["fetchedAt"]
             return jsonify(out)
     try:
-        emails = fetch_folder(addr, pwd, kind, days=days)
-        payload = {"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days}
+        emails = fetch_folder(addr, pwd, kind, days=days, cap=cap, match=match or None)
+        # A382 — `truncated`: the cap was reached, so older messages in the window were not read
+        payload = {"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days,
+                   "cap": cap, "truncated": len(emails) >= cap, "match": match}
         fetched_at = datetime.now(PH_TZ).isoformat()
         if len(_feed_cache) >= _FEED_CACHE_MAX:
             _feed_cache.pop(next(iter(_feed_cache)), None)
