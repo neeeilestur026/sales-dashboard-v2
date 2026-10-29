@@ -109,7 +109,7 @@ function quotationBoardMove(from, to) {
   if (to === 'approved' || (to === 'approval' && from !== 'draft' && from !== 'sent-back')) {
     reason = 'Approving happens in the review, where the pricing and the saved PDF are checked. Open the quotation instead.';
   } else if (to === 'won') {
-    reason = 'A quotation becomes Won when a sales order records it — not by hand.';
+    reason = 'Mark it won on Quotation status (A382), or it becomes Won when a sales order records it.';
   } else if (from === 'won') {
     reason = 'This one already has a sales order against it.';
   } else if (to === 'draft' && from !== 'closed') {

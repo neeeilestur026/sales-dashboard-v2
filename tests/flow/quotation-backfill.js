@@ -79,7 +79,7 @@ console.log('\nthe width trap');
      contradicted each other and this one lost; a pin that disagrees with another pin is worse
      than no pin. Reconciled toward quotation-owner.js, which is the one that measures the
      writers as well as the header. */
-  check('SCHEMA.Quotations is 29 wide', c3.SCHEMA.Quotations.length === 29, c3.SCHEMA.Quotations.length);  // A276: +Type, +Service Kind
+  check('SCHEMA.Quotations is 38 wide', c3.SCHEMA.Quotations.length === 38, c3.SCHEMA.Quotations.length);  // A276: +Type, +Service Kind · A382: +9 result columns
   check('Sent At Basis is on it', c3.SCHEMA.Quotations.indexOf('Sent At Basis') >= 0);
   check('Snooze Until is on it', c3.SCHEMA.Quotations.indexOf('Snooze Until') >= 0);
 }

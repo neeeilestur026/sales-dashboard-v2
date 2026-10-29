@@ -157,6 +157,7 @@ const FLOW_SECURED_ACTIONS = [
   'sendQuotation', 'setCollectionMeta', 'setCommissionRate', 'setFlowDriveFolder', 'setFlowSettings',
   'setMgmtPricing', 'setOpeningBalance', 'setPricingRequestSalesperson', 'setQuotationEmailReply', 'setQuotationFollowUp',
   'setQuotationSalesperson', 'setSOSupplierType', 'setTravelFloat', 'setupFlowDrive', 'snoozeQuotation',
+  'setQuotationResult',   // A382 — quotation status
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
   'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
   'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',
@@ -1263,6 +1264,9 @@ function flowQuotationBucket(q, hasSO) {
   if (hasSO && hasSO[no]) return 'won';
   const st = String((q || {}).status || '');
   if (FLOW_Q_CLOSED_STATUSES.indexOf(st) !== -1) return 'closed';
+  /* A382 — or its rep marked it won (Quotation status), on a quotation that went out: after an order, after a close,
+     never on internal work. Status stays Sent / Approved, so pages that read Status are unchanged. */
+  if (String((q || {}).result || '') === 'Won' && (FLOW_Q_SENT_STATUSES.indexOf(st) !== -1 || FLOW_Q_APPROVED_STATUSES.indexOf(st) !== -1)) return 'won';
   if (FLOW_Q_SENT_STATUSES.indexOf(st) !== -1) return 'sent';
   if (FLOW_Q_APPROVED_STATUSES.indexOf(st) !== -1) return 'approved';
   return 'internal';
@@ -1363,8 +1367,14 @@ function flowFollowUp(q, links, cfg, hasSO, asOf) {
     if (r && (!replied || r > replied)) replied = r;
     if (r && (!last || r > last)) last = r;
   });
+  /* A382 — the rep's own record of the last follow-up (Quotation status: a call, a Viber message, a visit, or a picked
+     email) is contact too. Not a reply: the rep chased them, so the clock restarts from then. */
+  const own = flowDate((q || {}).lastFollowUp);
+  if (own && (!last || own > last)) last = own;
+  if (own && replied && own >= replied) replied = null;   // they answered, and the rep has followed up since
   out.lastContactAt = last || '';
 
+  if (!out.sentAt && own) out.sentAt = own;               // marked sent with no date, but a follow-up is on record
   if (!out.sentAt) {
     // Marked Sent but with no date — an older record from before the stamp existed.
     out.state = 'unknown';

@@ -251,7 +251,7 @@ console.log('\n== the money-bearing widths ==');
  ['LgEmailBatch', 14, 'A277 — Count is derived from Contact Nos'], ['LgLeads', 27, 'A277-2 inserted Attendees while the sheet still existed nowhere'], ['LgAccred', 14, 'A277'],
  ['SOCostDetails', 18, 'the gross-profit record; saveSOCostDetails is a FULL-ROW overwrite'],
  ['DailyReports', 24, 'no test mentioned this sheet at all before A243'],
- ['Quotations', 29, 'A276 appended Type + Service Kind'],
+ ['Quotations', 38, 'A382 appended the nine result columns (A276 Type + Service Kind before them)'],
  ['SalesOrders', 16, 'A276 appended Type + Service Kind (createInvoice reads Type to know a hire from a sale); A331 VAT Type + Zero Rating Ref'],
  ['SalesOrderItems', 10, 'A276 appended Charge Kind + Rate Basis + Duration'],
  ['QuotationItems', 16, 'A276 appended Charge Kind + Rate Basis + Duration'],

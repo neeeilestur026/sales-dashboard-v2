@@ -550,6 +550,12 @@ async function apiFetchEmailFeed(folder, days, force) {
   // "I sent it a minute ago" is always one click from being true.
   return _flaskFetch('/api/email/feed', { folder, days: days || 14, force: !!force });
 }
+/** A382 — the caller's own sent mail to one client or naming one quotation: match {to: [address or domain],
+ *  subject: [text]} — up to 180 days back, at most 200 messages. A quotation's last follow-up is often older than
+ *  the newest few hundred messages a plain feed keeps. */
+async function apiFindSentEmails(match, days, force) {
+  return _flaskFetch('/api/email/feed', { folder: 'sent', match: match || {}, days: days || 120, force: !!force });
+}
 
 /** A217 — has the client replied to any of these sent messages?
  *

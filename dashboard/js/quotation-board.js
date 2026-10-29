@@ -171,8 +171,8 @@ function qbRenderNote(rows, board) {
       new. <a href="flow-quotations.html">Estimate the dates →</a>`);
   }
   if (won) {
-    bits.push(`<b>Won</b> counts only quotations a sales order actually names — most orders do not
-      record one, so treat it as a floor, never as a conversion rate.`);
+    bits.push(`<b>Won</b> counts the quotations a sales order names, and the ones a rep marked won on
+      <a href="quotation-status.html">Quotation status</a> — most orders do not record their quotation, so treat it as a floor.`);
   }
   document.getElementById('qbNote').innerHTML = bits.length
     ? `<div class="qb-note">${bits.join(' ')}</div>` : '';
