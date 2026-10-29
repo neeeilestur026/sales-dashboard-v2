@@ -2010,6 +2010,13 @@ async function qcSavePdf(no) {
         description: it.itemName || '',
         uom: it.uom || '',
         optionNo: String(it.optionNo || '').trim(),           // A205
+        /* A383 — the hire shape, from the record like everything else here. Missing it, the route
+           spans no line (it spans by rateBasis, never by uom), so a 7-day hire filed as "1 DAY" at
+           one day's amount while the record kept the 7-day total, and a deposit was VATed. A record
+           read from a backend that does not return the key falls back to this browser's line. */
+        chargeKind: String(('chargeKind' in it ? it.chargeKind : (loc && loc.chargeKind)) || '').trim(),
+        rateBasis: String(('rateBasis' in it ? it.rateBasis : (loc && loc.rateBasis)) || '').trim(),
+        duration: ('duration' in it) ? it.duration : ((loc && loc.duration) || ''),
         // A86: the pairing the customer sees — what they asked for, then OUR OFFER
         origItemNo: it.origItemNo || '', origItemName: it.origItemName || '',
         scope: lay ? String(lay.s || '') : String((loc && loc.scope) || ''),
