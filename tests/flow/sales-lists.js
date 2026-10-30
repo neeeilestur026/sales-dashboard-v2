@@ -57,6 +57,23 @@ eq('search: words, and a phone typed as digits', [M.slmSearch(R, 'pump').map(r =
 }
 eq('a group carries its count and value', M.slmGroup(R, 'client', { today: T })[0].value, 100);
 eq('the count line', [M.slmCountLine(4, 4, 175, 'request'), M.slmCountLine(2, 4, 0, 'request')], ['4 requests · ₱175.00', '2 of 4 requests']);
+/* A386 — Neil, 30 Oct 2026: a request's item cell printed the whole spec sheet that was pasted into the item name */
+const SPEC = 'Portable AcetyleneandOxygen tank Kit Product Name: Portable Welding Kit Brand: Greenfield Type: Portable Oxy-Acetylene Welding Kit ' +
+  'Application: Suitable for welding, brazing, soldering, and heating applications Kit Components: Oxygen cylinder Acetylene cylinder Warranty: Manufacturer warranty';
+eq('a list shows an item\'s name, not its spec sheet: the text before the first label ("Product Name:", "Brand:" …)',
+   [M.slmShortItem(SPEC), M.slmShortItem('Hydraulic torque wrench 10,940 ft-lbs'), M.slmShortItem('Bolt tensioner Model: BT-200 Rating: 1500 bar')],
+   ['Portable AcetyleneandOxygen tank Kit', 'Hydraulic torque wrench 10,940 ft-lbs', 'Bolt tensioner']);
+{
+  const sp = M.slmItemSpecs(SPEC);
+  eq('the Open view reads the spec sheet apart: the name, then label and value (title-case values do not swallow the label)',
+     [sp.title, sp.specs.map(x => x[0])], ['Portable AcetyleneandOxygen tank Kit', ['Product Name', 'Brand', 'Type', 'Application', 'Kit Components', 'Warranty']]);
+  eq('  values stay whole', [sp.specs[0][1], sp.specs[1][1], sp.specs[2][1]], ['Portable Welding Kit', 'Greenfield', 'Portable Oxy-Acetylene Welding Kit']);
+  eq('  "Manual Use:" and "Safety Feature:" are read right; a plain name has no specs',
+     [M.slmItemSpecs('Ignition Method: Manual Use: Ideal for HVAC work Safety Feature: Check valves').specs.map(x => x[0]), M.slmItemSpecs('Hydraulic torque wrench 10,940 ft-lbs')],
+     [['Ignition Method', 'Use', 'Safety Feature'], { title: 'Hydraulic torque wrench 10,940 ft-lbs', specs: [] }]);
+}
+eq('  a long name with no labels is cut at a word, with an ellipsis; a name that IS a label stays', [M.slmShortItem('Lifting chain grade 80 alloy steel with safety hooks and shortening clutches both ends supplied', 40), M.slmShortItem('Brand: X')],
+   ['Lifting chain grade 80 alloy steel with…', 'Brand: X']);
 
 sec('2 · the organizer draws');
 const SL = (function () { const c = { console, localStorage: { getItem: () => null, setItem() {} }, flowEsc: (s) => String(s), JSON, Math, Number, String, Object, Array, Date };
@@ -89,7 +106,9 @@ const PRS = [
   { prNo: 'PR-PART', date: '2026-10-05', customer: 'Taganito Mining', requestedBy: 'Kimberlyn Blones', status: 'Partly Quoted', items: [it(1, 900, { quotedOn: 'Q-1', quotable: false }), it(2, 450)], archived: false, updatedAt: '2026-10-25T02:00:00Z', quotationNos: ['Q-1'] },
   { prNo: 'PR-PART-DONE', date: '2026-10-02', customer: 'Taganito Mining', requestedBy: 'Kimberlyn Blones', status: 'Partly Quoted', items: [it(1, 900, { quotedOn: 'Q-2', quotable: false })], archived: false, updatedAt: '2026-10-22T02:00:00Z', quotationNos: ['Q-2'] },
   { prNo: 'PR-SRC', date: '2026-10-27', customer: 'Apex Mining', requestedBy: 'Kimberlyn Blones', status: 'Sourcing', items: [it(1, 0)], archived: false, updatedAt: '2026-10-27T02:00:00Z', quotationNos: [] },
-  { prNo: 'PR-Q', date: '2026-09-12', customer: 'Apex Mining', requestedBy: 'Kimberlyn Blones', status: 'Quoted', items: [it(1, 700, { quotedOn: 'Q-3', quotable: false })], archived: false, updatedAt: '2026-10-15T02:00:00Z', quotationNos: ['Q-3'] }];
+  { prNo: 'PR-Q', date: '2026-09-12', customer: 'Apex Mining', requestedBy: 'Kimberlyn Blones', status: 'Quoted', items: [it(1, 700, { quotedOn: 'Q-3', quotable: false })], archived: false, updatedAt: '2026-10-15T02:00:00Z', quotationNos: ['Q-3'] },
+  { prNo: 'PR-LONG', date: '2026-10-29', customer: 'ACEN - One Subic Power', requestedBy: 'Kimberlyn Blones', status: 'Requested', archived: false, updatedAt: '2026-10-29T02:00:00Z', quotationNos: [],
+    items: [it(1, 0, { itemName: 'Portable AcetyleneandOxygen tank Kit Product Name: Portable Welding Kit Brand: Greenfield Type: Portable Oxy-Acetylene Welding Kit' })] }];
 async function prPage(session, settings) {
   const p = page(['js/sales-lists-model.js', 'js/sales-lists.js', 'js/client-rollup.js', 'js/supplier-list-model.js', 'js/flow-pricing-engine.js', 'js/flow-pricing-request.js'], 'flow-pricing-request.html',
     session || { username: 'sales1', name: 'Kimberlyn Blones', role: 'sales' },
@@ -105,17 +124,23 @@ async function prPage(session, settings) {
   const p = await prPage();
   const host = p.els.prOrgHost, chips = host.parts['.sl2-chips'].innerHTML, groups = host.parts['.sl2-groups'].innerHTML;
   ok('the list reads fresh (Refresh served a minute-old copy)', p.paramsFor('getPricingRequests') && true);
-  ok('chips: Waiting for price, For Quotation, Quoted and Archived, adding up to All', /All <span class="n">5<\/span>/.test(chips) && /Waiting for price <span class="n">1<\/span>/.test(chips) &&
+  ok('chips: Waiting for price, For Quotation, Quoted and Archived, adding up to All', /All <span class="n">6<\/span>/.test(chips) && /Waiting for price <span class="n">2<\/span>/.test(chips) &&
      /For Quotation <span class="n">2<\/span>/.test(chips) && /Quoted <span class="n">2<\/span>/.test(chips) && /Archived <span class="n">1<\/span>/.test(chips), chips);
   eq('the stage each request is really in (a Partly Quoted with nothing left is Quoted, whatever its status)',
-     PRS.map(r => p.run('prStageOf(' + JSON.stringify(r) + ', flowPrRemaining(' + JSON.stringify(r) + '))')), ['source', 'ready', 'ready', 'done', 'source', 'done']);
+     PRS.map(r => p.run('prStageOf(' + JSON.stringify(r) + ', flowPrRemaining(' + JSON.stringify(r) + '))')), ['source', 'ready', 'ready', 'done', 'source', 'done', 'source']);
   ok('the archived request is not in the list, and the note says how to see it', !/PR-OLD/.test(groups) && /1 request archived — no update in 30 days/.test(p.els.prOrgNote.innerHTML), p.els.prOrgNote.innerHTML);
   ok('a ready request: Create quotation on the row itself', /PR-READY[\s\S]*?Create quotation<\/button>/.test(groups), groups.slice(0, 800));
   ok('a partly quoted request: "Quote the 1 left" (it had no button anywhere), and what it already became', /Quote the 1 left<\/button>/.test(groups) &&
      /href="flow-quotations\.html\?review=Q-1">Q-1<\/a><span class="sl2-sub">Sent<\/span>/.test(groups) && /1 of 2 already quoted/.test(groups));
-  ok('the row shows the first item, how many more, and when it was last updated', /Torque wrench 1 \+1 more/.test(groups) && /updated 2 days ago/.test(groups));
+  ok('a long item name shows as its name (the whole text is on hover), not forty lines of spec', /<span class="sl2-item" title="Portable AcetyleneandOxygen tank Kit Product Name: Portable Welding Kit Brand: Greenfield Type: Portable Oxy-Acetylene Welding Kit">Portable AcetyleneandOxygen tank Kit<\/span>/.test(groups), groups.slice(0, 400));
+  ok('the row shows the first item, how many more, and when it was last updated', /<span class="sl2-item" title="Torque wrench 1">Torque wrench 1<\/span><span class="sl2-more">\+1 more<\/span>/.test(groups) &&
+     /updated 2 days ago/.test(groups), groups.slice(0, 600));
   p.run('prOrg.pick("archived")');
   ok('Archived: the old request, with Bring back', /PR-OLD[\s\S]*Bring back<\/button>/.test(host.parts['.sl2-groups'].innerHTML));
+  p.run('openPr("PR-LONG")');
+  ok('Open shows the item as its name with its specs laid out as label and value, not one sideways-scrolling line',
+     /<td class="sl2-itemcell"><span class="sl2-code">TW-1<\/span><b class="sl2-ititle">Portable AcetyleneandOxygen tank Kit<\/b><dl class="sl2-specs"><div><dt>Product Name<\/dt><dd>Portable Welding Kit<\/dd><\/div><div><dt>Brand<\/dt><dd>Greenfield<\/dd><\/div>/.test(p.els.modalBody.innerHTML),
+     p.els.modalBody.innerHTML.slice(0, 500));
   p.run('openPr("PR-PART")');
   ok('opening a partly quoted request offers Create Quotation for what is left', /makeQuotation\('PR-PART'\)/.test(p.els.modalFoot.innerHTML), p.els.modalFoot.innerHTML.slice(0, 300));
 
@@ -126,7 +151,7 @@ async function prPage(session, settings) {
 
   const adm = await prPage({ username: 'admin1', name: 'Admin One', role: 'admin' });
   const ac = adm.els.prOrgHost.parts['.sl2-chips'].innerHTML;
-  ok('admin: To source is the default chip, and the chips keep each stage', /data-chip="source" aria-pressed="true">To source <span class="n">1<\/span>/.test(ac) && /To verify|With management|For Quotation/.test(ac), ac);
+  ok('admin: To source is the default chip, and the chips keep each stage', /data-chip="source" aria-pressed="true">To source <span class="n">2<\/span>/.test(ac) && /To verify|With management|For Quotation/.test(ac), ac);
 
   sec('4 · the quotation list');
   const Q = [
@@ -143,7 +168,7 @@ async function prPage(session, settings) {
   ok('chips: Not sent yet, With the client, Lost or closed, adding up to All', /All <span class="n">4<\/span>/.test(qc) && /Not sent yet <span class="n">1<\/span>/.test(qc) &&
      /With the client <span class="n">2<\/span>/.test(qc) && /Lost or closed <span class="n">1<\/span>/.test(qc), qc);
   ok('a row: the request it came from, its subject and its last follow-up with how', /from <a class="sl2-link" href="flow-pricing-request\.html\?pr=PR-READY">PR-READY<\/a>/.test(qg) &&
-     /<span class="sl2-sub">Wrenches<\/span>/.test(qg) && /2026-10-28<span class="sl2-sub">2 days ago · Call<\/span>/.test(qg), qg.slice(0, 900));
+     /<span class="sl2-item" title="Wrenches">Wrenches<\/span>/.test(qg) && /2026-10-28<span class="sl2-sub">2 days ago · Call<\/span>/.test(qg), qg.slice(0, 900));
   ok('  Update (Won / Pending / Lost on My quotations) and Park on a sent quotation', /href="quotation-status\.html\?q=Q-SENT-OLD">Update<\/a>/.test(qg) && /qPark\("Q-SENT-OLD"\)/.test(qg));
   qp.run('qOrg.state.group = "follow"; qOrg.draw()');
   const fg = qh.parts['.sl2-groups'].innerHTML;

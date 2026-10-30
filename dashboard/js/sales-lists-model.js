@@ -142,6 +142,48 @@ function slmGroup(rows, by, o) {
   return list;
 }
 
+/* A386 — an item's NAME, not its whole description. Item names on requests often carry the full spec sheet pasted in
+   ("Portable AcetyleneandOxygen tank Kit Product Name: Portable Welding Kit Brand: Greenfield Type: ..."), which turned one
+   row of My Requests into a column of forty lines. The list shows what the item is; Open shows all of it. */
+const _SLM_SPEC = /\s(?:Product Name|Brand|Model(?: No\.?)?|Type|Specs?|Specifications?|Application|Description|Features?|Size|Capacity|Material|Components?|Warranty|Dimensions?|Rating|Power|Voltage)\s*:/i;
+/** A short name for a list row: the text before the first spec label ("Brand:", "Type:" …), at most `max` characters,
+ *  cut at a word with an ellipsis. */
+function slmShortItem(name, max) {
+  const n = max || 60;
+  let s = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+  const cut = s.search(_SLM_SPEC);
+  if (cut >= 8) s = s.slice(0, cut).replace(/[\s,;:–—-]+$/, '');
+  else { const t = slmItemSpecs(s); if (t.specs.length && t.title && s.indexOf(t.title) === 0 && t.title.length >= 8) s = t.title; }
+  if (s.length > n) s = s.slice(0, n).replace(/\s+\S*$/, '').replace(/[\s,;:–—-]+$/, '') + '…';
+  return s;
+}
+
+const _SLM_TAIL = /(Product Name|Model No\.?|Model|Brand|Type|Applications?|Material|Warranty|Use|Origin|Voltage|Rating|Description|Specifications?)$/;
+/** An item name with a spec sheet pasted in, read apart: { title, specs: [[label, value]] }. A label is one to four
+ *  capitalised words before a colon ("Brand:", "Kit Components:", "Cylinder Capacity:"); the title is what comes before
+ *  the first one (or the Product Name, when the text starts with a label). A name with no labels is all title. */
+function slmItemSpecs(name) {
+  const s = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+  const re = /(?:^|\s)((?:[A-Z][\w&/().'-]*)(?: [A-Z][\w&/().'-]*){0,3}):\s/g, marks = [];
+  let m;
+  while ((m = re.exec(s))) {
+    /* Title-case values ("Portable Welding Kit Brand:") run into the label: a common label at the end of the run is the
+       label, and the words before it belong to the value. Otherwise a run of three or more keeps its last two words. */
+    let label = m[1];
+    const known = _SLM_TAIL.exec(label), words = label.split(' ');
+    if (known && known[1] !== label) label = known[1];
+    else if (!known && words.length > 2) label = words.slice(-2).join(' ');
+    const start = m.index + (m[0].charAt(0) === ' ' ? 1 : 0) + (m[1].length - label.length);
+    marks.push({ at: start, label, body: re.lastIndex });
+  }
+  if (!marks.length) return { title: s, specs: [] };
+  const specs = marks.map((k, i) => [k.label, s.slice(k.body, i + 1 < marks.length ? marks[i + 1].at : s.length).trim().replace(/[\s,;]+$/, '')]).filter(x => x[1]);
+  const title = s.slice(0, marks[0].at).trim().replace(/[\s,;:–—-]+$/, '');
+  /* nothing before the first label: every pair stays, and the title is the Product Name when there is one */
+  const named = specs.find(x => /^Product Name$/i.test(x[0]));
+  return { title: title || (named ? named[1] : ''), specs };
+}
+
 /** The count line under the toolbar: "12 of 48 · ₱1,234,567.00". */
 function slmCountLine(shown, total, value, noun) {
   const n = noun || 'record';
@@ -151,5 +193,5 @@ function slmCountLine(shown, total, value, noun) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SLM_AGES, slmMonthKey, slmMonthLabel, slmDaysSince, slmAge, slmAgeLabel, slmAgo, slmClientKey, slmSearch, slmSort,
-                     slmChipCounts, slmGroup, slmCountLine };
+                     slmChipCounts, slmGroup, slmCountLine, slmShortItem, slmItemSpecs };
 }
