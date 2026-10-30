@@ -77,7 +77,7 @@ ok('#prLink opens in a new tab and starts at "#" (setAppLink fills it)', /href="
 ok('#monthQuotations is the slab\'s value', /<div class="v" id="monthQuotations">/.test(HTML));
 {
   // training-mode.js points at these; the rebuild must keep every one
-  const reg = TM.slice(TM.indexOf("'dashboard.html': {"), TM.indexOf("'clients.html': {"));
+  const reg = TM.slice(TM.indexOf("'dashboard.html': {"), TM.indexOf("'performance.html': {"));
   const sels = (reg.match(/selector: '([^']+)'/g) || []).map(s => s.match(/'([^']+)'/)[1]);
   eq('training-mode.js names four selectors on the sales home', sels.length, 4);
   sels.forEach(sel => {

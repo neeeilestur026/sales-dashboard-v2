@@ -146,6 +146,10 @@ function qcToggleCreate(open) {
 /* Clear the builder back to a blank quotation (leaves the remembered doc defaults in place). */
 function qcResetForm() {
   qcQuotationNo = '';
+  qcPdfPendingNo = '';                                    // A385
+  const more = document.getElementById('qcMore'); if (more) more.open = true;
+  const sw = document.getElementById('qcSubmitWrap'); if (sw) sw.hidden = true;
+  const nh = document.getElementById('qcNoHint'); if (nh) nh.hidden = true;
   /* A281 — back to a supply quotation. Without this, building a hire and then pressing New would
      leave the next one silently typed as a service quotation. qcTypeChanged() runs at the END of
      this function, once the items are cleared: the column HEADINGS are its business, not
@@ -232,7 +236,7 @@ function qcSyncLock() {
   });
   const btn = document.getElementById('qcFinalizeBtn');
   if (btn) {
-    btn.textContent = (qcMode === 'document') ? 'Regenerate & file PDF' : 'Finalize quotation';
+    btn.textContent = qcFinalizeLabel();
     /* A178 — refuse rather than destroy. If the archived photos could not be read back, filing now
        would replace a good document with a photo-less copy, and the rep would have no way to tell. */
     if (qcPhotoFailed) {
@@ -454,10 +458,9 @@ function qcPrefillDoc() {
   try { d = (typeof flowLoadDefaults === 'function' ? flowLoadDefaults('quotation') : {}) || {}; } catch (e) { d = {}; }
   const pick = k => d[k] || d[k.charAt(0).toUpperCase() + k.slice(1)] || '';
   const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-  set('qcAddress', pick('address'));
-  set('qcAttention', pick('attention'));
-  set('qcDesignation', pick('designation'));
-  set('qcEmail', pick('email'));
+  /* A385 — the CLIENT's address, attention, designation and email are no longer carried from the last quotation:
+     they were the previous client's, and on a quotation from a request they won over the request's own (which only
+     filled empty boxes). Only the rep's own defaults carry over: terms, validity, signatory. */
   set('qcValidity', pick('validity') || '30 days');
   set('qcDelivery', pick('delivery') || '1-3 weeks upon receipt of order');
   set('qcPayment', pick('payment') || '30 days upon delivery and receipt of invoice');
@@ -492,6 +495,12 @@ function qcBindInputs() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { qcSyncBlocks(); qcOnChange(); });
   });
+  // A385: a client with a priced request waiting is quoted from it, not by hand a second time
+  const cu = document.getElementById('qcCustomer');
+  if (cu) cu.addEventListener('change', qcReadyPrHint);
+  // A385: the "Send for approval now" tick names the button
+  const sn = document.getElementById('qcSubmitNow');
+  if (sn) sn.addEventListener('change', () => { const b = document.getElementById('qcFinalizeBtn'); if (b) b.textContent = qcFinalizeLabel(); });
   // A178: turning photos back on is a photo-set change, so let the next preview carry the images.
   const ph = document.getElementById('qcPhotos');
   if (ph) ph.addEventListener('change', () => { qcPreviewPhotos = true; });
@@ -516,10 +525,11 @@ async function qcFetchPr(prNo) {
   const want = String(prNo || '');
   if (!want) return null;
   const scoped = flowOwnsRecordsOnly(qcRole) ? { requestedBy: qcSession.name } : {};   // A280
-  let res = await fetchFlow('getPricingRequests', scoped);
+  /* A385 — fresh: a cached copy could still show lines that went out a minute ago */
+  let res = await fetchFlow('getPricingRequests', scoped, { fresh: true });
   let pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
   if (!pr && flowOwnsRecordsOnly(qcRole)) {
-    res = await fetchFlow('getPricingRequests', {});
+    res = await fetchFlow('getPricingRequests', {}, { fresh: true });
     pr = ((res && res.data) || []).find(p => String(p.prNo) === want);
   }
   return pr || null;
@@ -527,8 +537,10 @@ async function qcFetchPr(prNo) {
 
 /* ?fromPR=<prNo>. The rep contributes only the quotation number, subject, discount and the layout —
    every line is management's, at management's price. */
+let qcPrResult = null, qcPrCustomer = '';   // A385 — what the create said about the request; the request's client
 async function qcLoadFromPR(prNo) {
   qcFromPr = String(prNo);
+  qcPrResult = null;
   qcMode = 'edit';          // the rep still contributes the number, subject, discount and layout
   qcLocked = true;          // ...but every line is management's, rebuilt server-side
   qcSyncLock();
@@ -537,6 +549,7 @@ async function qcLoadFromPR(prNo) {
     if (!pr) { qcMsg('Purchase Request ' + qcFromPr + ' was not found, or is not returned to you.', false); return; }
 
     document.getElementById('qcCustomer').value = pr.customer || '';
+    qcPrCustomer = pr.customer || '';
     const subj = document.getElementById('qcSubject');
     const included = (pr.items || []).filter(i => i.included);
     if (!subj.value) {
@@ -550,14 +563,20 @@ async function qcLoadFromPR(prNo) {
     const psEl = document.getElementById('qcPlantSite');
     if (psEl && !psEl.value && pr.plantSite) psEl.value = pr.plantSite;
 
-    // Prefill the client's contact block from what admin captured on the request.
-    try {
-      const dj = JSON.parse(pr.docJson || '{}');
-      const set = (id, v) => { const el = document.getElementById(id); if (el && v && !el.value) el.value = v; };
-      set('qcAddress', dj.companyAddress); set('qcAttention', dj.contactPerson);
-      set('qcDesignation', dj.designation); set('qcEmail', dj.contactEmail);
-      set('qcRfq', dj.prNumberClient || dj.rfqNo);
-    } catch (e) { /* a PR without a doc block is fine */ }
+    /* The client's contact block, from what admin captured on the request. A385 — ALWAYS from the request (blank where
+       it has nothing), never "only into an empty box": the box could hold the previous client's details. */
+    let dj = {};
+    try { dj = JSON.parse(pr.docJson || '{}') || {}; } catch (e) { dj = {}; /* a PR without a doc block is fine */ }
+    [['qcAddress', dj.companyAddress], ['qcAttention', dj.contactPerson], ['qcDesignation', dj.designation],
+     ['qcEmail', dj.contactEmail], ['qcRfq', dj.prNumberClient || dj.rfqNo]].forEach(([id, v]) => {
+      const el = document.getElementById(id); if (el) el.value = v || '';
+    });
+    /* A385 — fewer steps: the document details are already filled from the request, so they fold under More details;
+       the number is suggested; and the quotation can go for approval in the same press. */
+    const more = document.getElementById('qcMore'); if (more) more.open = false;
+    if (qcOneStepOn()) { const sw = document.getElementById('qcSubmitWrap'), cb = document.getElementById('qcSubmitNow'); if (sw) sw.hidden = false; if (cb) cb.checked = true; }
+    qcSuggestNo(pr.customer, (included[0] && (included[0].itemName || included[0].itemNo)) || '', false);
+    qcSyncLock();
 
     /* A242 — WHICH LINES ARE STILL AVAILABLE, and which are already out on another quotation.
        flowPrRemaining is the same rule the server applies, so a line offered here is a line the
@@ -638,7 +657,7 @@ async function qcLoadFromPR(prNo) {
     if (rem.unpriced.length) bits.push(rem.unpriced.length + ' item(s) have no price yet and are left unticked');
     qcBanner('Building the quotation for <strong>' + (typeof flowEsc === 'function' ? flowEsc(qcFromPr) : qcFromPr)
       + '</strong>. Item prices are management’s and cannot be changed here — you set the quotation number, '
-      + 'subject, discount and layout. Create it first, then edit the Draft if a line really must move.'
+      + 'subject, discount, layout and each item’s scope. Untick a line to leave it for a later quotation.'
       + (bits.length
           ? '<br><strong>' + rem.ready.length + ' of ' + included.length + ' item(s) are ticked to go on this quotation.</strong> '
             + bits.join('; ') + '. Whatever you leave behind stays on the request and can be quoted later.'
@@ -786,6 +805,24 @@ async function qcOpenAndRefresh(no) {
   if (typeof qcOpen !== 'function') return;
   await qcOpen(no, 'edit');            // A257 — qcOpen re-reads, so this must wait for it
   qcRefreshPricesFromPR();
+}
+
+/* A385 — a quotation typed by hand never names a request, so the request stayed "For Quotation" and could be quoted a
+   second time (PR-202609-059). When the rep picks a client who has a priced request waiting, say so and offer it. */
+async function qcReadyPrHint() {
+  if (qcFromPr || qcQuotationNo || qcMode === 'document') return;
+  const cust = String((document.getElementById('qcCustomer') || {}).value || '').trim();
+  if (!cust || typeof flowPrRemaining !== 'function') return;
+  const key = typeof crCanonKey === 'function' ? crCanonKey(cust) : cust.toLowerCase();
+  const scoped = flowOwnsRecordsOnly(qcRole) ? { requestedBy: qcSession.name } : {};
+  const res = await fetchFlow('getPricingRequests', scoped).catch(() => null);
+  const ready = ((res && res.data) || []).filter(r => !r.archived && (r.status === 'Returned to Sales' || r.status === 'Partly Quoted') &&
+    (typeof crCanonKey === 'function' ? crCanonKey(r.customer) : String(r.customer || '').toLowerCase()) === key && flowPrRemaining(r).ready.length);
+  if (!ready.length || String((document.getElementById('qcCustomer') || {}).value || '').trim() !== cust) return;
+  const e = (typeof flowEsc === 'function') ? flowEsc : (x => x);
+  qcBanner(ready.map(r => '<strong>' + e(r.prNo) + '</strong>').join(', ') + (ready.length === 1 ? ' is' : ' are') + ' priced and waiting for ' + e(cust) +
+    '. Quote from it instead, so the request is closed and its items are not quoted twice. ' +
+    ready.slice(0, 3).map(r => '<a class="btn btn-primary btn-sm" style="margin:.4rem .4rem 0 0;" href="flow-quotations.html?fromPR=' + encodeURIComponent(r.prNo) + '">Quote from ' + e(r.prNo) + '</a>').join(''), 'warn');
 }
 
 function qcBanner(html, tone) {
@@ -1018,14 +1055,17 @@ function qcOpenScope(key) {
   document.getElementById('qcScopeItem').textContent = name;
   const box = document.getElementById('qcScopeText');
   box.value = String(it.scope || '');
-  box.readOnly = !!qcLocked;
-  document.getElementById('qcScopeSave').style.display = qcLocked ? 'none' : '';
+  /* A385 — on a quotation made from a request the PRICES are management's, but the scope, notes, group and hidden price
+     are layout and the rep's to write (they ride on the create). Only the saved-document mode keeps all of it locked. */
+  const layLocked = qcScopeLocked();
+  box.readOnly = layLocked;
+  document.getElementById('qcScopeSave').style.display = layLocked ? 'none' : '';
   // A241 — the group and the unit. The unit selector always carries the line's CURRENT value even
   // when it is not one of ours (A147: a real unit from the pricing request is never overwritten),
   // so opening this modal on an old line and pressing Cancel cannot rewrite it.
   const grp = document.getElementById('qcGroup');
   grp.value = String(it.group || '');
-  grp.readOnly = !!qcLocked;
+  grp.readOnly = layLocked;
   const uom = document.getElementById('qcUom');
   uom.innerHTML = (typeof flowUomOptions === 'function') ? flowUomOptions(it.uom) : '';
   uom.disabled = !!qcLocked;
@@ -1037,8 +1077,8 @@ function qcOpenScope(key) {
   qcRenderBlocks();
   const hide = document.getElementById('qcHidePrice');
   hide.checked = !!it.hidePrice;
-  hide.disabled = !!qcLocked;
-  document.getElementById('qcBlkAdd').style.display = qcLocked ? 'none' : '';
+  hide.disabled = layLocked;
+  document.getElementById('qcBlkAdd').style.display = layLocked ? 'none' : '';
   qcScopeTick();
   document.getElementById('qcScopeOverlay').classList.add('open');
   if (!qcLocked) box.focus();
@@ -1302,7 +1342,7 @@ function qcCloseScope() {
 }
 
 function qcSaveScope() {
-  if (qcLocked) return qcCloseScope();
+  if (qcScopeLocked()) return qcCloseScope();
   const it = qcItems.find(i => String(i.lineKey) === String(qcScopeKey));
   if (it) {
     it.scope = String(document.getElementById('qcScopeText').value || '');
@@ -1312,7 +1352,7 @@ function qcSaveScope() {
                           .filter(b => b.t || b.b.trim());
     it.hidePrice = !!document.getElementById('qcHidePrice').checked;
     it.group = String(document.getElementById('qcGroup').value || '').trim();
-    it.uom = qcUomValue();
+    if (!qcLocked) it.uom = qcUomValue();   // A385 — a request's unit stays the request's
     qcRenderItems();
     qcOnChange();                                       // refresh the live preview
   }
@@ -1711,13 +1751,78 @@ function qcLayoutJson() {
   return JSON.stringify(lay);
 }
 
+/* ── A385 — fewer steps from a priced request to a quotation in approval, and no error on the way ─────────────────────
+   Neil, 30 Oct 2026: "find a way to remove unneccessary tasks". The number is suggested (the year's next one, then the
+   rep's initials, the client and the item; FlowSettings quoteNoSuggest), the quotation goes for approval in the same
+   press (quoteOneStep; untick "Send for approval now" for a Draft), and a PDF that fails after the quotation saved is
+   made again on the next press — never an edit that rewrote the server's lines with every row on screen. */
+let qcPdfPendingNo = '';   // the quotation saved, its PDF did not: the next Finalize only makes the PDF (and sends it)
+function _qcSetting(k) { const c = (typeof qCfg !== 'undefined' && qCfg) || {}; return String(c[k] == null ? 'on' : c[k]).trim().toLowerCase() !== 'off'; }
+function qcOneStepOn() { return _qcSetting('quoteOneStep'); }
+function qcNoSuggestOn() { return _qcSetting('quoteNoSuggest'); }
+function qcSendsNow() { const cb = document.getElementById('qcSubmitNow'), w = document.getElementById('qcSubmitWrap'); return !!(qcFromPr && cb && cb.checked && w && !w.hidden); }
+function qcScopeLocked() { return qcMode === 'document' || (!!qcLocked && !qcFromPr); }
+function qcFinalizeLabel() {
+  if (qcMode === 'document') return 'Regenerate & file PDF';
+  if (qcPdfPendingNo) return 'Make the PDF again';
+  return qcSendsNow() ? 'Finalize and send for approval' : 'Finalize quotation';
+}
+/** The rep's initials as their quotation numbers already spell them ("GL", "KPB"), else from their name. */
+function qcInitials() {
+  const me = String((qcSession && qcSession.name) || '').toLowerCase(), list = (typeof qList !== 'undefined' && Array.isArray(qList)) ? qList : [];
+  const mine = list.filter(q => String(q.createdBy || '').toLowerCase() === me || String(q.salesperson || '').toLowerCase() === me)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  for (const q of mine) { const m = /^\d{4}-\d+-([A-Z]{2,4})-/.exec(String(q.quotationNo || '')); if (m) return m[1]; }
+  return String((qcSession && qcSession.name) || '').split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase()).join('').slice(0, 3);
+}
+function qcShortClient(name) {
+  const k = typeof crCanonKey === 'function' ? crCanonKey(name) : String(name || '').toLowerCase();
+  return k.split(' ').filter(Boolean).slice(0, 2).join(' ').toUpperCase();
+}
+function qcShortItem(t) { return String(t || '').replace(/[^\w\s&/.-]/g, ' ').trim().split(/\s+/).slice(0, 4).join(' ').toUpperCase().slice(0, 32); }
+/** Fill the number box with a suggestion, unless the rep has typed one (or `force` after a number was just taken). */
+async function qcSuggestNo(customer, item, force) {
+  const el = document.getElementById('qcNo'), hint = document.getElementById('qcNoHint');
+  if (!el || !qcNoSuggestOn() || (!force && el.value.trim())) return;
+  const r = await fetchFlow('suggestQuotationNo', {}, { fresh: true, noStore: true }).catch(() => null);
+  if (!r || !r.success || !r.prefix) return;            // before FlowAPI 193 the box stays empty, as it was
+  if (!force && el.value.trim()) return;                 // typed while we asked
+  el.value = [r.prefix, qcInitials(), qcShortClient(customer), qcShortItem(item)].filter(Boolean).join('-');
+  if (hint) hint.hidden = false;
+  if (typeof qcOnChange === 'function') qcOnChange();
+}
+/** The quotation saved and its PDF did not: make the PDF, send it if asked, then finish as usual. */
+async function qcFinishPending(btn) {
+  const no = qcPdfPendingNo;
+  btn.disabled = true; btn.textContent = 'Generating PDF…';
+  try {
+    const photoWarn = await qcSavePdf(no);
+    qcPdfPendingNo = '';
+    const sent = qcSendsNow() ? await qcSendForApproval(no) : '';
+    qcMsg('The PDF for ' + no + ' is filed to Drive.' + sent + (photoWarn ? ' Note: ' + photoWarn + '.' : ''), true);
+    if (typeof hxToast === 'function') hxToast('The PDF for ' + no + ' is filed to Drive.' + sent, { tone: 'ok' });
+    btn.disabled = false; btn.textContent = qcFinalizeLabel();
+    await qcAfterSave(no);
+  } catch (e) {
+    qcMsg('Quotation ' + no + ' is saved, but its PDF could not be made (' + (e.message || 'no reason given') + '). Press “Make the PDF again”.', false);
+    btn.disabled = false; btn.textContent = qcFinalizeLabel();
+  }
+}
+/** Send a quotation made from a request for approval; returns the sentence that says so. */
+async function qcSendForApproval(no) {
+  const r = await postFlow('submitQuotationApproval', { quotationNo: no }).catch(e => ({ success: false, message: String(e && e.message || e) }));
+  return r && r.success ? ' It is with ' + (/Management/.test(r.status || '') ? 'management' : 'admin') + ' for approval.'
+    : ' It is saved as a Draft — send it for approval from the list (' + ((r && r.message) || 'the submit did not go through') + ').';
+}
+
 async function qcFinalize() {
   // A176 — document mode never writes the record; it only rebuilds and refiles the PDF.
   if (qcMode === 'document') return qcRegenerateOnly();
+  if (qcPdfPendingNo) return qcFinishPending(document.getElementById('qcFinalizeBtn'));   // A385
   const val = id => (document.getElementById(id) || {}).value || '';
   const num = (typeof flowNum === 'function') ? flowNum : (v => parseFloat(v) || 0);
   const btn = document.getElementById('qcFinalizeBtn');
-  if (!val('qcNo').trim()) { qcMsg('Quotation No is required — it is your own code, not auto-generated.', false); return; }
+  if (!val('qcNo').trim()) { qcMsg('Quotation No is required — it is your own code' + (qcNoSuggestOn() ? ' (a suggestion is filled in when the server can make one).' : ', not auto-generated.'), false); return; }
   if (!val('qcSubject').trim()) { qcMsg('Subject is required — it prints on the document.', false); return; }
   if (!qcFromPr && !val('qcCustomer').trim()) { qcMsg('Customer is required.', false); return; }
   const priced = qcItems.filter(i => (i.itemNo || i.itemName));
@@ -1772,7 +1877,7 @@ async function qcFinalize() {
         const picked = qcQuotedItems().map(i => i.prLine);
         if (!picked.length) {
           qcMsg('Tick at least one item to put on this quotation.', false);
-          btn.disabled = false; btn.textContent = 'Finalize quotation'; return;
+          btn.disabled = false; btn.textContent = qcFinalizeLabel(); return;
         }
         base.lines = JSON.stringify(picked);
       }
@@ -1780,20 +1885,29 @@ async function qcFinalize() {
       // A158: a ₱0 line is a real freebie, not a mistake — confirm, then repeat with the override.
       if (res && !res.success && res.needsConfirm === 'zeroPrice') {
         if (!confirm(res.message + '\n\nCreate the quotation with those items as free?')) {
-          btn.disabled = false; btn.textContent = 'Finalize quotation'; return;
+          btn.disabled = false; btn.textContent = qcFinalizeLabel(); return;
         }
         res = await postFlow('createQuotationFromPR', Object.assign({}, base, { confirmZero: true }));
+      }
+      /* A385 — the number was taken (by a colleague, a moment ago): suggest the next one instead of a dead end */
+      if (res && !res.success && res.existing && qcNoSuggestOn()) {
+        await qcSuggestNo(qcPrCustomer || '', '', true);
+        qcMsg(res.message + ' The next free number is filled in — press ' + qcFinalizeLabel() + ' again.', false);
+        btn.disabled = false; btn.textContent = qcFinalizeLabel(); return;
       }
       if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
       newNo = res.quotationNo;
       if (res.duplicate) {
         /* A242 — this no longer means "the request is Quoted"; it means EVERY ITEM on it is out
            already. A request with items still outstanding never lands here. */
-        qcMsg(res.message || ('Every item on that request is already quoted (' + newNo + ').'), true);
-        btn.disabled = false; btn.textContent = 'Finalize quotation';
-        await qcAfterSave(newNo);
-        return;
-      }
+        if (res.retried) qcPrResult = { status: res.status, remaining: res.remaining };   // A385 — our own retry: it IS this quotation
+        else {
+          qcMsg(res.message || ('Every item on that request is already quoted (' + newNo + ').'), true);
+          btn.disabled = false; btn.textContent = qcFinalizeLabel();
+          await qcAfterSave(newNo);
+          return;
+        }
+      } else qcPrResult = { status: res.status, remaining: res.remaining };
       // A174: layout now rides along on the create above. It used to be a follow-up
       // updateQuotation call, and that call deleted every line of the quotation it had just made.
     } else {
@@ -1843,20 +1957,29 @@ async function qcFinalize() {
       if (qcRole === 'admin' || qcRole === 'director') await qcAutoAddItems(items);
     }
 
+    const created = !qcQuotationNo;
     qcQuotationNo = newNo;
     try { if (typeof flowSaveDefaults === 'function') flowSaveDefaults('quotation', qcPayload(false).doc); } catch (e) {}
 
     btn.textContent = 'Generating PDF…';
+    if (qcFromPr && created) qcPdfPendingNo = newNo;       // A385 — until the PDF is filed, the next press only makes it
     const photoWarn = await qcSavePdf(newNo);
+    qcPdfPendingNo = '';
+    const sent = (qcFromPr && created && qcSendsNow()) ? await qcSendForApproval(newNo) : '';
 
-    qcMsg('Quotation ' + newNo + ' saved' + (qcFromPr ? ' and ' + qcFromPr + ' is now Quoted' : '')
-        + '. The PDF is filed to Drive.'
-        + (photoWarn ? ' Note: ' + photoWarn + ' — the document itself is fine.' : ''), true);
-    btn.disabled = false; btn.textContent = 'Finalize quotation';
+    /* A385 — say what happened to the request: Quoted, or part of it with the rest still to quote */
+    const pr = qcPrResult || {}, partly = pr.status === 'Partly Quoted';
+    const said = 'Quotation ' + newNo + ' saved' + (qcFromPr
+          ? (partly ? '; ' + qcFromPr + ' is partly quoted — ' + (pr.remaining || 'some') + ' item(s) left to quote later' : ' and ' + qcFromPr + ' is now Quoted') : '')
+        + '. The PDF is filed to Drive.' + sent;
+    qcMsg(said + (photoWarn ? ' Note: ' + photoWarn + ' — the document itself is fine.' : ''), true);
+    if (typeof hxToast === 'function') hxToast(said, { tone: 'ok' });   // A385 — the form resets below; the toast stays to say what happened
+    btn.disabled = false; btn.textContent = qcFinalizeLabel();
     await qcAfterSave(newNo);
   } catch (e) {
-    qcMsg(e.message || 'Could not save.', false);
-    btn.disabled = false; btn.textContent = 'Finalize quotation';
+    qcMsg(qcPdfPendingNo ? 'Quotation ' + qcPdfPendingNo + ' is saved, but its PDF could not be made (' + (e.message || 'no reason given') + '). Press “Make the PDF again”.'
+                         : (e.message || 'Could not save.'), false);
+    btn.disabled = false; btn.textContent = qcFinalizeLabel();
   }
 }
 

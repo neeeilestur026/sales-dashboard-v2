@@ -41,7 +41,7 @@ const LEDGER_NAV = {
   admin: [
     ['Home', 'home', 'admin.html'],
     ['Sell', 'cart', [['website-requests.html', 'Website requests'], ['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['admin-import-quotation.html', 'Import quotation'], ['flow-sales-orders.html', 'Sales orders'], ['flow-lifecycle.html', 'SO lifecycle']]],
-    ['Clients', 'users', [['clients.html', 'Client list'], ['flow-clients.html', 'Client master'], ['client-tracker.html', 'Client tracker'], ['admin-targets.html', 'Sales targets'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
+    ['Clients', 'users', [['flow-clients.html', 'Client master'], ['client-tracker.html', 'Client tracker'], ['admin-targets.html', 'Sales targets'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
     ['Buy & pay', 'card', [['supplier-list.html', 'Supplier list'], ['flow-purchase-orders.html', 'Purchase orders'], ['flow-payment-requests.html', 'Payment requests'], ['payment-requests.html', 'Sales payment requests'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-other-payables.html', 'Other payables'], ['flow-suppliers.html', 'Suppliers']]],   // A374 — the supplier list first
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
     ['Collect', 'inbox', [['flow-invoices.html', 'Invoices'], ['flow-ar-aging.html', 'AR aging'], ['flow-collections.html', 'Collections'], ['collection-details.html', 'Collection details'], ['month-check.html', 'Month check']]],
@@ -79,10 +79,10 @@ const LEDGER_NAV = {
     ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['team-performance.html', 'Team performance'], ['client-visits.html', 'Client visits'], ['management-itinerary.html', 'Weekly itineraries'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],   // A366 · A369
     ['Guide', 'compass', [['flow-home.html', 'Process overview'], ['flow-guide.html', 'Process guide']]]
   ],
-  sales: [
+  sales: [   // A385 — PR tracker and Quotation board left the sales menu: the two lists are organized instead
     ['Home', 'home', 'dashboard.html'],
-    ['Quote', 'file', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'My quotations'], ['flow-inventory.html', 'Inventory']]],
-    ['Clients', 'users', [['clients.html', 'Client list'], ['director-client-book.html', 'Client Book'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
+    ['Quote', 'file', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['flow-quotations.html', 'Quotations'], ['quotation-status.html', 'My quotations'], ['flow-inventory.html', 'Inventory']]],
+    ['Clients', 'users', [['director-client-book.html', 'Client Book'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
     ['Field', 'pin', [['client-visits.html', 'Client visits'], ['weekly-itinerary.html', 'Weekly itinerary'], ['flow-travel.html', 'Travel allowance'], ['flow-commissions.html', 'Commission requests'], ['sales-emails.html', 'My emails']]],   // A369 — client visits, the new itinerary
     ['Reports', 'clip', [['report.html', 'Daily report'], ['my-daily-report.html', 'New daily report'], ['my-reports.html', 'My reports']]],
     ['Guide', 'compass', 'flow-guide.html']

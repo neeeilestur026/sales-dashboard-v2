@@ -58,7 +58,7 @@ const set = (c, who, params) => call(c, 'setQuotationResult', Object.assign({}, 
 sec('1 · the version, the width, both writers');
 {
   const c = load(GS, store());
-  eq('getVersion', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version, 192);
+  eq('getVersion', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version, 193);
   eq('Quotations is 38 wide', c.SCHEMA.Quotations.length, 38);
   eq('the nine columns, in order, after Service Kind', c.SCHEMA.Quotations.slice(28),
      ['Service Kind', 'Result', 'Result At', 'Result By', 'Result Reason', 'Result Note', 'Last Follow Up', 'Follow Up Via', 'Follow Up Status', 'Closed From']);

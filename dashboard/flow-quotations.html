@@ -8,46 +8,6 @@
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/flow-screen.css">
 <style>
-  /* ── A215 · the worklist ───────────────────────────────────────────────────────────────────── */
-  .qw-tabs { display: flex; gap: .35rem; flex-wrap: wrap; }
-  .qw-tab { padding: .34rem .8rem; border-radius: 999px; font: 700 .78rem var(--hx-text);
-    cursor: pointer; border: 1px solid var(--hx-hair); background: var(--hx-card);
-    color: var(--hx-ink-2); transition: all .14s ease; white-space: nowrap; }
-  .qw-tab:hover { border-color: var(--hx-navy); color: var(--hx-navy-ink); }
-  .qw-tab.active { background: var(--hx-navy); color: var(--hx-slab-ink); border-color: var(--hx-navy); }
-  .qw-tab .n { opacity: .8; margin-left: .3rem; font-variant-numeric: tabular-nums; }
-
-  .qw-row { display: flex; gap: .8rem; align-items: flex-start; padding: .65rem .2rem;
-    border-bottom: 1px solid var(--hx-hair); }
-  .qw-row:last-child { border-bottom: 0; }
-  .qw-row .act { flex: none; width: 84px; }
-  .qw-row .act .btn { width: 100%; }
-  .qw-row .body { flex: 1; min-width: 0; }
-  .qw-row .no { font: 600 .82rem/1.4 var(--hx-text); color: var(--hx-ink);
-    overflow-wrap: anywhere; }
-  .qw-row .cust { font-size: .8rem; color: var(--hx-ink-2); overflow-wrap: anywhere; }
-  .qw-row .why { font-size: .74rem; color: var(--hx-ink-3); margin-top: .18rem; }
-  .qw-row .money { flex: none; text-align: right; font: 600 .82rem var(--hx-text);
-    font-variant-numeric: tabular-nums; color: var(--hx-ink); min-width: 108px; }
-  .qw-row .extra { flex: none; display: flex; gap: .3rem; align-items: center; }
-  .qw-pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px;
-    font: 700 .66rem var(--hx-text); text-transform: uppercase; letter-spacing: .03em; }
-  .qw-est { background: var(--hx-inset); color: var(--hx-ink-2); font-weight: 600;
-    text-transform: none; letter-spacing: 0; }
-  .qw-empty { padding: 1.1rem .2rem; color: var(--hx-ink-3); font-size: .86rem; }
-  .qw-banner { margin-top: .7rem; padding: .7rem .85rem; border-radius: 10px; background: var(--hx-warn-soft);
-    border: 1px solid var(--hx-warn-soft); color: var(--hx-warn); font: 500 .8rem/1.6 var(--hx-text);
-    display: flex; gap: .8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-  .qw-story { padding: .5rem 0 .7rem 92px; font-size: .76rem; color: var(--hx-ink-2); }
-  .qw-story .ev { display: flex; gap: .6rem; padding: .16rem 0; }
-  .qw-story .ev .when { flex: none; width: 92px; color: var(--hx-ink-3);
-    font-variant-numeric: tabular-nums; }
-  @media (max-width: 700px) {
-    .qw-row { flex-wrap: wrap; }
-    .qw-row .money { min-width: 0; text-align: left; }
-    .qw-story { padding-left: 0; }
-  }
-
   /* A175 — the Quote Configurator is now the create surface on this page: form on the left,
      the REAL generated PDF on the right. The history below is untouched. */
   /* A236 — the form column leads slightly now. It used to trail the preview (1 : 1.05), which left
@@ -143,6 +103,7 @@
   .qc-createhead h3 { margin: 0; font-size: .95rem; font-weight: 700; }
   #qcCreate[hidden] { display: none; }
 </style>
+  <link rel="stylesheet" href="css/sales-lists.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
 </head>
@@ -201,7 +162,8 @@
             <div class="qc-pane">
               <h3>Quotation</h3>
               <div class="qc-grid">
-                <div><label>Quotation No *</label><input type="text" id="qcNo" placeholder="your own code"></div>
+                <div><label>Quotation No *</label><input type="text" id="qcNo" placeholder="your own code">
+                  <div class="qc-note" id="qcNoHint" hidden>Suggested: the next number this year, your initials, the client and the item. Change any part.</div></div>
                 <div><label>Date</label><input type="date" id="qcDate"></div>
                 <div class="full"><label>Customer *</label><input type="text" id="qcCustomer" placeholder="Company name"></div>
                 <div class="full"><label>Subject *</label><input type="text" id="qcSubject" placeholder="e.g. KITO ELECTRIC CHAIN HOIST"></div>
@@ -277,6 +239,9 @@
               <div class="qc-tot" id="qcTotals"></div>
             </div>
 
+            <!-- A385: on a quotation made from a request these are already filled in, so they fold away -->
+            <details class="qc-more" id="qcMore" open>
+            <summary class="qc-more-h">More details <span>layout, scope blocks, the client's contact and the terms</span></summary>
             <div class="qc-pane" style="margin-top:1rem;">
               <h3>Layout</h3>
               <div class="qc-grid">
@@ -356,7 +321,10 @@
               </div>
             </div>
 
+            </details>
+
             <div class="qc-actions" style="margin-top:1rem;">
+              <label class="qc-tog" id="qcSubmitWrap" hidden><input type="checkbox" id="qcSubmitNow" checked> Send for approval now</label>
               <button type="button" class="btn btn-primary" onclick="qcFinalize()" id="qcFinalizeBtn">Finalize quotation</button>
               <button type="button" class="btn btn-secondary" onclick="qcResetForm()">Reset</button>
               <span id="qcModeHint" class="qc-note" style="display:none;flex-basis:100%;margin-top:.2rem;">
@@ -384,31 +352,16 @@
       </div>
     </div>
 
-    <!-- ══ A215 · the worklist ═══════════════════════════════════════════════════════════════════
-         The table below is ordered by DATE, which is precisely backwards for tracking: the row that
-         needs attention most has sat longest, so it ends up furthest down. This card answers "what
-         do I do next" instead, and the table stays exactly as it was for everything else. -->
-    <div class="chart-card" id="qWorkCard" style="margin-bottom:1rem;">
-      <div class="flow-actions" style="justify-content:space-between;align-items:flex-start;">
-        <div>
-          <h3 style="font-size:0.95rem;font-weight:600;margin:0;">What needs you</h3>
-          <div style="font-size:0.76rem;color: var(--hx-ink-3);margin-top:0.15rem;"
-               id="qWorkSub">Your quotations, in the order they need doing.</div>
-        </div>
-        <div class="qw-tabs" id="qWorkTabs"></div>
-      </div>
-      <div id="qWorkBanner"></div>
-      <!-- The page had no general message element — only per-modal ones — so parking and the
-           backfill had nowhere to report to. -->
-      <div id="qMsg" class="flow-msg" style="display:none;margin-top:0.6rem;"></div>
-      <div id="qFollowUps" style="margin-top:0.7rem;"></div>
-    </div>
-
     <div class="chart-card">
       <div class="flow-actions" style="justify-content:space-between;">
         <h3 style="font-size:0.95rem;font-weight:600;">Quotations</h3>
-        <button class="btn btn-sm btn-secondary" onclick="loadQuotations()">Refresh</button>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <button class="btn btn-sm btn-secondary" id="qBackfillBtn" style="display:none;" onclick="qOpenBackfill()">Estimate missing send dates</button>
+          <button class="btn btn-sm btn-secondary" onclick="loadQuotations()">Refresh</button>
+        </div>
       </div>
+      <!-- A385: Park and the send-date estimate report here (the worklist card that held this line is gone) -->
+      <div id="qMsg" class="flow-msg" style="display:none;margin-bottom:0.6rem;"></div>
 
       <!-- Older quotations stay fully actionable — pick the month one was created in to find it. -->
       <div class="flow-actions no-print" style="gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.6rem;">
@@ -482,19 +435,11 @@
         </label>
       </div>
 
+      <!-- A385: the long example that sat in the box read as text already typed in; it is a short hint now -->
       <div class="qc-scope-hint">
-        One inclusion per line — each prints as its own bullet under this item's description.
-        Wrap a line in <b>**asterisks**</b> to make it a sub-heading (e.g. <b>**Standard
-        Accessories**</b>); it stays with the line beneath it so a page break cannot separate them.
-        Start a line with <b>–</b> or <b>--</b> to indent it under the bullet above.
-        A <b>**lead-in**</b> may also open a line — <b>**Diesel Engine** — Baudouin 16M33</b> prints
-        the first part in bold and the rest as ordinary text.
-        Add as many lines as you like — they flow onto the next page rather than being cut.
-        A single line longer than 1,200 characters is shortened on the document with a “…”, and the
-        quotation refuses to save if all its scope text together passes 45,000 characters.
+        One entry per line. <b>**Bold**</b> makes a heading; start a line with <b>–</b> to indent it.
       </div>
-      <textarea id="qcScopeText" oninput="qcScopeTick()"
-        placeholder="**Diesel Engine** — Baudouin 16M33G1650/6, 1800rpm — 3 pcs&#10;– Vacuum Circuit Breaker: ABB-VD4&#10;**Standard Accessories**&#10;3-jaw chuck 250mm"></textarea>
+      <textarea id="qcScopeText" oninput="qcScopeTick()"></textarea>
       <div class="qc-scope-count" id="qcScopeCount">No entries yet. One inclusion per line.</div>
 
       <!-- A240: note blocks. A free-text title is what lets one block speak for several items
@@ -573,7 +518,9 @@
   <script src="js/flow-api.js"></script>
   <script src="js/flow-docs.js"></script>
   <script src="js/quotation-email-match.js"></script>
-  <script src="js/quotation-worklist.js"></script>
+  <script src="js/client-rollup.js"></script>
+  <script src="js/sales-lists-model.js"></script>
+  <script src="js/sales-lists.js"></script>
   <script src="js/flow-quote-configurator.js"></script>
   <script src="js/flow-quotations.js"></script>
 

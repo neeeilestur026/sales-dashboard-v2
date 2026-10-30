@@ -26,7 +26,7 @@ const PORTAL = JSON.stringify({ followDue: '3', openQuotes: '₱3.8M' });
 sec('1 · the version');
 {
   const c = load(GS, {});
-  ok('getVersion = 192', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 192);
+  ok('getVersion = 193', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 193);
 }
 
 sec('2 · the director saves and reads back');

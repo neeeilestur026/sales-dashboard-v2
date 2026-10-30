@@ -659,7 +659,7 @@ SECURED_ACTIONS = [
     "savePfInquiry", "saveQuotationPDF", "saveSOCostDetails", "saveSONotes", "saveSupplier",
     "saveTravelPDF", "saveTravelReplenishment", "saveWeeklyItinerary", "seedClientAliases", "seedCommissionDemo",
     "sendQuotation", "setCollectionMeta", "setCommissionRate", "setFlowDriveFolder", "setFlowSettings",
-    "setMgmtPricing", "setOpeningBalance", "setPricingRequestSalesperson", "setQuotationEmailReply", "setQuotationFollowUp",
+    "setMgmtPricing", "setOpeningBalance", "setPricingRequestSalesperson", "restorePricingRequest", "setQuotationEmailReply", "setQuotationFollowUp",
     "setQuotationSalesperson", "setSOSupplierType", "setTravelFloat", "setupFlowDrive", "snoozeQuotation",
     "setQuotationResult",   # A382 — quotation status
     "getCollectionBook", "saveCollectionDetails",   # A384 — collection details

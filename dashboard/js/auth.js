@@ -676,7 +676,6 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <!-- A272 — admin-team.html (Team Analytics) and admin-reports.html (Daily Reports) removed
                from the nav. Team Performance and All Daily Reports under Process Flow cover both. -->
-          <a href="clients.html" class="${activePage === 'admin-clients' ? 'active' : ''}">Client List</a>
           <a href="admin-daily-report.html" class="${activePage === 'admin-daily-report' ? 'active' : ''}">Admin Daily Report</a>
           <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">New Daily Report</a>
           <a href="admin-targets.html" class="${activePage === 'admin-targets' ? 'active' : ''}">Sales Targets</a>
@@ -1254,9 +1253,7 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="product-finder.html" class="${activePage === 'product-finder' ? 'active' : ''}">Product Finder</a>
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
-          <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
-          <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
           <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">My Quotations</a>   <!-- A382 -->
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
@@ -1275,7 +1272,6 @@ function renderNavbar(activePage) {
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
-          <a href="clients.html" class="${activePage === 'clients' ? 'active' : ''}">Client List</a>
           <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">Client Book</a>
           <a href="performance.html" class="${activePage === 'performance' ? 'active' : ''}">Client Tracker</a>
           <a href="pending-items.html" class="${activePage === 'pending-items' ? 'active' : ''}">Pending Items</a>
@@ -1534,7 +1530,7 @@ async function flowComputeActions(session) {
   // Management: pricing requests waiting for final prices (previously unsurfaced on any home).
   if (isMgmt || isDir) {
     jobs.push(fetchFlow('getPricingRequests').then(r => {
-      const n = ((r && r.data) || []).filter(p => p.status === 'For Mgmt Pricing').length;
+      const n = ((r && r.data) || []).filter(p => !p.archived && p.status === 'For Mgmt Pricing').length;   // A385 — archived requests are nobody's work
       if (n) add('report', 'info', n + ' pricing request(s) waiting for your final pricing', 'flow-pricing-request.html');
     }).catch(() => {}));
   }
@@ -1543,7 +1539,7 @@ async function flowComputeActions(session) {
      unquoted with nothing anywhere pointing at it. One fetch covers all three. */
   if (isAdmin) {
     jobs.push(fetchFlow('getPricingRequests').then(r => {
-      const rows = (r && r.data) || [];
+      const rows = ((r && r.data) || []).filter(p => !p.archived);   // A385 — archived requests are nobody's work
       const src = rows.filter(p => p.status === 'Requested' || p.status === 'Sourcing').length;
       if (src) add('report', 'info', src + ' pricing request(s) waiting to be sourced', 'flow-pricing-request.html');
       const ver = rows.filter(p => p.status === 'Mgmt Priced').length;
@@ -1712,7 +1708,9 @@ async function flowComputeActions(session) {
   if (isRep) {          // A280 — sales and lead-gen both raise these
     jobs.push(fetchFlow('getPricingRequests', { requestedBy: session.name }).then(r => {
       // A242 — same on the rep's own home: a partly-quoted request still has items to quote.
-      const n = ((r && r.data) || []).filter(p => p.status === 'Returned to Sales' || p.status === 'Partly Quoted').length;
+      /* A385 — only what really has priced lines left (flowPrRemaining), and never an archived one */
+      const n = ((r && r.data) || []).filter(p => !p.archived && (p.status === 'Returned to Sales' || p.status === 'Partly Quoted') &&
+        (typeof flowPrRemaining !== 'function' || flowPrRemaining(p).ready.length)).length;
       if (n) add('report', 'ok', n + ' pricing request(s) ready to quote (final prices set)', 'flow-pricing-request.html');
     }).catch(() => {}));
     jobs.push(Promise.all([

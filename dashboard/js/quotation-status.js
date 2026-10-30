@@ -55,6 +55,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   _qsId('qsBulk').addEventListener('click', qsBulkClick);
   if (typeof window.addEventListener === 'function') window.addEventListener('resize', qsMoveInd);
   await qsLoad(false);
+  /* A385 — ?q=<quotation> arrives from the quotation list's Update: open that quotation's choices (Won, Pending, Lost). */
+  const want = String(qp.get('q') || '').trim();
+  if (want) {
+    const q = (QS.all || []).find(x => String(x.quotationNo) === want);
+    if (q && QS.over && flowQuotationOwner(q) !== QS.rep) { QS.rep = flowQuotationOwner(q); qsFillReps(); qsRepUrl(); qsBuildRows(); qsRender(); }
+    const r = qsRow(want);
+    if (r) qsChooser(r, null);
+  }
 });
 
 /* ── load ─────────────────────────────────────────────────────────────────────────────────────── */
