@@ -70,7 +70,8 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'client-visits.html',
   // A374 — the supplier list (admin)
   'supplier-list.html',
-  'quotation-status.html'];   // A382
+  'quotation-status.html',   // A382
+  'collection-details.html'];   // A384
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

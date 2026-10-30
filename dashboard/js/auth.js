@@ -335,8 +335,6 @@ function requireClientBookAccess() {
   return session;
 }
 
-/* A374 — the supplier list (supplier-list.html): admin keeps it, the director too. FlowSettings supplierBookRoles widens
-   who the server lets in; the page follows the default. */
 /* A382 — Quotation status: each rep's own quotations, and every rep's for those who oversee them (admin, management,
    the director). Accounting and lead gen go home: they set no quotation's result. */
 function requireQuotationStatusAccess() {
@@ -352,6 +350,8 @@ function requireQuotationStatusAccess() {
   return session;
 }
 
+/* A374 — the supplier list (supplier-list.html): admin keeps it, the director too. FlowSettings supplierBookRoles widens
+   who the server lets in; the page follows the default. */
 function requireSupplierListAccess() {
   const session = getSession();
   if (!session) {
@@ -359,6 +359,22 @@ function requireSupplierListAccess() {
     return null;
   }
   if (!['admin', 'director'].includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
+/* A384 — collection details (collection-details.html): accounting and admin keep them, the director reads them. Mirrors
+   FlowAPI.gs _CD_VIEW (who reads) — the server decides who may change them (_CD_EDIT: accounting and admin). */
+const FLOW_COLLECTION_DETAILS_ROLES = ['accounting', 'admin', 'director'];
+function requireCollectionDetailsAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!FLOW_COLLECTION_DETAILS_ROLES.includes(session.role)) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
@@ -681,7 +697,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status' || activePage === 'collection-details') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -731,6 +747,7 @@ function renderNavbar(activePage) {
             <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
             <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
             <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
+            <a href="collection-details.html" class="${activePage === 'collection-details' ? 'active' : ''}">Collection details</a>   <!-- A384 -->
           </div>
           <div class="dd-group">
             <div class="dd-title">Books</div>
@@ -771,7 +788,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'accounting') {
-    const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders' || activePage === 'client-visits';   // A369
+    const flowActive = (activePage || '').indexOf('flow') === 0 || activePage === 'management-sales-orders' || activePage === 'client-visits' || activePage === 'collection-details';   // A369, A384
     const reportsActive = ['accounting-daily-report', 'my-daily-report', 'payment-requests', 'financial-reports'].includes(activePage);
     const acctMenuActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -807,6 +824,7 @@ function renderNavbar(activePage) {
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
           <a href="flow-collections.html" class="${activePage === 'flow-collections' ? 'active' : ''}">Collections</a>
+          <a href="collection-details.html" class="${activePage === 'collection-details' ? 'active' : ''}">Collection details</a>   <!-- A384 -->
           <a href="flow-expenses.html" class="${activePage === 'flow-expenses' ? 'active' : ''}">Expenses</a>
           <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
           <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
@@ -974,7 +992,7 @@ function renderNavbar(activePage) {
     const dirPayablesActive = ['supplier-list', 'flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
     const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits'].includes(activePage);   // A216, A366, A369
-    const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin'].includes(activePage);
+    const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin', 'collection-details'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
     const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests', 'quotation-status'].includes(activePage);   // A217 · A338
     navLinks = `
@@ -1067,6 +1085,7 @@ function renderNavbar(activePage) {
           <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
           <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
           <a href="collect.html" class="${activePage === 'collect' ? 'active' : ''}">Collect</a>
+          <a href="collection-details.html" class="${activePage === 'collection-details' ? 'active' : ''}">Collection details</a>   <!-- A384 -->
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
         </div>
       </div>`;

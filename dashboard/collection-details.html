@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collection details</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/collection-details.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content cd-main">
+    <!-- A384 — each client's collection details: how they pay, their bank, where to collect, who to call. Accounting and
+         admin keep them; the director reads them. The clients come from the Client master and the open receivables. -->
+    <header class="cd-head">
+      <div class="cd-titles">
+        <h1>Collection details</h1>
+        <p class="cd-lede">How each client pays us, where to collect, and who to call.</p>
+        <p class="cd-progress" id="cdProgress" aria-live="polite"></p>
+      </div>
+      <div class="cd-actions">
+        <button type="button" class="btn btn-secondary" id="cdExport">Export CSV</button>
+      </div>
+    </header>
+    <div id="cdNotice"></div>
+    <div class="cd-bar">
+      <div class="cd-filters" id="cdFilters" role="search"></div>
+      <div class="cd-chips" id="cdChips" role="group" aria-label="Show"></div>
+    </div>
+    <div class="cd-split" id="cdSplit">
+      <section class="cd-listcol" aria-label="Clients">
+        <p class="cd-count" id="cdFoot" aria-live="polite"></p>
+        <div class="cd-list" id="cdTable" role="list"></div>
+      </section>
+      <section class="cd-pane" id="cdPane" aria-label="The client"></section>
+    </div>
+  </main>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/collection-details-model.js"></script>
+  <script src="js/collection-details.js"></script>
+</body>
+</html>
