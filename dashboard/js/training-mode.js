@@ -26,18 +26,7 @@
         { selector: '#quotationLink', title: 'Quotation Generator', text: 'Click to open the quotation tool. Try filling in a sample client and item — saved drafts will be discarded in training mode.' },
         { selector: '#prLink', title: 'PR Generator', text: 'Open this to practice writing Purchase Requests. Submitted PRs will not reach the real records while training is on.' },
         { selector: 'a[href="report.html"]', title: 'Daily Report', text: 'Submit your daily activities here. Reports from trainees ARE saved so your supervisor can review your day.' },
-        { selector: 'a[href="clients.html"]', title: 'Client List', text: 'Browse and try adding clients. New/edited/deleted client entries will be discarded in training mode.' }
-      ]
-    },
-    'clients.html': {
-      title: 'Clients — Practice Area',
-      help: [
-        'You can add, edit, and delete client records to learn the workflow.',
-        'None of these actions will affect the real Clients sheet while training mode is on.',
-        'Try the Add Client form first to learn what fields are required.'
-      ],
-      tooltips: [
-        { selector: '#submitBtn', title: 'Add Client', text: 'Fill in all required fields then click here. Training mode will simulate a successful save — nothing reaches the live records.' }
+        { selector: 'a[href="director-client-book.html"]', title: 'Client Book', text: 'Your clients, their people and what you have sent them. The old Client List is retired (A385).' }
       ]
     },
     'performance.html': {

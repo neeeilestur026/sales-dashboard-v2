@@ -20,8 +20,8 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u;
 const HEX = /#(?:[0-9a-fA-F]{3}){1,2}\b/g;
 
-const STUB = 'director-recommender.html';
-const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_') && f !== STUB).sort();
+const STUBS = ['director-recommender.html', 'clients.html'];   // A385 — clients.html is a redirect now
+const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_') && STUBS.indexOf(f) < 0).sort();
 const read = (f) => fs.readFileSync(D + f, 'utf8');
 
 /* Pages that have had the full pass (hex → token, fallbacks stripped, chrome emoji gone). Each family
@@ -30,7 +30,7 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'director-home.html', 'director-expenses.html', 'director-sales-orders.html', 'director-emails.html',
   'leadgen-home.html', 'leadgen-daily-report.html',
   // A290 — the sales family
-  'dashboard.html', 'clients.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html',
+  'dashboard.html', 'pending-items.html', 'performance.html', 'quotation-summary.html', 'weekly-itinerary.html', 'sales-emails.html', 'product-finder.html',
   // A291 — the admin family
   'admin.html', 'admin-daily-report.html', 'admin-hr-reports.html', 'admin-import-quotation.html', 'admin-login-log.html', 'admin-reports.html', 'admin-summary.html',
   'admin-targets.html', 'admin-team.html', 'admin-users.html', 'pr-tracker.html', 'po-approvals.html', 'quotation-approvals.html', 'purchase-request-tracker.html',
@@ -71,7 +71,7 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   // A374 — the supplier list (admin)
   'supplier-list.html',
   'quotation-status.html',   // A382
-  'collection-details.html'];   // A384
+  'collection-details.html'];   // A384 (A385: clients.html left the list — it is a redirect stub now)
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

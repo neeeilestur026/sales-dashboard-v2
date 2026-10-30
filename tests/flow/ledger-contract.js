@@ -117,7 +117,7 @@ sec('2 · contrast meets WCAG AA in both themes');
 
 /* ── 3 · the pages ─────────────────────────────────────────────────────────────────────────── */
 sec('3 · exactly the in-scope pages carry the look');
-const EXCLUDED = ['scan.html', 'collect.html', 'labels.html', 'index.html', 'director-recommender.html',
+const EXCLUDED = ['scan.html', 'collect.html', 'labels.html', 'index.html', 'director-recommender.html', 'clients.html',   // A385: a redirect stub
   'reconcile-2026-costs.html', 'replace-2026-sos.html', 'update-2025-costs.html'];
 const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_')).sort();
 const IN = PAGES.filter(f => !EXCLUDED.includes(f) && !f.startsWith('migrate-'));

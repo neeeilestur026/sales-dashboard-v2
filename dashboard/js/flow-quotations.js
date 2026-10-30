@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-quotations');
   // Only admin/accounting can open the rest of the flow — show the sub-nav to them.
   if (qSession.role === 'admin' || qSession.role === 'accounting') renderFlowNav('flow-quotations.html');
+  /* A385 — the send-date estimate (it lived on the worklist card): for admin and the director, beside Refresh */
+  const bf = document.getElementById('qBackfillBtn');
+  if (bf && (qSession.role === 'admin' || qSession.role === 'director')) bf.style.display = '';
 
   const params = new URLSearchParams(location.search);
 
@@ -111,7 +114,8 @@ function qPatchLocal(no, saved, oldNo) {
 
 async function loadQuotations() {
   const c = document.getElementById('listContainer');
-  c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
+  /* A385 — the organized list keeps its controls (and what was typed in them) through a Refresh */
+  if (!qOrg || !c.querySelector('#qOrgHost')) { qOrg = null; c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>'; }
   try {
     // Sales see only their own; oversight roles (admin/accounting/management/director) see all.
     const params = qIsOversight ? {} : { createdBy: qSession.name };
@@ -184,191 +188,17 @@ const QFU_STYLE = {
   'unknown':  'background:var(--hx-inset);color:var(--hx-ink-2);'
 };
 
-/** The Follow-ups card — what needs chasing, worst first. Deliberately on this page rather than a
- *  page of its own: a separate page would need its own copy of the money and bucket helpers, and
- *  three copies of those is what A182 and A208 Part A were both written to undo. */
-/* ── A215 · the worklist ──────────────────────────────────────────────────────────────────────────
-   The table below this card is ordered by DATE, which is exactly backwards for tracking: the row
-   that needs attention most has sat longest, so it lands furthest down the page. This renders the
-   same quotations in the order they need DOING, with the action for each one on its own row.
-
-   The engine (quotation-worklist.js) decides what the step is; everything here is presentation. */
-let qwGroup = 'now';          // which tab is open
-let qwOpenStory = '';         // which row has its history expanded
-let qwList = null;            // the last computed worklist, so a tab switch does not recompute
-
-/** Colour per step. Reuses the follow-up palette where the meaning matches, so a rep who has learned
- *  the badge colours on the table does not have to learn a second language here. */
-const QW_STYLE = {
-  answer:         'background:var(--hx-cyan-ring);color:var(--hx-cyan-ink);',
-  fix:            'background:var(--hx-red-line);color:var(--hx-red);',
-  send:           'background:var(--hx-navy-line);color:var(--hx-navy-text);',
-  chase:          'background:var(--hx-warn-line);color:var(--hx-warn);',
-  'no-send-date': 'background:var(--hx-inset);color:var(--hx-ink-2);',
-  'wait-approval':'background:var(--hx-inset);color:var(--hx-ink-2);',
-  'wait-client':  'background:var(--hx-ok-soft);color:var(--hx-ok);',
-  snoozed:        'background:var(--hx-inset);color:var(--hx-ink-2);',
-  draft:          'background:var(--hx-inset);color:var(--hx-ink-2);',
-  won:            'background:var(--hx-ok-soft);color:var(--hx-ok);',
-  closed:         'background:var(--hx-inset);color:var(--hx-ink-2);'
-};
-
-function qRenderFollowUps(rows) {
-  const el = document.getElementById('qFollowUps');
-  if (!el || typeof quotationWorklist !== 'function') return;
-
-  qwList = quotationWorklist(rows || [], qLinks, qCfg, qHasSO);
-  qwRenderTabs();
-  qwRenderBanner();
-
-  const list = qwList.groups[qwGroup] || [];
-  if (!list.length) {
-    el.innerHTML = '<div class="qw-empty">' + (qwGroup === 'now'
-      ? '✓ Nothing is waiting on you. Anything with the client or in approval is under “Waiting”.'
-      : 'Nothing here.') + '</div>';
-    return;
-  }
-  /* The no-send-date rows are collapsed into the banner above rather than listed: there are 60 of
-     them on live data, and 60 identical rows would bury the four things a rep can actually act on. */
-  const shown = list.filter(r => r.step !== 'no-send-date');
-  if (!shown.length) {
-    el.innerHTML = '<div class="qw-empty">✓ Nothing else needs you — just the send dates above.</div>';
-    return;
-  }
-  el.innerHTML = shown.map(qwRow).join('');
-}
-
-function qwRenderTabs() {
-  const el = document.getElementById('qWorkTabs');
-  if (!el || !qwList) return;
-  const label = { now: 'Needs you', waiting: 'Waiting', done: 'Done' };
-  el.innerHTML = ['now', 'waiting', 'done'].map(g =>
-    `<button class="qw-tab${g === qwGroup ? ' active' : ''}" onclick="qwSetGroup('${g}')">${label[g]}<span class="n">${qwList.counts[g]}</span></button>`
-  ).join('');
-  const sub = document.getElementById('qWorkSub');
-  if (sub) {
-    sub.textContent = qwGroup === 'now'
-      ? (qwList.counts.now
-          ? 'In the order they need doing — the most overdue first, then the largest.'
-          : 'Your quotations, in the order they need doing.')
-      : qwGroup === 'waiting'
-        ? 'With the client, in approval, or parked. Nothing for you to do yet.'
-        : 'Won, closed, or not pursued.';
-  }
-}
-
-function qwSetGroup(g) { qwGroup = g; qwOpenStory = ''; qRenderFollowUps(qwLastRows()); }
-/* Re-render from the same filtered set the list is showing, so the tabs and the table below can
-   never disagree about which quotations are in scope. */
-function qwLastRows() { return (qwList && qwList.rows.map(r => r.quotation)) || []; }
-
-/** The one banner: the send dates nobody recorded. It is the single biggest reason the worklist
- *  cannot rank most of the pipeline, so it says the number and offers the fix rather than leaving
- *  60 rows saying "sent date not recorded". */
-function qwRenderBanner() {
-  const el = document.getElementById('qWorkBanner');
-  if (!el || !qwList) return;
-  const n = qwList.rows.filter(r => r.step === 'no-send-date').length;
-  if (!n || qwGroup !== 'now') { el.innerHTML = ''; return; }
-  const canFix = ['director', 'management', 'admin', 'accounting'].indexOf(
-    String((qSession && qSession.role) || '').toLowerCase()) >= 0;
-  el.innerHTML = `<div class="qw-banner">
-      <div><b>${n} quotation${n === 1 ? '' : 's'} ${n === 1 ? 'was' : 'were'} marked sent before the system
-        recorded when.</b> Until that is filled in ${n === 1 ? 'it' : 'they'} cannot be ranked by how long
-        ${n === 1 ? 'it has' : 'they have'} been quiet, so ${n === 1 ? 'it is' : 'they are'} not listed below.</div>
-      ${canFix ? '<button class="btn btn-sm" onclick="qwOpenBackfill()">Estimate the dates…</button>'
-               : '<span style="font-size:.74rem;">Ask management to estimate them.</span>'}
-    </div>`;
-}
-
-function qwRow(r) {
-  const q = r.quotation;
-  const no = String(q.quotationNo || '');
-  const esc = flowEsc(no);
-  const canAct = !!r.verb;
-  /* Every action here already exists on the page — this only puts it where the instruction is,
-     instead of two clicks inside a modal. */
-  const onClick = { fix: `openReviewModal("${esc}")`, send: `sendQuotationAction("${esc}")`,
-                    answer: `qOpenEmailLink("${esc}")`, chase: `qOpenEmailLink("${esc}")`,
-                    draft: `openReviewModal("${esc}")` }[r.step] || `openReviewModal("${esc}")`;
-  const est = String(q.sentAtBasis || '').trim();
-  return `<div class="qw-row">
-      <div class="act">${canAct
-        ? `<button class="btn btn-sm ${r.step === 'fix' || r.step === 'answer' ? 'btn-primary' : ''}"
-             onclick='${onClick}'>${flowEsc(r.verb)}</button>`
-        : `<span class="qw-pill" style="${QW_STYLE[r.step] || ''}">${flowEsc(r.title)}</span>`}</div>
-      <div class="body">
-        <div class="no">${esc}</div>
-        <div class="cust">${flowEsc(q.customer || '—')}</div>
-        <div class="why">${flowEsc(r.line)}${r.detail ? ' · ' + flowEsc(r.detail) : ''}${
-          est ? ` <span class="qw-pill qw-est" title="This date was estimated, not recorded">${flowEsc(est)}</span>` : ''}</div>
-        ${qwOpenStory === no ? qwStory(q, r) : ''}
-      </div>
-      <div class="money">${flowMoney(r.value, 'PHP')}</div>
-      <div class="extra">
-        <button class="link-btn" onclick='qwToggleStory("${esc}")'>${qwOpenStory === no ? 'Hide' : 'History'}</button>
-        ${r.group !== 'done' ? `<button class="link-btn" onclick='qwPark("${esc}")'>${
-          r.step === 'snoozed' ? 'Unpark' : 'Park'}</button>` : ''}
-      </div>
-    </div>`;
-}
-
-function qwToggleStory(no) { qwOpenStory = (qwOpenStory === no) ? '' : no; qRenderFollowUps(qwLastRows()); }
-
-/** What happened to this quotation, in order. Everything here is already loaded — this is a render,
- *  not a fetch. Answering "what happened with this one" used to mean opening five pages. */
-function qwStory(q, r) {
-  /* Each event carries a sort key as well as a label. An event with no recorded date INHERITS the
-     key of the one before it, so "Sent back (date not recorded)" stays where it belongs — after
-     "Created" — instead of sorting to the top of the story on a literal string compare. */
-  const ev = [];
-  const add = (when, what) => {
-    if (!what) return;
-    const d = flowDate(when);
-    ev.push({ when: d || '—', what: what, key: d || (ev.length ? ev[ev.length - 1].key : '') });
-  };
-  add(q.date, 'Created' + (q.createdBy ? ' by ' + q.createdBy : ''));
-  /* State it even when there is no timestamp. rejectQuotation did not stamp who or when until A215,
-     so every quotation sent back before that has the status and nothing else — and a history that
-     silently omits the most important event is worse than one that admits the date is missing. */
-  const decided = (q.status === 'Rejected') ? 'Sent back' :
-                  (q.approvedAt || q.approvedBy) ? 'Approved' : '';
-  if (decided) {
-    const lbl = decided + (q.approvedBy ? ' by ' + q.approvedBy : '') +
-                (q.approvalNote ? ' — ' + q.approvalNote : '');
-    if (flowDate(q.approvedAt)) add(q.approvedAt, lbl);
-    else ev.push({ when: '(not recorded)', what: lbl,
-                   key: ev.length ? ev[ev.length - 1].key : '' });
-  }
-  if (q.sentAt) {
-    add(q.sentAt, 'Sent to the client' + (q.sentTo ? ' (' + q.sentTo + ')' : '') +
-        (String(q.sentAtBasis || '').trim() ? ' — ' + q.sentAtBasis : ''));
-  }
-  (qLinks[String(q.quotationNo)] || []).forEach(l => {
-    if (String(l.status || 'Active') !== 'Active') return;
-    add(l.sentAt, (String(l.kind || 'Initial') === 'Initial' ? 'Email: ' : 'Chase: ') +
-        (l.subject || '(no subject)'));
-    if (l.replyAt) add(l.replyAt, 'Client replied' + (l.replyFrom ? ' — ' + l.replyFrom : ''));
-  });
-  if (q.snoozeUntil) add(q.snoozeUntil, 'Parked until then' + (q.snoozeReason ? ' — ' + q.snoozeReason : ''));
-  if (qHasSO[String(q.quotationNo)]) {
-    ev.push({ when: '', what: 'Became a sales order',
-              key: ev.length ? ev[ev.length - 1].key : '' });
-  }
-
-  // Array.prototype.sort is stable, so equal keys keep the order they were added in.
-  ev.sort((a, b) => String(a.key).localeCompare(String(b.key)));
-  if (!ev.length) return '<div class="qw-story">Nothing recorded yet.</div>';
-  return '<div class="qw-story">' + ev.map(e =>
-    `<div class="ev"><span class="when">${flowEsc(e.when)}</span><span>${flowEsc(e.what)}</span></div>`).join('') +
-    '</div>';
-}
+/* A385 — "What needs you" (the A215 worklist card) is gone from this page at Neil's request (30 Oct 2026); the lists
+   below are organized instead (js/sales-lists.js). Its two actions that had no other home stay, on the rows and the
+   list header: Park (snoozeQuotation) and the send-date estimate. The engine, js/quotation-worklist.js, is untouched —
+   the director and management homes still use it. */
 
 /** Park a deal off the worklist, or bring it back. The reason is required by the handler and asked
  *  for here, because six weeks later "why is this parked?" is the only question anybody asks. */
-async function qwPark(no) {
-  const row = (qwList && qwList.rows.filter(r => String(r.quotation.quotationNo) === String(no))[0]) || null;
-  const parked = row && row.step === 'snoozed';
+async function qPark(no) {
+  const q = qList.find(x => String(x.quotationNo) === String(no)) || {};
+  const until = flowDate(q.snoozeUntil);
+  const parked = !!until && until >= flowToday();
   try {
     if (parked) {
       if (!confirm('Put ' + no + ' back on your list?')) return;
@@ -377,7 +207,7 @@ async function qwPark(no) {
       flowMsg('qMsg', r.message, true);
     } else {
       const until = prompt('Park ' + no + ' until when? (YYYY-MM-DD)\n\n' +
-        'It leaves your list and comes back on that date.', qwDefaultPark());
+        'It leaves the follow-up lists and comes back on that date.', qDefaultPark());
       if (!until) return;
       const why = prompt('Why? One line — future you will want to know.');
       if (!why || !why.trim()) return;
@@ -389,7 +219,7 @@ async function qwPark(no) {
   } catch (e) { flowMsg('qMsg', e.message, false); }
 }
 /** A fortnight out — far enough to be worth parking, near enough that nothing is forgotten. */
-function qwDefaultPark() {
+function qDefaultPark() {
   const d = new Date(flowToday() + 'T00:00:00');
   d.setDate(d.getDate() + 14);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
@@ -398,7 +228,7 @@ function qwDefaultPark() {
 
 /** Preview the send-date backfill, then apply it — never the other way round. The whole point of the
  *  two steps is that somebody reads what would change before 60 rows do. */
-async function qwOpenBackfill() {
+async function qOpenBackfill() {
   try {
     const pv = await postFlow('previewQuotationSentAt', {});
     if (!pv.success) throw new Error(pv.message);
@@ -532,6 +362,9 @@ function qBuildMonthOptions() {
 function renderQuotationList() {
   const c = document.getElementById('listContainer');
   if (!c) return;
+  if (typeof sl2On === 'function' && sl2On(qCfg)) { qRenderOrganized(); return; }   // A385
+  const bar = document.getElementById('qMonthFilter'); if (bar && bar.closest) { const r = bar.closest('.flow-actions'); if (r) r.style.display = ''; }
+  qOrg = null;
   const month = (document.getElementById('qMonthFilter') || {}).value || '';
   const term = ((document.getElementById('qSearch') || {}).value || '').trim().toLowerCase();
   // A152: status filter — Active (default, hides closed), Closed (win/loss review), or All.
@@ -559,7 +392,6 @@ function renderQuotationList() {
   qRoll = flowQuotationRollup(rows, qHasSO);
   qDupPairs = flowQuotationDupPairs(rows);
   qRenderKpiTiles(qRoll, rows.length, month, sview, flowQuotationRollup(periodRows, qHasSO));
-  qRenderFollowUps(rows);
 
   const count = document.getElementById('qListCount');
   if (count) {
@@ -576,7 +408,67 @@ function renderQuotationList() {
   c.innerHTML = qIsOversight ? renderGroupedByRep(rows) : renderQuotationTable(rows);
 }
 
-function quotationActions(q) {
+/* ── A385 — THE ORGANIZED LIST ──────────────────────────────────────────────────────────────────────────────────────
+   Neil, 30 Oct 2026: quotations "pending or already sent" organized "by month created, last follow up, by client". Each
+   quotation is in one chip — Not sent yet, With the client, Won, Lost or closed — from flowQuotationBucket (the A382
+   result included), so the chips add up; Group by is Month · Client · Stage · Last follow-up (oldest contact first: the
+   deal nobody has chased in weeks is the one to look at), plus Rep for those who see everyone's. The rows keep every
+   action they had and add the last follow-up, the request it came from, Update (Won / Pending / Lost on My quotations)
+   and Park. The tiles above describe the period shown, every status. */
+let qOrg = null;
+const Q_ORG_STAGES = [['draft', 'Draft'], ['back', 'Sent back for rework'], ['approval', 'In approval'], ['approved', 'Approved — not sent yet'],
+  ['due', 'With the client — follow-up due'], ['waiting', 'With the client — waiting'], ['won', 'Won'], ['closed', 'Lost or closed']];
+function qPeriod() { let v = null; try { v = localStorage.getItem('sl2:q-period'); } catch (e) { v = null; } return v === '' ? '' : 'last90'; }   // only the two choices there are
+function qOrgRow(q) {
+  const no = String(q.quotationNo), b = flowQuotationBucket(q, qHasSO), st = String(q.status || 'Draft');
+  const fu = (typeof flowFollowUp === 'function') ? flowFollowUp(q, qLinks[no] || [], qCfg, qHasSO) : { state: '' };
+  const stage = b === 'won' ? 'won' : b === 'closed' ? 'closed' : b === 'approved' ? 'approved'
+    : b === 'sent' ? (['due', 'overdue', 'replied'].indexOf(fu.state) >= 0 ? 'due' : 'waiting')
+    : st === 'Rejected' ? 'back' : /^Pending/.test(st) ? 'approval' : 'draft';
+  return { key: no, date: q.date, client: q.customer, clientKey: slmClientKey(q.customer), stage, bucket: b, value: flowQuotationNet(q),
+           followAt: b === 'sent' ? (fu.lastContactAt || flowDate(q.lastFollowUp) || '') : '', rep: flowQuotationOwner(q),
+           hay: [no, q.customer, q.subject, q.prNo, q.createdBy, q.salesperson, q.clientRefNo].concat((q.items || []).map(i => i.itemName || i.itemNo)).join(' '),
+           raw: Object.assign({ _fu: fu, _stage: stage }, q) };
+}
+function qChipOf(row) { return row.bucket === 'won' ? 'won' : row.bucket === 'closed' ? 'closed' : row.bucket === 'sent' ? 'client' : 'notsent'; }
+function qRenderOrganized() {
+  const c = document.getElementById('listContainer');
+  const bar = document.getElementById('qMonthFilter'); if (bar && bar.closest) { const r = bar.closest('.flow-actions'); if (r) r.style.display = 'none'; }   // the organizer replaces the month / status / search row
+  if (!qOrg) {
+    c.innerHTML = '<div id="qOrgHost"></div>';
+    const period = '<label class="sl2-sortw"><span class="sl2-sr">Period</span><select class="sl2-sort" data-q-period>' +
+      '<option value="last90">Last 90 days</option><option value="">All time</option></select></label>';
+    qOrg = sl2Organizer({ id: 'q-' + (qIsOversight ? 'all' : 'mine'), host: document.getElementById('qOrgHost'), noun: 'quotation',
+      chips: [['notsent', 'Not sent yet'], ['client', 'With the client'], ['won', 'Won'], ['closed', 'Lost or closed']], chipOf: qChipOf,
+      groups: [['month', 'Month'], ['client', 'Client'], ['stage', 'Stage'], ['follow', 'Last follow-up']].concat(qIsOversight ? [['rep', 'Rep']] : []),
+      defaults: { chip: 'all', group: qIsOversight ? 'rep' : 'month', sort: 'newest' }, stages: Q_ORG_STAGES, today: flowToday(), oldestFirst: true,
+      followGroup: (r) => r.bucket === 'won' ? ['won', 'Won'] : r.bucket === 'closed' ? ['closed', 'Lost or closed'] : r.bucket === 'sent' ? null : ['notsent', 'Not sent yet'],
+      followOrder: ['notsent', 'won', 'closed'],
+      sorts: [['newest', 'Newest first'], ['oldest', 'Oldest first'], ['biggest', 'Biggest first'], ['client', 'By client']],
+      placeholder: 'Search quotations, clients, subjects, items or requests', tools: period,
+      table: (rows) => renderQuotationTable(rows, true),
+      empty: (chip) => chip === 'client' ? 'Nothing is with a client right now.' : chip === 'notsent' ? 'Everything has gone out.' : 'No quotations here.' });
+    const sel = c.querySelector('[data-q-period]');
+    if (sel) {
+      sel.value = qPeriod();
+      sel.addEventListener('change', () => { try { localStorage.setItem('sl2:q-period', sel.value); } catch (e) {} qRenderOrganized(); });
+    }
+  }
+  const month = qPeriod(), shown = qFilterPeriod(qList, month);
+  qRoll = flowQuotationRollup(shown, qHasSO);
+  qDupPairs = flowQuotationDupPairs(shown);
+  qRenderKpiTiles(qRoll, shown.length, month, 'all', qRoll);
+  qOrg.set(shown.map(qOrgRow));
+}
+/** A385 — when this quotation was last followed up, and how ('—' before it went out). */
+function qLastFollowCell(q) {
+  const fu = q._fu || {}, at = fu.lastContactAt || '';
+  if (!at) return flowQuotationBucket(q, qHasSO) === 'sent' ? '<span class="sl2-tag old">never</span>' : '<span style="color:var(--hx-ink-3);">—</span>';
+  const via = flowDate(q.lastFollowUp) === at && q.followUpVia ? ' · ' + q.followUpVia : '';
+  return flowDate(at) + '<span class="sl2-sub">' + flowEsc(slmAgo(at, flowToday()) + via) + '</span>';
+}
+
+function quotationActions(q, org) {
   const no = flowEsc(q.quotationNo);
   const role = qSession.role, st = q.status || 'Draft';
   /* A280 — `isRep`, not `isSales`: a lead-gen user builds quotations from their own purchase
@@ -626,6 +518,13 @@ function quotationActions(q) {
     const n = (qLinks[String(q.quotationNo)] || []).filter(l => String(l.status || 'Active') === 'Active').length;
     a += B(`qOpenEmailLink("${no}")`, n ? `Email (${n})` : 'Email');
   }
+  /* A385 — set its result where results are set (My quotations), and Park, which lived on the worklist card */
+  if (org && (st === 'Sent' || st === 'Approved' || Q_CLOSED.indexOf(st) !== -1) && (isCreator || isRep || isAdmin || role === 'management' || role === 'director'))
+    a += ` <a class="link-btn" style="margin-left:0.5rem;" href="quotation-status.html?q=${encodeURIComponent(q.quotationNo)}">Update</a>`;
+  if (org && st === 'Sent' && (isCreator || isRep)) {
+    const parked = flowDate(q.snoozeUntil) && flowDate(q.snoozeUntil) >= flowToday();
+    a += B(`qPark("${no}")`, parked ? 'Unpark' : 'Park');
+  }
   return a;
 }
 
@@ -635,7 +534,7 @@ function quotationActions(q) {
 function qtnGross(q) { return flowQuotationGross(q); }
 function qtnTotal(q) { return flowQuotationNet(q); }
 
-function quotationRow(q) {
+function quotationRow(q, org) {
   const st = q.status || 'Draft';
   const noteTip = (st === 'Rejected' && q.approvalNote) ? ` title="Reason: ${flowEsc(q.approvalNote)}"` : '';
   const noteLine = (st === 'Rejected' && q.approvalNote) ? `<div style="font-size:0.72rem;color:var(--hx-red);margin-top:0.2rem;">✕ ${flowEsc(q.approvalNote)}</div>` : '';
@@ -654,7 +553,10 @@ function quotationRow(q) {
   // A208: how long this has been sitting with the client, on the row itself.
   const fu = (typeof flowFollowUp === 'function') ? flowFollowUp(q, qLinks[String(q.quotationNo)] || [], qCfg, qHasSO) : null;
   const fuBadge = (fu && fu.label) ? ` <span class="flow-badge" style="${QFU_STYLE[fu.state] || ''}" title="${flowEsc(fu.reason || fu.label)}">${flowEsc(fu.label)}</span>` : '';
-  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}${fuBadge}</td><td>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}</td>
+  /* A385 — in the organized list: the request it came from, and the last follow-up in its own column */
+  const fromPr = org && q.prNo ? `<span class="sl2-sub">from <a class="sl2-link" href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}">${flowEsc(q.prNo)}</a></span>` : '';
+  const subj = org && q.subject ? `<span class="sl2-sub">${flowEsc(q.subject)}</span>` : '';
+  return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}${fuBadge}${fromPr}</td><td${org ? ' class="sl2-nw"' : ''}>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}${subj}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:var(--hx-cyan-ink);">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>
     <td>${q.pdfLink ? `<a href="${flowEsc(q.pdfLink)}" target="_blank" class="link-btn"${qPdfState(q) === 'fresh'
@@ -663,7 +565,7 @@ function quotationRow(q) {
             ? 'This saved PDF no longer matches the quotation — click PDF to regenerate.'
             : 'This PDF predates change-tracking, so it can\'t be confirmed to match — click PDF to regenerate.'}"`
       }>${qPdfState(q) === 'fresh' ? '' : '⚠ '}View saved</a>` : '<span style="color:var(--hx-ink-3);">—</span>'}</td>
-    <td style="white-space:nowrap;">${quotationActions(q)}</td></tr>`;
+    ${org ? `<td class="sl2-nw">${qLastFollowCell(q)}</td><td class="sl2-acts">` : '<td style="white-space:nowrap;">'}${quotationActions(q, org)}</td></tr>`;
 }
 
 // ─── Approval actions ─────────────────────────────
@@ -866,8 +768,8 @@ function qrReject(no) {
   _qAction('rejectQuotation', no, { reason });
 }
 
-function renderQuotationTable(rows) {
-  return `<table class="flow-table"><thead><tr><th>Quotation No</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th>PDF</th><th></th></tr></thead><tbody>${rows.map(quotationRow).join('')}</tbody></table>`;
+function renderQuotationTable(rows, org) {
+  return `<table class="flow-table"><thead><tr><th>Quotation No</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th><th>Items</th><th>PDF</th>${org ? '<th>Last follow-up</th>' : ''}<th></th></tr></thead><tbody>${rows.map(q => quotationRow(q, org)).join('')}</tbody></table>`;
 }
 
 // Oversight: group the (filtered) quotations into collapsible sections (one per Created By).

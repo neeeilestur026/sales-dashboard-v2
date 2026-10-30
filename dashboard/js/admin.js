@@ -158,7 +158,7 @@ async function _loadTaskPanel(tab) {
       // A191: noStore — admin renders six safe columns from this, but the payload also carries
       // commission %, margin % and the cost breakdown, which must not linger in their storage.
       const r = await fetchFlow('getPricingRequests', {}, { noStore: true });
-      const rows = ((r && r.data) || []).slice(0, 50);
+      const rows = ((r && r.data) || []).filter(p => !p.archived).slice(0, 50);   // A385 — archived requests are out of the queues
       wrap.innerHTML = rows.length === 0 ? _emptyMsg('No purchase requests yet.') : _tableHtml(
         ['PR No', 'Date', 'Requested By', 'Customer', 'Status', 'Items', ''],
         rows.map(p => [
@@ -183,7 +183,7 @@ async function loadTaskOverview() {
     ]);
     const data = (r) => (r.status === 'fulfilled' && r.value && r.value.data) ? r.value.data : [];
     const qRows = data(qt), sRows = data(so), pRows = data(po), aRows = data(ap),
-          rRows = data(rc), vRows = data(iv), prRows = data(pr);
+          rRows = data(rc), vRows = data(iv), prRows = data(pr).filter(p => !p.archived);   // A385
 
     // Tab count badges (.ct)
     _setText('tcQt', qRows.length);

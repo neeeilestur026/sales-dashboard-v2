@@ -80,7 +80,7 @@ async function prtReload() {
       fetchFlow('getQuotations', {}, { fresh: true }),
       fetchFlow('getFlowSettings', {}).catch(() => ({ data: {} }))
     ]);
-    prtPRs = (pr && pr.data) || [];
+    prtPRs = ((pr && pr.data) || []).filter(p => !p.archived);   // A385 — no update in prArchiveDays: out of every work list
     prtCfg = (cfg && cfg.data) || {};
     prtQuoByNo = {};
     ((quo && quo.data) || []).forEach(q => { prtQuoByNo[String(q.quotationNo)] = q; });

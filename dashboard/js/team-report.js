@@ -96,7 +96,7 @@ async function _trLoad(S) {
   keys.forEach((k, i) => { got[k] = vals[i]; });
   if (S.shared.activity === null && S.role !== 'leadgen') failed.push('activity log');
   S.failed = failed;
-  S.raw = { today: S.today, activity: S.shared.activity || [], settings: S.shared.settings, ar: got.ar, prs: got.prs, pos: got.pos, sos: got.sos,
+  S.raw = { today: S.today, activity: S.shared.activity || [], settings: S.shared.settings, ar: got.ar, prs: Array.isArray(got.prs) ? got.prs.filter(p => !p.archived) : got.prs, pos: got.pos,   /* A385 — archived requests are not stuck, they are archived */ sos: got.sos,
             clients: got.clients, suppliers: got.suppliers, lgData: got.lgData };
   S.backend = got.saved.ok;
   S.backendMsg = got.saved.ok ? '' : got.saved.message;

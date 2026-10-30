@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 192;   // A384 — collection details: each client's bank, address and who to call. History: see CHANGELOG.
+var FLOW_VERSION = 193;   // A385 — the sales lists: old requests archive themselves; a retried quote is the same quote. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -855,6 +855,7 @@ var _SECURED = {
   savePRPDF: 1, savePaymentRequestPDF: 1, savePfInquiry: 1, saveQuotationPDF: 1, saveSOCostDetails: 1, saveSONotes: 1,
   saveSupplier: 1, saveTravelPDF: 1, saveTravelReplenishment: 1, saveWeeklyItinerary: 1, seedClientAliases: 1, seedCommissionDemo: 1,
   sendQuotation: 1, setCollectionMeta: 1, setCommissionRate: 1, setFlowDriveFolder: 1, setFlowSettings: 1, setMgmtPricing: 1,
+  restorePricingRequest: 1,   // A385 — bring an archived request back (owner, admin, director)
   setOpeningBalance: 1, setPricingRequestSalesperson: 1, setQuotationEmailReply: 1, setQuotationFollowUp: 1, setQuotationSalesperson: 1, setSOSupplierType: 1,
   setTravelFloat: 1, setupFlowDrive: 1, snoozeQuotation: 1, submitCommissionRequest: 1, submitDailyReport: 1, submitForPricing: 1,
   setQuotationResult: 1,   // A382 — quotation status (owner or approver, checked inside)
@@ -12422,6 +12423,7 @@ function setPricingRequestSalesperson(p) {
   var who = String(p.salesperson == null ? '' : p.salesperson).trim();
   var was = _prOwner(h);
   _setCellByKey('PricingRequests', 'PR No', p.prNo, 'Salesperson', who);
+  _prTouch(p.prNo);   // A385 — a change of owner is an update too
   return { success: true, prNo: p.prNo, salesperson: who, previous: was,
     message: who ? (p.prNo + ' now belongs to ' + who + '.')
                  : (p.prNo + ' no longer names a salesperson; it falls back to who requested it (' + was + ').') };
@@ -12573,7 +12575,11 @@ var _FLOW_SETTING_DEFAULTS = {
   lgMaxBatch: 60, lgReplyRateAim: 8,
   lgWorkingDays: 'Mon,Tue,Wed,Thu,Fri', lgHolidays: '',
   lgSectorCycle: 'Cement,Mining,Power,Water',
-  lgRepLuzon: '', lgRepVisMin: ''
+  lgRepLuzon: '', lgRepVisMin: '',
+  /* A385 — the sales side's switches, so each change can be turned off in the FlowSettings sheet without a deploy.
+     prArchiveDays: a purchase request with no update for this many days is archived (hidden from every work list,
+     kept in every history); 0 archives nothing. The other three are 'on' / 'off' for the pages. */
+  prArchiveDays: 30, salesListsOrganizer: 'on', quoteOneStep: 'on', quoteNoSuggest: 'on'
 };
 function getFlowSettings() {
   var out = {};
@@ -15492,6 +15498,7 @@ var _MODULE_MAP = {
   // A226 — without these two the reattribution leaves no audit row at all.
   runPricingRequestOwnerBackfill: ['Pricing Request', 'Reattributed'],
   setPricingRequestSalesperson: ['Pricing Request', 'Reattributed'],
+  restorePricingRequest: ['Pricing Request', 'Brought back'],   // A385
   runQuotationOwnerBackfill: ['Quotation', 'Reattributed'],
   setQuotationSalesperson: ['Quotation', 'Reattributed'],
   setFlowSettings: ['Settings', 'Saved'],
@@ -17498,9 +17505,11 @@ function getPricingRequests(p) {
   Object.keys(quoCands).forEach(function (k) {
     quoNosByPR[k] = _quoAllForPR(k, quoCands[k]).map(function (q) { return String(q['Quotation No']); });
   });
+  var archiveDays = _prArchiveDays(), nowMs = _now().getTime();
 
-  return { success: true, data: headers.map(function (h) {
+  return { success: true, archiveDays: archiveDays, data: headers.map(function (h) {
     var its = items.filter(function (r) { return String(r['PR No']) === String(h['PR No']); });
+    var lastUpdate = _prLastUpdate(h, quoNosByPR[String(h['PR No'])] || [], quoByNo);   // A385
     var qno = quoByPR[String(h['PR No'])] || '', qsrc = qno ? 'column' : '';
     if (!qno) {
       var qm = String(h['Notes'] || '').match(/Quotation\s+(\S+)/i);
@@ -17519,6 +17528,9 @@ function getPricingRequests(p) {
          single pick and still what most surfaces read; this is what a partly-quoted request needs to
          show honestly. Empty for the 297 requests that became nothing. */
       quotationNos: quoNosByPR[String(h['PR No'])] || [],
+      /* A385 — when anything last happened to it, and whether that was long enough ago to archive it. Every list
+         that is somebody's work hides an archived request; every history still shows it. */
+      updatedAt: lastUpdate, archived: _prIsArchived(lastUpdate, archiveDays, nowMs),
       clientNo: String(h['Client Book No'] || ''),   // A358 — the Client Book client, when the rep linked one
       destination: h['Destination'], commission: _num(h['Commission %']), margin: _num(h['Margin %']),
       status: h['Status'], pdfLink: h['PDF Link'] || '', notes: h['Notes'], rowIndex: h.rowIndex,
@@ -17544,6 +17556,55 @@ function getPricingRequests(p) {
       })
     };
   }) };
+}
+
+/* ── A385 — ARCHIVING OLD REQUESTS ─────────────────────────────────────────────────────────────────────────────────
+   Neil, 30 Oct 2026: "archive/hide all Purchase request from all users ... who is more than a month old", counted from
+   the last update, priced ones too. Nothing is written by the rule: a request is archived when the newest of its
+   Updated At, Created At, Date and the dates of the quotations it became is more than prArchiveDays ago (FlowSettings,
+   default 30; 0 turns archiving off). restorePricingRequest stamps Updated At, which brings one back for that long. */
+function _prArchiveDays() {
+  var v = 30;
+  try { var d = getFlowSettings().data || {}; if (d.prArchiveDays !== undefined && d.prArchiveDays !== '') v = Number(d.prArchiveDays); } catch (e) {}
+  return isFinite(v) && v > 0 ? v : 0;
+}
+function _prMs(v) { if (!v) return 0; var d = v instanceof Date ? v : new Date(v); var t = d.getTime(); return isNaN(t) ? 0 : t; }
+/** The newest moment anything happened to a request, as an ISO time ('' when it has no date at all). */
+function _prLastUpdate(h, quoNos, quoByNo) {
+  var t = Math.max(_prMs(h['Updated At']), _prMs(h['Created At']), _prMs(h['Date']));
+  (quoNos || []).forEach(function (no) { var q = quoByNo && quoByNo[no]; if (q) t = Math.max(t, _prMs(q['Created At']), _prMs(q['Date'])); });
+  return t ? new Date(t).toISOString() : '';
+}
+function _prIsArchived(iso, days, nowMs) { var t = _prMs(iso); return !!(days && t && nowMs - t > days * 86400000); }
+/** Any change to a request is an update: stamp it (col 12, as _setPRStatus does). */
+function _prTouch(prNo) {
+  var sh = _sheet('PricingRequests'), col = SCHEMA.PricingRequests.indexOf('Updated At') + 1;
+  _rows('PricingRequests').forEach(function (h) { if (String(h['PR No']) === String(prNo)) sh.getRange(h.rowIndex, col, 1, 1).setValues([[_now()]]); });
+}
+/** restorePricingRequest({prNo, putBack?}) — bring an archived request back for another prArchiveDays: its owner, admin
+ *  or the director. Writes only Updated At (putBack: the earlier one again, the snackbar's Undo). */
+function restorePricingRequest(p) {
+  p = p || {};
+  var h = _prHeaderRow(p.prNo);
+  if (!h) return { success: false, message: 'Purchase request ' + (p.prNo || '') + ' was not found.' };
+  var role = _sgRole(p), mine = _prSameOwner(_prOwner(h), p.actorName) || _prSameOwner(h['Requested By'], p.actorName);
+  if (!(mine || role === 'admin' || role === 'director')) return { success: false, message: 'Only the rep who owns ' + p.prNo + ', admin or the director can bring it back.' };
+  /* putBack: the Undo of a Bring back — the Updated At it had, which must be in the past. */
+  if (p.putBack !== undefined && p.putBack !== null && p.putBack !== '') {
+    var back = new Date(p.putBack);
+    if (isNaN(back.getTime()) || back.getTime() > _now().getTime()) return { success: false, message: 'That is not an earlier date to put back.' };
+    _setCellByKey('PricingRequests', 'PR No', p.prNo, 'Updated At', back);
+    return { success: true, prNo: p.prNo, updatedAt: back.toISOString(), message: p.prNo + ' is archived again.' };
+  }
+  _prTouch(p.prNo);
+  return { success: true, prNo: p.prNo, updatedAt: _now().toISOString(), message: p.prNo + ' is back in the lists.' };
+}
+/** suggestQuotationNo() — the next number in this year's quotation sequence ("2026-604"), read from the Quotations
+ *  tab. The page builds the rest (initials, client, subject); the create still refuses a number already used. */
+function suggestQuotationNo() {
+  var year = Utilities.formatDate(_now(), Session.getScriptTimeZone(), 'yyyy'), max = 0, re = new RegExp('^' + year + '-(\\d+)');
+  _rows('Quotations').forEach(function (q) { var m = String(q['Quotation No'] || '').match(re); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return { success: true, year: year, seq: max + 1, prefix: year + '-' + (max + 1) };
 }
 
 // A147: current status of a PR (''; if not found), used by the stage gates below.
@@ -17850,7 +17911,7 @@ function updatePRSourcing(p) {
   if (curStatus === 'Requested' || curStatus === 'Sourcing' || curStatus === ''
       || curStatus === 'Partly Quoted') {
     _setPRStatus(p.prNo, 'Sourcing');
-  }
+  } else _prTouch(p.prNo);   // A385 — an edit at a later stage is still an update (it keeps the request out of the archive)
   return { success: true, prNo: p.prNo, status: curStatus || 'Sourcing', message: 'Sourcing saved.' };
 }
 
@@ -18165,6 +18226,16 @@ function createQuotationFromPR(p) {
   if (!p.prNo) return { success: false, message: 'prNo required.' };
   var hdr = _rows('PricingRequests').filter(function (h) { return String(h['PR No']) === String(p.prNo); })[0];
   if (!hdr) return { success: false, message: 'PR not found.' };
+  /* A385 — a RETRY of a create that already succeeded is answered first. postFlow retries a call carrying a
+     clientRef; the first attempt may have made the quotation and moved the request to Quoted, so the stage gate
+     below used to answer the retry with 'This request is "Quoted"' — an error for a quotation that exists. */
+  var made = p.clientRef ? _refSeen('createQuotation', p.clientRef) : '';
+  if (made) {
+    var nowSt = String(hdr['Status'] || '');
+    return { success: true, prNo: p.prNo, quotationNo: made, duplicate: true, retried: true, status: nowSt,
+      remaining: nowSt === 'Partly Quoted' ? _prRemainingLines(p.prNo, { hdr: hdr, quoByNo: null }).open.length : 0,
+      message: 'Quotation ' + made + ' created from ' + p.prNo + '.' };
+  }
   /* A147 stage gate. A242 — 'one quotation per PR' is retired here, and it was never a business rule:
      it was a status guard doing duty as one, and it made a request with 5 items where only 3 were
      priced unquotable. A request may now become several quotations over time; what stops the SAME
@@ -20676,6 +20747,7 @@ var HANDLERS = {
   previewPricingRequestOwners: previewPricingRequestOwners,
   runPricingRequestOwnerBackfill: runPricingRequestOwnerBackfill,
   setPricingRequestSalesperson: setPricingRequestSalesperson,
+  restorePricingRequest: restorePricingRequest, suggestQuotationNo: suggestQuotationNo,   // A385
   previewCommissionOwnerShift: previewCommissionOwnerShift,
   previewQuotationSentAt: previewQuotationSentAt,
   runQuotationSentAtBackfill: runQuotationSentAtBackfill,
@@ -20840,7 +20912,7 @@ var MUTATIONS = {
   setQuotationResult: 1,   // A382 — writes Quotations rows (up to 25) and may link an email
   setQuotationSalesperson: 1,
   // A226 — both write attribution; the backfill can touch 315 rows in one call.
-  runPricingRequestOwnerBackfill: 1, setPricingRequestSalesperson: 1,
+  runPricingRequestOwnerBackfill: 1, setPricingRequestSalesperson: 1, restorePricingRequest: 1,
   // A207 — every commission writer runs under the script lock, which is what makes the
   // "one collection, one claim" check at submit atomic against two tabs racing each other.
   createCommissionRequest: 1, updateCommissionRequest: 1, deleteCommissionRequest: 1,
@@ -20897,6 +20969,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A385 THE SALES LISTS (193; it carries A384's 192 and A382's 191; A380 holds 190; A327 takes 194 or later). Neil, 30 Oct 2026: purchase requests and quotations organized for the reps, old requests out of the way, and fewer steps from a priced request to a sent quotation; "prepare also so that we can easily revert this back". getPricingRequests returns updatedAt (the newest of Updated At, Created At, Date and the dates of the quotations it became) and archived (no update for prArchiveDays, FlowSettings, default 30; 0 = off), and archiveDays; it still returns every request, so every history and lookup is untouched and only the work lists hide archived ones. updatePRSourcing (at a later stage) and setPricingRequestSalesperson now stamp Updated At (_prTouch). restorePricingRequest (owner, admin, director; secured) stamps Updated At to bring one back. createQuotationFromPR answers a retried call (its clientRef already made a quotation) with that quotation before the stage gate, which used to call it an error. suggestQuotationNo: the year's next sequence number. New FlowSettings defaults: prArchiveDays 30, salesListsOrganizer, quoteOneStep, quoteNoSuggest (on/off, read by the pages).
 A384 COLLECTION DETAILS (192; it carries A382's 191; A380 holds 190; A327 takes 193 or later). Neil, 29 Oct 2026: each client's collection details (what bank, address, contact person, contact number); accounting and admin edit them, the director reads them, and AR aging shows them read-only. New tabs CollectionBook (16 wide, CC-) and CollectionBookLog (8, CCL-), written only by saveCollectionDetails (accounting, admin; upserts on _cdKey, a new spelling joins Aliases; ifUpdatedAt refuses a save over someone else's; a field not sent keeps its value). getCollectionBook (accounting, admin, director; secured, never creates the tabs) returns the records, the log, the lists (Pays By = AR aging's Method words; Pays Into = our banks from _fieldPlaces) and the banks seen on each client's cheques in FieldCollections. _cdKey is _canonKey without the business-unit drop: fourteen Aboitiz Power units are fourteen clients here. Also: _cbContacts no longer stores the formula guard's apostrophe inside Contacts JSON ('+63 ...), and every reader (_cbParse) takes an old one off, so the 22 Client Book phones read right with no data rewritten.
 A382 QUOTATION STATUS (191; A380 holds 190; A327 takes 192 or later). Neil, 29 Oct 2026: for each sales rep their own list of every quotation, each set to Won, Pending (the last follow-up: a picked email, or a date and Call / Viber / Visit, and where it stands) or Lost with a reason — "we just need to have the status of all the quotations". Quotations gains nine columns (38 wide): Result ('' | Pending | Won, beside Status — never a new status), Result At, Result By, Result Reason, Result Note, Last Follow Up, Follow Up Via, Follow Up Status, Closed From; _sheet widens a tab narrower than its schema; createQuotation and seedCommissionDemo append the blanks. setQuotationResult({quotationNo | quotationNos ≤25, result won|pending|lost|open, reason, note, followUpDate, followUpVia, followUpStatus, email, keep, approvalNote, ifResultAt}) — secured, owner or creator (case-insensitive) or admin / management / director, under the lock, audited (Quotation / Status Updated): won and pending need a sent or approved quotation (a closed one is first restored to the status it was closed from); one with a sales order is won already; lost takes a reason from eight (Price, Lead time, Specs did not fit, Went with a competitor → Lost; No budget, No reply from the client → Not Pursued; Duplicate quotation → Cancelled; Other → Lost, with a note) and leaves the result and follow-up fields alone, so its Undo ({open, keep}) restores the row; a picked email is linked in the same call (as a follow-up once the quotation has gone out). closeQuotation records Closed From; reopenQuotation clears Result, Result Reason and Closed From; reviseQuotation clears Result; linkQuotationEmail never lets an explicit Follow-up write Sent At. getQuotations returns the nine fields.
 A374 THE SUPPLIER LIST (189; A327 takes 190 or later). Neil, 26 Oct 2026: a suppliers list for the admin dashboard (name, several contact people, phones and emails, address, local or international, distributorship, usual delivery, payment terms, usual items), connected to pricing: what admin prices goes under the supplier with the price and the date it was last updated. A new list apart from the old Suppliers tab (bank details, not touched). New tabs SupplierBook (25 wide; SB-; TIN kept as text), SupplierBookLog (9 wide; SBL-) and SupplierPrices (18 wide; SP-; Item No kept as text), and six secured actions, each with its own role check (FlowSettings supplierBookRoles, default admin and director): getSupplierBook (the whole list, prices and log; lite = the live names, spellings and each item's last price, also for accounting, who prices requests too), saveSupplierBookSupplier (a field not sent keeps what it has; Local or International; the distributorship is ours, its brands kept only with it; contact people as in the Client Book; Other delivery needs a note; a second supplier with the same key or a shared spelling is refused unless allowDuplicate; neither a contact nor an address = Needs Details), mergeSupplierBookSupplier (prices, spellings and contact people move to the other supplier, its blanks are filled, the first is archived with a note; dryRun says what would move), archiveSupplierBookSupplier (with a reason; restore) and importSupplierBookHistory (director; dry run by default: past requests' priced lines by supplier, every spelling, pairs that may be one supplier; the real run takes the merges a person confirmed, writes in blocks, skips lines already filed) and importSupplierBookList (director; dry run by default: the company's own supplier file; a supplier already on the list is overwritten with the file's details, its prices, spellings and history kept; one bad row refuses the whole file). submitForPricing now files the lines it forwards (_sbRecordForward, after the status is set and inside a try/catch, so it never stops a forward): one SupplierPrices row per request line, upserted on PR No + Line (a new price or supplier rewrites the row and its date; the same price changes nothing); a supplier not in the list yet is added, flagged as needing details; the response carries recorded {prices, unchanged, newSuppliers}. The price is admin's at the forward; setMgmtPricing still overwrites Supplier Price (FC) afterwards.

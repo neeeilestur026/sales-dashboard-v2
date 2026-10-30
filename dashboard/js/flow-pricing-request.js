@@ -14,6 +14,9 @@ let prOversight = false;  // accounting/director: see all reps (grouped) + act o
    setupRoleUI's bare `else // management`, which is the always-on pricing engine, a queue filtered
    to 'For Mgmt Pricing', and no create form at all. */
 let prIsRequester = false;
+let prSettings = null;    // A385 — FlowSettings (the salesListsOrganizer switch, the archive age)
+let prQuotes = {};        // A385 — quotationNo → quotation, so a request can say what its quotation is doing
+let prOrg = null;         // A385 — the organizer (js/sales-lists.js), once it is mounted
 let canSource = false;    // may run sourcing + verification
 let canPrice = false;     // may run management pricing
 
@@ -569,11 +572,20 @@ function resetForm() {
 // ─── List / queue ────────────────────────────────
 async function loadRequests() {
   const c = document.getElementById('listContainer');
-  c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
+  if (!prOrg) c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
     const params = prIsRequester ? { requestedBy: prSession.name } : {};
-    const res = await fetchFlow('getPricingRequests', params);
+    /* A385 — always a fresh read: Refresh served a copy up to a minute old, so a request just quoted still looked ready.
+       The settings and the quotations ride along (both cached reads); a request names its quotations, and the row says
+       what each is doing. */
+    const [res, cfg, qres] = await Promise.all([
+      fetchFlow('getPricingRequests', params, { fresh: true }),
+      prSettings ? Promise.resolve({ data: prSettings }) : fetchFlow('getFlowSettings').catch(() => ({ data: null })),
+      fetchFlow('getQuotations', prIsRequester ? { createdBy: prSession.name } : {}).catch(() => ({ data: [] }))]);
     prList = (res && res.data) || [];
+    prSettings = (cfg && cfg.data) || prSettings || {};
+    prQuotes = {};
+    ((qres && qres.data) || []).forEach(q => { prQuotes[String(q.quotationNo)] = q; });
     renderList();
   } catch (e) { c.innerHTML = `<p style="color:var(--hx-red);">${flowEsc(e.message)}</p>`; }
 }
@@ -593,9 +605,10 @@ async function resyncNumbering() {
 }
 
 function filteredList() {
-  if (!prFilter) return prList;
+  const live = prList.filter(r => !r.archived);   // A385 — an archived request is out of every work list
+  if (!prFilter) return live;
   const wanted = prFilter.split(',');
-  return prList.filter(r => wanted.includes(r.status));
+  return live.filter(r => wanted.includes(r.status));
 }
 
 function prRowHtml(r) {
@@ -650,6 +663,9 @@ function renderAdminAllGrouped(rows) {
 
 function renderList() {
   const c = document.getElementById('listContainer');
+  if (typeof sl2On === 'function' && sl2On(prSettings)) { prRenderOrganized(); return; }   // A385
+  const seg = document.getElementById('filterSeg'); if (seg) seg.style.display = '';
+  prOrg = null;
   const rows = filteredList();
   if (!rows.length) { c.innerHTML = '<p class="flow-empty">Nothing here.</p>'; return; }
   // Admin "All": organize by stage + separate migrated/old history.
@@ -690,6 +706,107 @@ function rowActions(r) {
   return open + docs + view;
 }
 
+/* ── A385 — THE ORGANIZED LIST ──────────────────────────────────────────────────────────────────────────────────────
+   Neil, 30 Oct 2026: purchase requests "pending or no price yet" organized "by month created, last follow up, by client".
+   One row per request, each in exactly one stage, so the chips add up: Waiting for price (sourcing, with management,
+   being verified), For Quotation (priced lines still open, by flowPrRemaining — the server's own rule — so a request
+   whose lines are all out is not here whatever its status says), Quoted, and Archived (no update for prArchiveDays).
+   The row keeps every action it had; it adds the request's quotations, how many lines are priced, and Create quotation
+   on the row itself — for a Partly Quoted request too, which had no button anywhere. */
+const PR_STAGES = [['source', 'Waiting for sourcing'], ['pricing', 'With management for pricing'], ['verify', 'Being verified'],
+                   ['ready', 'For Quotation'], ['done', 'Quoted']];
+function prStageOf(r, rem) {
+  const st = String(r.status || '');
+  if (prIsMigrated(r) || st === 'Quoted') return 'done';
+  if (st === 'Returned to Sales' || st === 'Partly Quoted') return rem.ready.length ? 'ready' : rem.open.length ? 'source' : 'done';
+  if (st === 'For Mgmt Pricing') return 'pricing';
+  if (st === 'Mgmt Priced' || st === 'Verifying') return 'verify';
+  return 'source';
+}
+function prOrgRow(r) {
+  const rem = flowPrRemaining(r), stage = prStageOf(r, rem), names = (r.items || []).map(i => i.itemName || i.itemNo);
+  return { key: r.prNo, date: r.date, client: r.customer, clientKey: slmClientKey(r.customer), stage, archived: !!r.archived,
+           value: rem.readyValue + rem.quotedValue, updatedAt: r.updatedAt || r.date, rep: r.salesperson || r.requestedBy,
+           hay: [r.prNo, r.customer, r.requestedBy, r.salesperson, r.plantSite, r.clientLocation].concat(names, r.quotationNos || [], [r.quotationNo]).join(' '),
+           raw: Object.assign({ _rem: rem, _stage: stage }, r) };
+}
+function prChipOf(row) {
+  if (row.archived) return 'archived';
+  if (prIsRequester && (row.stage === 'source' || row.stage === 'pricing' || row.stage === 'verify')) return 'waiting';
+  return row.stage;
+}
+function prRenderOrganized() {
+  const c = document.getElementById('listContainer'), seg = document.getElementById('filterSeg');
+  if (seg) seg.style.display = 'none';   // the organizer's chips replace the old status buttons
+  if (!prOrg) {
+    const chips = prIsRequester
+      ? [['waiting', 'Waiting for price'], ['ready', 'For Quotation', 'keep'], ['done', 'Quoted'], ['archived', 'Archived']]
+      : [['source', 'To source'], ['pricing', 'With management'], ['verify', 'To verify'], ['ready', 'For Quotation'], ['done', 'Quoted'], ['archived', 'Archived']];
+    const groups = [['month', 'Month'], ['client', 'Client'], ['stage', 'Stage'], ['update', 'Last update']].concat(prIsRequester ? [] : [['rep', 'Rep']]);
+    const dflt = prIsRequester ? { chip: 'all', group: 'month' } : prRole === 'admin' ? { chip: 'source', group: 'month' }
+      : prRole === 'management' ? { chip: 'pricing', group: 'rep' } : { chip: 'all', group: 'rep' };
+    c.innerHTML = '<div id="prOrgNote"></div><div id="prOrgHost"></div>';
+    prOrg = sl2Organizer({ id: 'pr-' + (prIsRequester ? 'mine' : prRole), host: document.getElementById('prOrgHost'), noun: 'request',
+      chips, chipOf: prChipOf, groups, defaults: Object.assign({ sort: 'newest' }, dflt), stages: PR_STAGES, today: flowToday(),
+      sorts: [['newest', 'Newest first'], ['oldest', 'Oldest first'], ['biggest', 'Biggest first'], ['client', 'By client']],
+      placeholder: 'Search requests, clients, items or quotations', table: prOrgTable,
+      empty: (chip) => chip === 'ready' ? 'Nothing is priced and waiting for a quotation.' : chip === 'archived' ? 'Nothing is archived.'
+        : chip === 'waiting' ? 'Nothing is waiting for a price.' : 'No purchase requests here.' });
+  }
+  const rows = prList.map(prOrgRow);
+  prOrg.set(rows);
+  const old = rows.filter(r => r.archived).length, days = flowNum((prSettings || {}).prArchiveDays);
+  const note = document.getElementById('prOrgNote');
+  if (note) note.innerHTML = old && prOrg.state.chip !== 'archived'
+    ? '<p class="sl2-note">' + old + ' request' + (old === 1 ? '' : 's') + ' archived — no update in ' + (days || 30) + ' days. ' +
+      '<button type="button" data-pr-archived>See them</button></p>' : '';
+  const see = note && note.querySelector('[data-pr-archived]');
+  if (see) see.addEventListener('click', () => { prOrg.pick('archived'); prRenderOrganized(); });
+}
+function prOrgTable(rows) {
+  const owner = !prIsRequester;
+  return `<table class="flow-table"><thead><tr><th>Request</th><th>Client</th>${owner ? '<th>Rep</th>' : ''}<th>Stage</th><th>Lines</th><th>Quotation</th><th></th></tr></thead><tbody>` +
+    rows.map(r => {
+      const rem = r._rem, incl = rem.included.length, items = (r.items || []).filter(i => i.included);
+      const first = items[0] ? (items[0].itemName || items[0].itemNo) : '';
+      const lines = r._stage === 'ready' ? `<span class="sl2-tag ready">${rem.ready.length} ready</span>` + (rem.quoted.length ? `<span class="sl2-sub">${rem.quoted.length} of ${incl} already quoted</span>` : '')
+        : r._stage === 'done' ? `${rem.quoted.length || incl} of ${incl} quoted` : `${rem.ready.length + rem.quoted.length} of ${incl} priced`;
+      const qs = (r.quotationNos && r.quotationNos.length ? r.quotationNos : (r.quotationNo ? [r.quotationNo] : []));
+      const qcell = qs.length ? qs.map(no => { const q = prQuotes[no]; return `<a class="sl2-link" href="flow-quotations.html?review=${encodeURIComponent(no)}">${flowEsc(no)}</a>` +
+        (q ? `<span class="sl2-sub">${flowEsc(q.status || '')}</span>` : ''); }).join('') : '<span class="fc-dim">—</span>';
+      const quoteBtn = r._stage === 'ready' && !r.archived && (prIsRequester || prRole === 'admin')
+        ? `<button type="button" class="sl2-act" onclick='makeQuotation("${flowEsc(r.prNo)}")'>${rem.quoted.length ? 'Quote the ' + rem.ready.length + ' left' : 'Create quotation'}</button>` : '';
+      const back = r.archived ? `<button type="button" class="sl2-act quiet" onclick='prBringBack("${flowEsc(r.prNo)}")'>Bring back</button>` : '';
+      return `<tr><td><b>${flowEsc(r.prNo)}</b><span class="sl2-sub">${flowEsc(first)}${items.length > 1 ? ' +' + (items.length - 1) + ' more' : ''}</span></td>` +
+        `<td>${flowEsc(r.customer)}<span class="sl2-sub">${flowDate(r.date)}</span></td>` +
+        (owner ? `<td>${flowEsc(r.salesperson || r.requestedBy)}</td>` : '') +
+        `<td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span>` +
+          `<span class="sl2-age">${r.archived ? 'archived · ' : ''}updated ${flowEsc(slmAgo(r.updatedAt || r.date, flowToday()) || '')}</span></td>` +
+        `<td>${lines}</td><td>${qcell}</td><td class="sl2-acts">${quoteBtn}${back}${prOrgActions(r)}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+/** The row's own actions, short: Open, Docs and the PDF (View when it is filed, Make when it is missing) — the same three
+ *  rowActions offers, in words that fit beside Create quotation. */
+function prOrgActions(r) {
+  const no = flowEsc(r.prNo), canRegen = canSource || (prIsRequester && String(r.requestedBy) === String(prSession.name));
+  return `<button class="link-btn" onclick='openPr("${no}")'>Open</button>` +
+    ` <button class="link-btn" onclick='openDocsModal("Pricing Request","${no}")' style="margin-left:0.5rem;">Docs</button>` +
+    (r.pdfLink ? ` <a class="link-btn" href="${flowEsc(r.pdfLink)}" target="_blank" style="margin-left:0.5rem;">PDF</a>`
+      : canRegen ? ` <button class="link-btn" onclick='openPdf("${no}")' style="margin-left:0.5rem;">Make PDF</button>` : '');
+}
+/** Bring an archived request back for another prArchiveDays (it stamps Updated At); Undo puts the old date back. */
+async function prBringBack(no) {
+  const r = curPr(no); if (!r) return;
+  const was = r.updatedAt || '';
+  const res = await postFlow('restorePricingRequest', { prNo: no }).catch(e => ({ success: false, message: String(e && e.message || e) }));
+  if (!(res && res.success)) { if (typeof hxToast === 'function') hxToast((res && res.message) || 'Could not bring ' + no + ' back.', { tone: 'error' }); return; }
+  await loadRequests();
+  if (typeof hxSnackbar === 'function') hxSnackbar(no + ' is back in your list.', { action: 'Undo', onAction: async () => {
+    const u = await postFlow('restorePricingRequest', { prNo: no, putBack: was }).catch(() => null);
+    if (u && u.success) await loadRequests();
+  } });
+}
+
 // ─── Detail / action modal ───────────────────────
 function curPr(no) { return prList.find(r => String(r.prNo) === String(no)); }
 
@@ -725,7 +842,7 @@ function openPr(no) {
     foot.innerHTML = `<button class="btn btn-secondary" onclick="closePr()">Close</button>
       ${srcEditBtn(no)}
       <button class="btn btn-primary" onclick="verifyReturn()">Verify &amp; Return to Sales</button>`;
-  } else if (r.status === 'Returned to Sales' && (prIsRequester || prRole === 'admin')) {
+  } else if ((r.status === 'Returned to Sales' || (r.status === 'Partly Quoted' && flowPrRemaining(r).ready.length)) && (prIsRequester || prRole === 'admin')) {   // A385: a partly quoted request can quote what is left
     /* A192: was `prRole === 'admin' && r.requestedBy === prSession.name`. Tying the only
        Create-Quotation button in the system to one exact name string is what stranded
        PR-202607-242 and PR-202607-295: rename the user, add a trailing space, or have them leave,
