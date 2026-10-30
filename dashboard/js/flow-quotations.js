@@ -555,7 +555,7 @@ function quotationRow(q, org) {
   const fuBadge = (fu && fu.label) ? ` <span class="flow-badge" style="${QFU_STYLE[fu.state] || ''}" title="${flowEsc(fu.reason || fu.label)}">${flowEsc(fu.label)}</span>` : '';
   /* A385 — in the organized list: the request it came from, and the last follow-up in its own column */
   const fromPr = org && q.prNo ? `<span class="sl2-sub">from <a class="sl2-link" href="flow-pricing-request.html?pr=${encodeURIComponent(q.prNo)}">${flowEsc(q.prNo)}</a></span>` : '';
-  const subj = org && q.subject ? `<span class="sl2-sub">${flowEsc(q.subject)}</span>` : '';
+  const subj = org && q.subject ? `<span class="sl2-item" title="${flowEsc(q.subject)}">${flowEsc(slmShortItem(q.subject, 70))}</span>` : '';   // A386
   return `<tr><td>${flowEsc(q.quotationNo)}${soNudge}${dupBadge}${fuBadge}${fromPr}</td><td${org ? ' class="sl2-nw"' : ''}>${flowDate(q.date)}</td><td>${flowEsc(q.customer)}${subj}</td>
     <td${noteTip}>${flowStatusBadge(st)}${noteLine}</td>
     <td class="num">${flowMoney(qtnTotal(q), 'PHP')}${flowNum(q.discountPct) > 0 ? `<div style="font-size:0.68rem;color:var(--hx-cyan-ink);">−${flowNum(q.discountPct)}% disc</div>` : ''}</td><td>${q.items.length}</td>

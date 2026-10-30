@@ -777,7 +777,9 @@ function prOrgTable(rows) {
       const quoteBtn = r._stage === 'ready' && !r.archived && (prIsRequester || prRole === 'admin')
         ? `<button type="button" class="sl2-act" onclick='makeQuotation("${flowEsc(r.prNo)}")'>${rem.quoted.length ? 'Quote the ' + rem.ready.length + ' left' : 'Create quotation'}</button>` : '';
       const back = r.archived ? `<button type="button" class="sl2-act quiet" onclick='prBringBack("${flowEsc(r.prNo)}")'>Bring back</button>` : '';
-      return `<tr><td><b>${flowEsc(r.prNo)}</b><span class="sl2-sub">${flowEsc(first)}${items.length > 1 ? ' +' + (items.length - 1) + ' more' : ''}</span></td>` +
+      /* A386 — the item's short name on two lines at most; the whole description is on hover and in Open */
+      const more = items.length > 1 ? `<span class="sl2-more">+${items.length - 1} more</span>` : '';
+      return `<tr><td><b>${flowEsc(r.prNo)}</b><span class="sl2-item" title="${flowEsc(String(first).replace(/\s+/g, ' ').trim())}">${flowEsc(slmShortItem(first))}</span>${more}</td>` +
         `<td>${flowEsc(r.customer)}<span class="sl2-sub">${flowDate(r.date)}</span></td>` +
         (owner ? `<td>${flowEsc(r.salesperson || r.requestedBy)}</td>` : '') +
         `<td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span>` +
@@ -965,10 +967,18 @@ function _prFinalCell(i) {
     : '<span style="color:var(--hx-warn);font-weight:700;" title="This item will print on the quotation at zero — a freebie.">₱0.00 (free)</span>';
 }
 
+/* A386 — an item as a person reads it: its code, its name, and the spec sheet that was pasted into the name laid out as
+   label and value, one per line — never one 400-character line that scrolls sideways (Neil, 30 Oct 2026). */
+function prItemCell(i) {
+  const sp = typeof slmItemSpecs === 'function' ? slmItemSpecs(i.itemName || '') : { title: i.itemName || '', specs: [] };
+  const code = i.itemNo && !/^(n\/?a|none|tba|-+)$/i.test(String(i.itemNo)) ? `<span class="sl2-code">${flowEsc(i.itemNo)}</span>` : '';
+  return `${code}<b class="sl2-ititle">${flowEsc(sp.title || i.itemNo || 'Item')}</b>` + (sp.specs.length
+    ? `<dl class="sl2-specs">${sp.specs.map(x => `<div><dt>${flowEsc(x[0])}</dt><dd>${flowEsc(x[1])}</dd></div>`).join('')}</dl>` : '');
+}
 function readonlyTable(r, priced) {
   return `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>UOM</th>
     <th>Supplier</th><th>Principal</th><th class="num">Price (FC)</th><th>VAT</th>${priced ? '<th class="num">Final Price</th>' : ''}<th>Incl?</th></tr></thead><tbody>${r.items.map(i =>
-    `<tr><td>${flowEsc(i.itemNo)} — ${flowEsc(i.itemName)}</td><td class="num">${flowNum(i.qty)}</td><td>${flowEsc(i.uom)}</td>
+    `<tr><td class="sl2-itemcell">${prItemCell(i)}</td><td class="num">${flowNum(i.qty)}</td><td>${flowEsc(i.uom)}</td>
       <td>${flowEsc(i.supplier || '—')}</td><td>${flowEsc(i.principal || '—')}</td>
       <td class="num">${i.supplierPrice ? flowNum(i.supplierPrice) : '—'}</td><td>${flowEsc(i.vat || '—')}</td>
       ${priced ? `<td class="num">${_prFinalCell(i)}</td>` : ''}
