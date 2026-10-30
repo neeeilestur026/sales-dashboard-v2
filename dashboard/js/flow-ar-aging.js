@@ -9,6 +9,11 @@ let arSession = null;
 let arSg = false;
 const AR_PAY_ROLES = ['accounting', 'admin', 'director'];
 const arMayCollect = () => !arSg || AR_PAY_ROLES.includes(String((arSession && arSession.role) || '').toLowerCase());
+/* A384 — each client's collection details (FlowAPI 192, getCollectionBook): read only here, for the roles that may see
+   them (management opens this page too, and never asks). null until read, or when the server has no such action yet. */
+const AR_CD_ROLES = ['accounting', 'admin', 'director'];
+const arCdView = () => AR_CD_ROLES.includes(String((arSession && arSession.role) || '').toLowerCase());
+let arBook = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   arSession = requireOversight();
@@ -16,9 +21,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNavbar('flow-ar-aging');
   renderFlowNav('flow-ar-aging.html');
   const sg = (typeof flowVersionAtLeast === 'function' ? flowVersionAtLeast(169) : Promise.resolve(false)).catch(() => false);
+  const book = arCdView() && typeof postFlow === 'function' ? postFlow('getCollectionBook', {}).catch(() => null) : Promise.resolve(null);   // A384
+  document.getElementById('container').addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-cd]');
+    if (b) arCdSheet(b.getAttribute('data-cd'), b);
+  });
   await loadAR();
   arSg = await sg;
-  if (arSg) render();   // management becomes view-only: the Collect buttons go
+  const bk = await book;
+  arBook = bk && bk.success ? bk : null;
+  if (arSg || arBook) render();   // management becomes view-only: the Collect buttons go; the Details buttons come
 });
 
 /* ── A248 — WHICH INVOICES NEVER REACHED AR AGING ─────────────────────────────────────────────────
@@ -332,6 +344,7 @@ function rowHtml(r) {
       ${done || !arMayCollect() ? '' : `<button class="link-btn" onclick='openCollect("${flowEsc(r.arNo)}")'>Collect</button>`}
       <button class="link-btn" onclick="saveRow('${flowEsc(r.arNo)}', this)" style="margin-left:0.4rem;">Save</button>
       <button class="link-btn" onclick='openDocsModal("AR Aging","${flowEsc(r.arNo)}")' style="margin-left:0.4rem;">Docs</button>
+      ${arBook ? `<button type="button" class="link-btn" data-cd="${flowEsc(r.customer)}" style="margin-left:0.4rem;">Details</button>` : ''}
     </td></tr>`;
 }
 
@@ -414,8 +427,52 @@ function openCollect(arNo) {
   const dep = document.getElementById('collectDepositedTo'); if (dep) dep.value = '';   // A320
   const chq = document.getElementById('collectCheque'); if (chq) chq.value = '';
   document.getElementById('collectMsg').style.display = 'none';
+  arCdFill(r.customer);
   collectRecalcNet();
   document.getElementById('collectModal').classList.add('open');
+}
+
+/* ── A384 — the client's collection details, read only ─────────────────────────────────────────── */
+function arCdLink(customer) { return 'collection-details.html?client=' + encodeURIComponent(customer || ''); }
+/** The Record Collection form: who pays and how, and Method and Deposited to started from it (both still changeable). */
+function arCdFill(customer) {
+  const box = document.getElementById('collectCd');
+  if (!box) return;
+  if (!arBook) { box.hidden = true; box.innerHTML = ''; return; }
+  const rec = cdFind(arBook.records, customer), pre = cdPrefill(rec), filled = [];
+  const method = document.getElementById('collectMethod'), dep = document.getElementById('collectDepositedTo');
+  if (pre.method && method) { method.value = pre.method; filled.push('Method'); }
+  if (pre.depositedTo && dep && Array.prototype.some.call(dep.options, o => o.value === pre.depositedTo)) { dep.value = pre.depositedTo; filled.push('Deposited to'); }
+  const places = (arBook.lists && arBook.lists.places) || [];
+  box.innerHTML = '<div class="cd-brief-card"><h4 class="cd-gh">Collection details</h4>' +
+    cdCardHtml(rec, { compact: true, places, empty: 'No collection details yet for this client.' }) +
+    '<p class="cd-brief-foot">' + (filled.length ? '<span>' + filled.join(' and ') + ' filled from them.</span>' : '') +
+    '<a href="' + flowEsc(arCdLink(customer)) + '">' + (rec ? 'See all' : 'Add them') + '</a></p></div>';
+  box.hidden = false;
+}
+/** A row's Details: the client's whole card in a sheet (a bottom sheet on phones). */
+function arCdSheet(customer, back) {
+  if (!arBook) return;
+  let ov = document.getElementById('cdSheet');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'flow-modal-overlay cd-arsheet';
+    ov.id = 'cdSheet';
+    ov.innerHTML = '<div class="flow-modal cd-modal" role="dialog" aria-modal="true" aria-labelledby="cdSheetTitle"></div>';
+    document.body.appendChild(ov);
+    const close = () => { ov.classList.remove('open'); if (ov._back && ov._back.focus) ov._back.focus(); };
+    ov.addEventListener('click', (e) => { if (e.target === ov || (e.target.closest && e.target.closest('[data-close]'))) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ov.classList.contains('open')) close(); });
+  }
+  ov._back = back || null;
+  const rec = cdFind(arBook.records, customer), places = (arBook.lists && arBook.lists.places) || [];
+  ov.querySelector('.cd-modal').innerHTML = '<div class="cd-sheet"><header class="cd-dhead"><div class="cd-dtop"><div class="cd-dtitle"><h3 id="cdSheetTitle">' + flowEsc(customer) + '</h3>' +
+    '<p class="cd-dmeta">' + (rec && rec.updatedAt ? 'Updated ' + flowEsc(cdDay(rec.updatedAt)) + (rec.updatedBy ? ' by ' + flowEsc(rec.updatedBy) : '') : 'Collection details') + '</p></div>' +
+    '<button type="button" class="btn btn-secondary" data-close>Close</button></div></header><div class="cd-body">' +
+    cdCardHtml(rec, { places, empty: 'No collection details yet for this client.' }) +
+    '<p class="cd-sub"><a href="' + flowEsc(arCdLink(customer)) + '">' + (rec ? 'Open in Collection details' : 'Add them in Collection details') + '</a></p></div></div>';
+  ov.classList.add('open');
+  const btn = ov.querySelector('[data-close]'); if (btn) btn.focus();
 }
 function closeCollect() { document.getElementById('collectModal').classList.remove('open'); }
 

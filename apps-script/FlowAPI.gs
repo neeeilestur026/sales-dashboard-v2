@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 191;   // A382 — quotation status: each rep sets every quotation's result (won, pending, lost). History: see CHANGELOG.
+var FLOW_VERSION = 192;   // A384 — collection details: each client's bank, address and who to call. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -608,7 +608,12 @@ var SCHEMA = {
                   'Archive Reason', 'TIN'],
   SupplierBookLog: ['Log No', 'Supplier No', 'Kind', 'From', 'To', 'Note', 'Ref', 'By', 'At'],
   SupplierPrices: ['Price No', 'Supplier No', 'Supplier', 'Item Key', 'Item No', 'Item Name', 'UOM', 'Qty', 'Currency',
-                   'Supplier Price (FC)', 'VAT', 'Principal', 'PR No', 'Line', 'Customer', 'Priced By', 'Priced At', 'Source']
+                   'Supplier Price (FC)', 'VAT', 'Principal', 'PR No', 'Line', 'Customer', 'Priced By', 'Priced At', 'Source'],
+  // A384 — collection details (accounting and admin write them; the director reads): one row per client, keyed by _cdKey,
+  // and a log that is only ever appended to. Written only by saveCollectionDetails.
+  CollectionBook: ['Client No', 'Client', 'Key', 'Aliases', 'Pays By', 'Their Bank', 'Bank Note', 'Pays Into', 'Collection Address',
+                   'When To Collect', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At'],
+  CollectionBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -853,6 +858,7 @@ var _SECURED = {
   setOpeningBalance: 1, setPricingRequestSalesperson: 1, setQuotationEmailReply: 1, setQuotationFollowUp: 1, setQuotationSalesperson: 1, setSOSupplierType: 1,
   setTravelFloat: 1, setupFlowDrive: 1, snoozeQuotation: 1, submitCommissionRequest: 1, submitDailyReport: 1, submitForPricing: 1,
   setQuotationResult: 1,   // A382 — quotation status (owner or approver, checked inside)
+  getCollectionBook: 1, saveCollectionDetails: 1,   // A384 — collection details (bank, address, contacts): its read is secured too
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
@@ -16088,6 +16094,20 @@ function _cbDenied(p) {
 }
 function _cbDate(v) { var s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
 /** The contact people as JSON: at most 30 people, each with up to 10 emails and 10 phones; every email checked. */
+/* A384 — a contact value lives INSIDE the Contacts JSON cell, and that cell starts with "[", so Sheets can never read it as
+   a formula. _webCell's formula guard there stored a real apostrophe ("'+63 917 …": 22 Client Book phones by 26 Oct), which
+   every page then showed. The same cleaning without the guard; an apostrophe a reader was already shown comes off again. */
+function _cbCell(v) { return _webCell(v).replace(/^'(?=[=+\-@])/, ''); }
+/** The contact people stored in a cell, with any apostrophe the old guard left taken off (no data is rewritten). */
+function _cbParse(text) {
+  var list = [];
+  try { list = JSON.parse(String(text || '[]')); } catch (e) { list = []; }
+  if (!Array.isArray(list)) return [];
+  var un = function (v) { return typeof v === 'string' ? v.replace(/^'(?=[=+\-@])/, '') : v; };
+  return list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) {
+    var o = {}; Object.keys(c).forEach(function (k) { o[k] = Array.isArray(c[k]) ? c[k].map(un) : un(c[k]); }); return o;
+  });
+}
 function _cbContacts(json) {
   var t = String(json == null ? '' : json).trim();
   if (!t) return { text: '[]', list: [] };
@@ -16099,13 +16119,13 @@ function _cbContacts(json) {
   var out = [], bad = '';
   list.forEach(function (c, i) {
     if (!c || typeof c !== 'object') return;
-    var emails = (Array.isArray(c.emails) ? c.emails : []).map(function (e) { return _webCell(e).toLowerCase(); }).filter(Boolean).slice(0, 10);
-    var phones = (Array.isArray(c.phones) ? c.phones : []).map(function (x) { return _webCell(x).slice(0, 40); }).filter(Boolean).slice(0, 10);
+    var emails = (Array.isArray(c.emails) ? c.emails : []).map(function (e) { return _cbCell(e).toLowerCase(); }).filter(Boolean).slice(0, 10);
+    var phones = (Array.isArray(c.phones) ? c.phones : []).map(function (x) { return _cbCell(x).slice(0, 40); }).filter(Boolean).slice(0, 10);
     emails.forEach(function (e) { if (!bad && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) bad = '"' + e + '" is not an email address.'; });
-    var name = _webCell(c.name).slice(0, 120);
+    var name = _cbCell(c.name).slice(0, 120);
     if (!name && !emails.length && !phones.length) return;
-    out.push({ id: _webCell(c.id).slice(0, 24) || ('P' + (i + 1)), name: name, position: _webCell(c.position).slice(0, 120), emails: emails, phones: phones,
-               primary: c.primary === true, note: _webCell(c.note).slice(0, 190) });
+    out.push({ id: _cbCell(c.id).slice(0, 24) || ('P' + (i + 1)), name: name, position: _cbCell(c.position).slice(0, 120), emails: emails, phones: phones,
+               primary: c.primary === true, note: _cbCell(c.note).slice(0, 190) });
   });
   if (bad) return { error: bad };
   if (out.length && !out.some(function (c) { return c.primary; })) out[0].primary = true;
@@ -16127,8 +16147,7 @@ function _cbLog(clientNo, kind, from, to, note, ref, by) {
   _append('ClientBookLog', [no, clientNo, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), _webCell(ref).slice(0, 60), by, _now()]);
 }
 function _cbOut(r) {
-  var contacts = [];
-  try { contacts = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  var contacts = _cbParse(r['Contacts JSON']);
   return { clientNo: String(r['Client No']), company: String(r['Company'] || ''), key: String(r['Key'] || ''), owner: String(r['Owner'] || ''),
            accreditation: String(r['Accreditation'] || ''), accreditationStep: String(r['Accreditation Step'] || ''),
            accreditationNote: String(r['Accreditation Note'] || ''), accreditedUntil: r['Accredited Until'] ? _dateStr(r['Accredited Until']) : '',
@@ -16218,7 +16237,7 @@ function saveClientBookClient(p) {
     if (String(row['Next Step']) !== obj['Next Step'] || (row['Next Step Date'] ? _dateStr(row['Next Step Date']) : '') !== nextDate) changed.push('next step');
     if (String(row['Notes']) !== obj['Notes']) changed.push('notes');
     if (changed.length) _cbLog(clientNo, 'details', '', '', 'Changed ' + changed.join(', ') + '.', '', by);
-    var before = []; try { before = JSON.parse(String(row['Contacts JSON'] || '[]')); } catch (e) { before = []; }
+    var before = _cbParse(row['Contacts JSON']);
     if (JSON.stringify(before) !== ct.text) {
       var names = function (l) { return l.map(function (c) { return c.name || (c.emails || [])[0] || (c.phones || [])[0] || ''; }); };
       var was = names(before), is = names(ct.list);
@@ -16475,8 +16494,7 @@ function _vpLog(no, kind, from, to, note, by) {
 /* A369 — Neil, 25 Oct 2026: "make sure that the sales has no trace of the estimated travel allowance". A rep's reads
    and saves never carry the two estimate fields; only the director, accounting and management get them. */
 function _vpOut(r, forSales) {
-  var people = [];
-  try { people = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { people = []; }
+  var people = _cbParse(r['Contacts JSON']);
   var est = r['Travel Estimate (PHP)'];
   var out = { visitPlanNo: String(r['Visit Plan No']), date: _dateStr(r['Date']), time: _vpTime(r['Time']), user: String(r['User'] || ''),
            clientNo: String(r['Client No'] || ''), company: String(r['Company'] || ''), location: String(r['Location'] || ''),
@@ -16556,8 +16574,7 @@ function _vpStop(s, who, book) {
   var ids = [];
   try { ids = typeof s.contactIds === 'string' ? JSON.parse(s.contactIds || '[]') : (s.contactIds || []); } catch (e) { return { error: 'The people to visit could not be read.', company: company }; }
   if (!Array.isArray(ids)) return { error: 'The people to visit could not be read.', company: company };
-  var contacts = [];
-  try { contacts = JSON.parse(String(client['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  var contacts = _cbParse(client['Contacts JSON']);
   var people = [], missing = '';
   ids.forEach(function (id) {
     var hit = (Array.isArray(contacts) ? contacts : []).filter(function (c) { return c && String(c.id) === String(id); })[0];
@@ -16842,8 +16859,7 @@ function _sbAppendBlock(name, rows) {
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, SCHEMA[name].length).setValues(rows);
 }
 function _sbOut(r) {
-  var contacts = [];
-  try { contacts = JSON.parse(String(r['Contacts JSON'] || '[]')); } catch (e) { contacts = []; }
+  var contacts = _cbParse(r['Contacts JSON']);
   return { supplierNo: String(r['Supplier No']), supplier: String(r['Supplier'] || ''), key: String(r['Key'] || ''), aliases: _sbSplit(r['Aliases']),
            type: String(r['Type'] || ''), distributor: _sbYes(r['Distributorship']), brands: _sbSplit(r['Brands']), contacts: contacts,
            address: String(r['Address'] || ''), delivery: String(r['Delivery'] || ''), deliveryNote: String(r['Delivery Note'] || ''),
@@ -16941,7 +16957,7 @@ function saveSupplierBookSupplier(p) {
   if (has('tin')) obj['TIN'] = _webCell(p.tin).slice(0, 40);
   if (has('usualItems')) obj['Usual Items'] = _sbLines(p.usualItems, 60, 160).join('\n');
   if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 2000);
-  var people = []; try { people = JSON.parse(String(obj['Contacts JSON'] || '[]')); } catch (e) { people = []; }
+  var people = _cbParse(obj['Contacts JSON']);
   obj['Needs Details'] = people.length || String(obj['Address'] || '').trim() ? '' : 'Yes';
   /* the same supplier twice: another live supplier with this comparison key, or a name or spelling in common */
   var allow = p.allowDuplicate === true || String(p.allowDuplicate) === 'true', mine = [name].concat(_sbSplit(obj['Aliases'])).map(_rawKey), twin = null;
@@ -16964,7 +16980,7 @@ function saveSupplierBookSupplier(p) {
       'Usual Items': 'the usual items', 'Notes': 'the notes', 'TIN': 'the TIN' };
     Object.keys(label).forEach(function (h) { if (String(row[h] == null ? '' : row[h]) !== String(obj[h] == null ? '' : obj[h])) changed.push(label[h]); });
     if (changed.length) _sbLog(supplierNo, 'details', '', '', 'Changed ' + changed.join(', ') + '.', '', by);
-    var before = []; try { before = JSON.parse(String(row['Contacts JSON'] || '[]')); } catch (e) { before = []; }
+    var before = _cbParse(row['Contacts JSON']);
     if (JSON.stringify(before) !== String(obj['Contacts JSON'])) {
       var names = function (l) { return l.map(function (c) { return c.name || (c.emails || [])[0] || (c.phones || [])[0] || ''; }); };
       var was = names(before), is = names(people);
@@ -16993,9 +17009,7 @@ function mergeSupplierBookSupplier(p) {
   keep[_rawKey(into['Supplier'])] = 1;
   _sbSplit(into['Aliases']).concat([String(from['Supplier'] || '')], _sbSplit(from['Aliases'])).forEach(function (a) { var k = _rawKey(a); if (a && !keep[k]) { keep[k] = 1; aliases.push(a); } });
   var moved = aliases.filter(function (a) { return _sbSplit(into['Aliases']).map(_rawKey).indexOf(_rawKey(a)) < 0; });
-  var mineP = [], theirsP = [];
-  try { mineP = JSON.parse(String(into['Contacts JSON'] || '[]')); } catch (e) { mineP = []; }
-  try { theirsP = JSON.parse(String(from['Contacts JSON'] || '[]')); } catch (e) { theirsP = []; }
+  var mineP = _cbParse(into['Contacts JSON']), theirsP = _cbParse(from['Contacts JSON']);
   var sig = function (c) { return String(c.name || '').trim().toLowerCase() + '|' + String((c.emails || [])[0] || '').toLowerCase(); };
   var seen = {}; mineP.forEach(function (c) { seen[sig(c)] = 1; });
   var addP = theirsP.filter(function (c) { return !seen[sig(c)]; }).map(function (c, i) { var x = JSON.parse(JSON.stringify(c)); x.id = 'M' + (i + 1) + '-' + String(c.id || '').slice(0, 18); x.primary = false; return x; });
@@ -17282,6 +17296,128 @@ function importSupplierBookHistory(p) {
   var lnos = _sbNextNumbers('SupplierBookLog', 'SBL', logs.length);
   _sbAppendBlock('SupplierBookLog', logs.map(function (l, k) { return [lnos[k]].concat(l.map(function (v, c) { return c === 4 ? _webCell(v, true).slice(0, 500) : v; })); }));
   return { success: true, lines: lines, suppliers: plan.length, newSuppliers: fresh, alreadyFiled: skipped, message: 'Filed ' + summary + '.' };
+}
+
+/* ── A384 — COLLECTION DETAILS (collection-details.html; AR aging shows them) ────────────────────────────────────────────
+   Neil, 29 Oct 2026: "each company or client has a collection details, what bank, address, contact person, and contact
+   number. the accounting, and admin dashboard can see this and they will be only ones to update this, but this will be
+   seen by director, accounting and admin". One CollectionBook row per client, written only by saveCollectionDetails;
+   CollectionBookLog is only ever appended to. The clients themselves stay on the Client master: a row here is only the
+   collection side of one of them, so there is no add, archive or merge.
+   A client is known by _cdKey, NOT _canonKey: _canonKey drops a " - TMI BU" tail, which files fourteen Aboitiz Power
+   business units as one company, and each unit pays on its own (its own AP contact, its own plant). _cdKey is the same
+   reduction with the unit kept, so "THERMA LUZON INC" and "THERMA LUZON, INC." are still one client. */
+var CD_PAYS_BY = ['Cheque', 'Bank Transfer', 'Online', 'Cash', 'Other'];   // AR aging's Method words, so it can prefill
+var _CD_VIEW = { accounting: 1, admin: 1, director: 1 };
+var _CD_EDIT = { accounting: 1, admin: 1 };
+function _cdKey(name) {
+  var s = String(name || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[.,]/g, ' ').replace(_CLIENT_SUFFIX_RE, ' ');
+  return s.replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function _cdDenied(p, edit) {
+  var role = _sgRole(p);
+  if (!_CD_VIEW[role]) return 'Collection details are for accounting, admin and the director.';
+  if (edit && !_CD_EDIT[role]) return 'Only accounting and admin can change collection details.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save the change under.';
+  return '';
+}
+/** Our bank accounts a client can pay into (the chart's banks, as AR aging's "Deposited to" names them). */
+function _cdPlaces() { return _fieldPlaces().banks.map(function (b) { return { code: b.code, name: b.name }; }); }
+function _cdOut(r) {
+  return { clientNo: String(r['Client No']), client: String(r['Client'] || ''), key: String(r['Key'] || ''), aliases: _sbSplit(r['Aliases']),
+           paysBy: String(r['Pays By'] || ''), theirBank: String(r['Their Bank'] || ''), bankNote: String(r['Bank Note'] || ''),
+           paysInto: String(r['Pays Into'] || ''), address: String(r['Collection Address'] || ''), whenToCollect: String(r['When To Collect'] || ''),
+           contacts: _cbParse(r['Contacts JSON']), notes: String(r['Notes'] || ''), createdBy: String(r['Created By'] || ''),
+           createdAt: _webIso(r['Created At']), updatedBy: String(r['Updated By'] || ''), updatedAt: _webIso(r['Updated At']) };
+}
+function _cdLog(no, kind, from, to, note, by) {
+  _append('CollectionBookLog', [_nextNumber('CollectionBookLog', 1, 'CCL'), no, kind, _webCell(from), _webCell(to), _webCell(note, true).slice(0, 500), by, _now()]);
+}
+
+/** getCollectionBook() — every client's collection details, the whole log, the lists the form offers, and the banks seen
+ *  on each client's cheques (FieldCollections, newest first, three at most). A read never creates the tabs. */
+function getCollectionBook(p) {
+  var no = _cdDenied(p, false);
+  if (no) return { success: false, message: no };
+  var log = _sbRows('CollectionBookLog').map(function (r) {
+    return { logNo: String(r['Log No']), clientNo: String(r['Client No']), kind: String(r['Kind'] || ''), from: String(r['From'] || ''),
+             to: String(r['To'] || ''), note: String(r['Note'] || ''), by: String(r['By'] || ''), at: _webIso(r['At']) };
+  });
+  var seen = {};
+  _sbRows('FieldCollections').filter(function (r) { return String(r['Cheque Bank'] || '').trim() && String(r['Status'] || '') !== 'Undone'; })
+    .map(function (r) { return { key: _cdKey(r['Customer']), bank: String(r['Cheque Bank']).trim(), date: _dateStr(r['Date'] || r['At']) }; })
+    .sort(function (a, b) { return b.date < a.date ? -1 : b.date > a.date ? 1 : 0; })
+    .forEach(function (x) {
+      var l = seen[x.key] = seen[x.key] || [];
+      if (l.length < 3 && !l.some(function (y) { return y.bank.toLowerCase() === x.bank.toLowerCase(); })) l.push({ bank: x.bank, date: x.date });
+    });
+  return { success: true, records: _sbRows('CollectionBook').map(_cdOut), log: log, chequeBanks: seen,
+           lists: { paysBy: CD_PAYS_BY, places: _cdPlaces() } };
+}
+
+/** saveCollectionDetails({client, paysBy, theirBank, bankNote, paysInto, address, whenToCollect, contactsJson, notes,
+ *  ifUpdatedAt?}) — accounting or admin sets one client's collection details: a new client is added, the same client
+ *  under another spelling is the same row (that spelling joins its Aliases). On an existing row a field that is not sent
+ *  keeps what it has. `ifUpdatedAt` is the Updated At the page last read ('' when it read none): someone else's save in
+ *  between is refused, not overwritten. */
+function saveCollectionDetails(p) {
+  p = p || {};
+  var no = _cdDenied(p, true);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName).trim(), name = _webCell(p.client).slice(0, 160), key = name ? _cdKey(name) : '';
+  if (!name || !key) return { success: false, message: 'Say which client these details are for.' };
+  var row = _sbRows('CollectionBook').filter(function (r) { return String(r['Key']) === key; })[0] || null;
+  if (p.ifUpdatedAt !== undefined && p.ifUpdatedAt !== null && String(p.ifUpdatedAt) !== (row ? _webIso(row['Updated At']) : '')) {
+    var when = row && row['Updated At'] ? Utilities.formatDate(new Date(row['Updated At']), Session.getScriptTimeZone(), 'dd MMM HH:mm') : '';
+    return { success: false, stale: true, message: (row ? String(row['Updated By'] || 'Someone') : 'Someone') + ' saved this client\'s details' +
+             (when ? ' at ' + when : '') + '. Reload to see them, then make your change.' };
+  }
+  var has = function (k) { return !row || (p[k] !== undefined && p[k] !== null); };
+  var paysBy = _sbPick(p.paysBy, CD_PAYS_BY);
+  if (paysBy === null) return { success: false, message: 'How they pay is one of: ' + CD_PAYS_BY.join(', ') + '.' };
+  var into = String(p.paysInto == null ? '' : p.paysInto).trim(), places = _cdPlaces();
+  if (into && !places.some(function (x) { return x.code === into; })) return { success: false, message: 'Pays into is one of our bank accounts: ' + places.map(function (x) { return x.name; }).join(', ') + '.' };
+  var ct = has('contactsJson') ? _cbContacts(p.contactsJson) : null;
+  if (ct && ct.error) return { success: false, message: ct.error };
+  var obj = {};
+  if (row) SCHEMA.CollectionBook.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Client': name, 'Key': key, 'Aliases': '', 'Contacts JSON': '[]', 'Created By': by, 'Created At': _now() });
+  if (row && _rawKey(name) !== _rawKey(row['Client']) && _sbSplit(row['Aliases']).map(_rawKey).indexOf(_rawKey(name)) < 0)
+    obj['Aliases'] = _sbSplit(row['Aliases']).concat([name]).slice(-20).join('\n');
+  if (has('paysBy')) obj['Pays By'] = paysBy;
+  if (has('theirBank')) obj['Their Bank'] = _webCell(p.theirBank).slice(0, 60);
+  if (has('bankNote')) obj['Bank Note'] = _webCell(p.bankNote).slice(0, 160);
+  if (has('paysInto')) obj['Pays Into'] = into;
+  if (has('address')) obj['Collection Address'] = _webCell(p.address, true).slice(0, 300);
+  if (has('whenToCollect')) obj['When To Collect'] = _webCell(p.whenToCollect).slice(0, 160);
+  if (ct) obj['Contacts JSON'] = ct.text;
+  if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 500);
+  var people = _cbParse(obj['Contacts JSON']);
+  if (!row && !people.length && !['Pays By', 'Their Bank', 'Bank Note', 'Pays Into', 'Collection Address', 'When To Collect', 'Notes'].some(function (h) { return String(obj[h] || '').trim(); }))
+    return { success: false, message: 'Nothing to save yet: add how they pay, their bank, the address or a contact person.' };
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  var clientNo = row ? String(row['Client No']) : _nextNumber('CollectionBook', 1, 'CC');
+  obj['Client No'] = clientNo;
+  var vals = SCHEMA.CollectionBook.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('CollectionBook').getRange(row.rowIndex, 1, 1, SCHEMA.CollectionBook.length).setValues([vals]);
+  else _append('CollectionBook', vals);
+  if (!row) {
+    _cdLog(clientNo, 'created', '', name, [obj['Pays By'], obj['Their Bank'], people.length + ' contact' + (people.length === 1 ? '' : 's')].filter(Boolean).join(', ') + '.', by);
+  } else {
+    var changed = [], label = { 'Pays By': 'how they pay', 'Their Bank': 'their bank', 'Bank Note': 'the bank note', 'Pays Into': 'which of our accounts',
+      'Collection Address': 'the address', 'When To Collect': 'when to collect', 'Notes': 'the notes' };
+    Object.keys(label).forEach(function (h) { if (String(row[h] == null ? '' : row[h]) !== String(obj[h] == null ? '' : obj[h])) changed.push(label[h]); });
+    if (changed.length) _cdLog(clientNo, 'details', '', '', 'Changed ' + changed.join(', ') + '.', by);
+    var before = _cbParse(row['Contacts JSON']);
+    if (JSON.stringify(before) !== JSON.stringify(people)) {
+      var names = function (l) { return l.map(function (c) { return c.name || (c.emails || [])[0] || (c.phones || [])[0] || ''; }); };
+      var was = names(before), is = names(people);
+      var added = is.filter(function (n) { return was.indexOf(n) < 0; }), gone = was.filter(function (n) { return is.indexOf(n) < 0; });
+      _cdLog(clientNo, 'contacts', String(before.length), String(people.length),
+             [added.length ? 'Added ' + added.join(', ') : '', gone.length ? 'Removed ' + gone.join(', ') : '', !added.length && !gone.length ? 'Details changed' : ''].filter(Boolean).join('. ') + '.', by);
+    }
+  }
+  return { success: true, clientNo: clientNo, record: _cdOut(obj), message: row ? 'Collection details saved.' : 'Collection details added.' };
 }
 
 /** Management acknowledges a submitted report (optionally with a comment). */
@@ -20617,6 +20753,7 @@ var HANDLERS = {
   cancelVisitPlan: cancelVisitPlan, markVisitPlanDone: markVisitPlanDone,   // A369
   getSupplierBook: getSupplierBook, saveSupplierBookSupplier: saveSupplierBookSupplier, mergeSupplierBookSupplier: mergeSupplierBookSupplier,   // A374
   archiveSupplierBookSupplier: archiveSupplierBookSupplier, importSupplierBookHistory: importSupplierBookHistory, importSupplierBookList: importSupplierBookList,
+  getCollectionBook: getCollectionBook, saveCollectionDetails: saveCollectionDetails,   // A384
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -20731,6 +20868,7 @@ var MUTATIONS = {
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360
   saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369
   saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374
+  saveCollectionDetails: 1,   // A384 — one client's collection details, and its log row
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -20759,6 +20897,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A384 COLLECTION DETAILS (192; it carries A382's 191; A380 holds 190; A327 takes 193 or later). Neil, 29 Oct 2026: each client's collection details (what bank, address, contact person, contact number); accounting and admin edit them, the director reads them, and AR aging shows them read-only. New tabs CollectionBook (16 wide, CC-) and CollectionBookLog (8, CCL-), written only by saveCollectionDetails (accounting, admin; upserts on _cdKey, a new spelling joins Aliases; ifUpdatedAt refuses a save over someone else's; a field not sent keeps its value). getCollectionBook (accounting, admin, director; secured, never creates the tabs) returns the records, the log, the lists (Pays By = AR aging's Method words; Pays Into = our banks from _fieldPlaces) and the banks seen on each client's cheques in FieldCollections. _cdKey is _canonKey without the business-unit drop: fourteen Aboitiz Power units are fourteen clients here. Also: _cbContacts no longer stores the formula guard's apostrophe inside Contacts JSON ('+63 ...), and every reader (_cbParse) takes an old one off, so the 22 Client Book phones read right with no data rewritten.
 A382 QUOTATION STATUS (191; A380 holds 190; A327 takes 192 or later). Neil, 29 Oct 2026: for each sales rep their own list of every quotation, each set to Won, Pending (the last follow-up: a picked email, or a date and Call / Viber / Visit, and where it stands) or Lost with a reason — "we just need to have the status of all the quotations". Quotations gains nine columns (38 wide): Result ('' | Pending | Won, beside Status — never a new status), Result At, Result By, Result Reason, Result Note, Last Follow Up, Follow Up Via, Follow Up Status, Closed From; _sheet widens a tab narrower than its schema; createQuotation and seedCommissionDemo append the blanks. setQuotationResult({quotationNo | quotationNos ≤25, result won|pending|lost|open, reason, note, followUpDate, followUpVia, followUpStatus, email, keep, approvalNote, ifResultAt}) — secured, owner or creator (case-insensitive) or admin / management / director, under the lock, audited (Quotation / Status Updated): won and pending need a sent or approved quotation (a closed one is first restored to the status it was closed from); one with a sales order is won already; lost takes a reason from eight (Price, Lead time, Specs did not fit, Went with a competitor → Lost; No budget, No reply from the client → Not Pursued; Duplicate quotation → Cancelled; Other → Lost, with a note) and leaves the result and follow-up fields alone, so its Undo ({open, keep}) restores the row; a picked email is linked in the same call (as a follow-up once the quotation has gone out). closeQuotation records Closed From; reopenQuotation clears Result, Result Reason and Closed From; reviseQuotation clears Result; linkQuotationEmail never lets an explicit Follow-up write Sent At. getQuotations returns the nine fields.
 A374 THE SUPPLIER LIST (189; A327 takes 190 or later). Neil, 26 Oct 2026: a suppliers list for the admin dashboard (name, several contact people, phones and emails, address, local or international, distributorship, usual delivery, payment terms, usual items), connected to pricing: what admin prices goes under the supplier with the price and the date it was last updated. A new list apart from the old Suppliers tab (bank details, not touched). New tabs SupplierBook (25 wide; SB-; TIN kept as text), SupplierBookLog (9 wide; SBL-) and SupplierPrices (18 wide; SP-; Item No kept as text), and six secured actions, each with its own role check (FlowSettings supplierBookRoles, default admin and director): getSupplierBook (the whole list, prices and log; lite = the live names, spellings and each item's last price, also for accounting, who prices requests too), saveSupplierBookSupplier (a field not sent keeps what it has; Local or International; the distributorship is ours, its brands kept only with it; contact people as in the Client Book; Other delivery needs a note; a second supplier with the same key or a shared spelling is refused unless allowDuplicate; neither a contact nor an address = Needs Details), mergeSupplierBookSupplier (prices, spellings and contact people move to the other supplier, its blanks are filled, the first is archived with a note; dryRun says what would move), archiveSupplierBookSupplier (with a reason; restore) and importSupplierBookHistory (director; dry run by default: past requests' priced lines by supplier, every spelling, pairs that may be one supplier; the real run takes the merges a person confirmed, writes in blocks, skips lines already filed) and importSupplierBookList (director; dry run by default: the company's own supplier file; a supplier already on the list is overwritten with the file's details, its prices, spellings and history kept; one bad row refuses the whole file). submitForPricing now files the lines it forwards (_sbRecordForward, after the status is set and inside a try/catch, so it never stops a forward): one SupplierPrices row per request line, upserted on PR No + Line (a new price or supplier rewrites the row and its date; the same price changes nothing); a supplier not in the list yet is added, flagged as needing details; the response carries recorded {prices, unchanged, newSuppliers}. The price is admin's at the forward; setMgmtPricing still overwrites Supplier Price (FC) afterwards.
 A372 RESTATING WHAT WAS PAID ON A PAYABLE (188; A327 takes 189 or later). Neil, 26 Oct 2026: AP-202607-013 (CON BAN KIAT, PO 2026-44, ₱250,560) said fully paid while its only payment request, PRF-2026-92 CBK, paid half (₱125,280; the books follow the request), so accounting could not raise the request for the other half. restateAPPaid({apNo, expectPaid, reason, dryRun}) — secured, director only, under the lock, audited (AP Aging / Paid restated): Paid (PHP) becomes what the order's paid payment requests settled (debited less bank charge, else the amount), never a typed figure; the status follows (Paid / Partial / Unpaid); the Notes are stamped; the legacy APPAY journal is re-posted at the new figure; a full copy of the row goes to Overrides ('restated-ap-paid'). The books are not touched. Refuses a figure other than expectPaid, a foreign-currency payable, an order with no or several payables, a figure above the payable, or nothing to change.

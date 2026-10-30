@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/collection-details.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
 </head>
@@ -53,6 +54,8 @@
     <div class="flow-modal" style="max-width:520px;">
       <h3>Record Collection</h3>
       <div class="sub" id="collectSub">—</div>
+      <!-- A384: the client's collection details (accounting, admin and the director); Method and Deposited to start from them -->
+      <div id="collectCd" hidden></div>
       <input type="hidden" id="collectArNo">
       <div class="flow-form">
         <div><label id="collectAmountLbl" for="collectAmount">Amount (PHP) *</label><input type="number" step="any" min="0" id="collectAmount" oninput="collectRecalcNet()"></div>
@@ -85,6 +88,7 @@
   <script src="js/flow-docs.js"></script>
   <script src="js/flow-reason.js"></script>
   <script src="js/flow-ledger-view.js"></script>
+  <script src="js/collection-details-model.js"></script>
   <script src="js/flow-ar-aging.js"></script>
 
   <script>

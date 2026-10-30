@@ -158,6 +158,7 @@ const FLOW_SECURED_ACTIONS = [
   'setMgmtPricing', 'setOpeningBalance', 'setPricingRequestSalesperson', 'setQuotationEmailReply', 'setQuotationFollowUp',
   'setQuotationSalesperson', 'setSOSupplierType', 'setTravelFloat', 'setupFlowDrive', 'snoozeQuotation',
   'setQuotationResult',   // A382 — quotation status
+  'getCollectionBook', 'saveCollectionDetails',   // A384 — collection details
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
   'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
   'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',
