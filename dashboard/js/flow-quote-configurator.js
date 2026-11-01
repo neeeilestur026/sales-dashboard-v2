@@ -1393,7 +1393,11 @@ function qcSet(key, field, value) {
     qcRenderItems();
   }
   if (field === 'itemNo') {                       // A159: stamp the permanent id on an exact pick
-    const inv = qcInventory.find(x => String(x.itemNo) === String(value));
+    /* A387 — only on a real code exactly one row has. A shared 'N/A' (or TBA, none, a dash) used to stamp the FIRST N/A
+       row's id on every no-code line, and that id rode to the order and the invoice and matched "exactly" there. */
+    const noCode = /^(n\/?a|na|none|tba|-+)?$/i.test(String(value == null ? '' : value).trim());
+    const hits = noCode ? [] : qcInventory.filter(x => String(x.itemNo) === String(value));
+    const inv = hits.length === 1 ? hits[0] : null;
     it.itemId = inv ? (inv.itemId || '') : '';
     if (inv && !it.itemName) { it.itemName = inv.description || ''; qcRenderItems(); }
   }

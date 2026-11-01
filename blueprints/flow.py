@@ -663,6 +663,7 @@ SECURED_ACTIONS = [
     "setQuotationSalesperson", "setSOSupplierType", "setTravelFloat", "setupFlowDrive", "snoozeQuotation",
     "setQuotationResult",   # A382 — quotation status
     "getCollectionBook", "saveCollectionDetails",   # A384 — collection details
+    "getItemBook", "getItemCard", "getItemHistory", "getItemPhotos", "saveItemDetails",   # A387 — the Item Book
     "submitCommissionRequest", "submitDailyReport", "submitForPricing", "submitPOApproval", "submitPaymentRequest",
     "submitQuotationApproval", "submitTravelReplenishment", "submitWeeklyItinerary", "unlinkQuotationEmail", "updateAPAging",
     "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",

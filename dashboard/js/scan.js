@@ -852,7 +852,8 @@
       if (it.tracked) rows.push(['Pieces', it.piecesIn + ' in the warehouse · ' + it.piecesOut + ' out']);
       if ((it.barcodes || []).length) rows.push(['Supplier barcodes', it.barcodes.join(', ')]);
       if (r.lastScan) rows.push(['Last scanned', r.lastScan.mode.toLowerCase() + ' · ' + r.lastScan.docNo + ' · ' + r.lastScan.at]);
-      actions = `<a class="btn btn-sm" href="labels.html?items=${encodeURIComponent(it.itemId + ':1')}">Print item label</a>`;
+      actions = `<a class="btn btn-sm" href="labels.html?items=${encodeURIComponent(it.itemId + ':1')}">Print item label</a>` +
+        `<a class="btn btn-sm" href="item-book.html?id=${encodeURIComponent(it.itemId)}">Open item card</a>`;   // A387 — the Item Book
       if (S.canPost) {
         actions += `<button type="button" class="btn btn-sm" id="scTrack">${it.tracked ? 'Stop tracking each piece' : 'Track each piece'}</button>`;
         if (it.tracked) actions += `<button type="button" class="btn btn-sm btn-primary primary" id="scRegOpen">Register pieces</button>`;
@@ -1004,6 +1005,15 @@
       if (!confirm(label + res.message + '\n\nProceed anyway with a zero landed cost?')) return { success: false, stopped: true, message: 'Not posted. Record the AP payment first.' };
       extra.confirmUnpaid = true;
       res = await postFlow('receiveByScan', Object.assign({}, payload, extra));
+    }
+    /* A387 — the server would not guess which stock row a line is, and posted nothing: ask on the phone, by PO line. */
+    if (res && !res.success && res.needsItem && res.needsItem.length && typeof ipPick === 'function') {
+      const inv = await fetchFlow('getInventory').then(r => (r && r.data) || []).catch(() => []);
+      const picks = await ipPick(res.needsItem, { what: 'receiving', stock: inv });
+      if (!picks) return { success: false, stopped: true, message: 'Not posted. Say which stock item each line is.' };
+      const byLine = {};
+      res.needsItem.forEach(n => { if (picks[n.index] !== undefined) byLine[n.line] = picks[n.index]; });
+      res = await postFlow('receiveByScan', Object.assign({}, payload, extra, { picks: JSON.stringify(byLine) }));
     }
     return res;
   }

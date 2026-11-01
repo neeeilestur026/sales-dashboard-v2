@@ -71,7 +71,8 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   // A374 — the supplier list (admin)
   'supplier-list.html',
   'quotation-status.html',   // A382
-  'collection-details.html'];   // A384 (A385: clients.html left the list — it is a redirect stub now)
+  'collection-details.html',   // A384 (A385: clients.html left the list — it is a redirect stub now)
+  'item-book.html'];   // A387 — the Item Book
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

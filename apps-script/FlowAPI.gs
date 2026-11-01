@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 193;   // A385 — the sales lists: old requests archive themselves; a retried quote is the same quote. History: see CHANGELOG.
+var FLOW_VERSION = 194;   // A387 — the Item Book: one card per product, and stock never lands on a guessed row. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -539,7 +539,11 @@ var SCHEMA = {
   Returns:       ['Return No', 'Date', 'Scanned By', 'Created At', 'Condition', 'Notes', 'Photos'],
   // A319 — what the scanner's "New item" form knew about an item it created (kept off Inventory so none
   // of Inventory's 11-wide writers change). Brand / Category come from _SCAN_BRANDS / _SCAN_CATEGORIES.
-  ItemDetails:   ['Item ID', 'Brand', 'Model', 'Category', 'Name', 'Photos', 'Created By', 'Created At', 'Source'],
+  ItemDetails:   ['Item ID', 'Brand', 'Model', 'Category', 'Name', 'Photos', 'Created By', 'Created At', 'Source',
+                  // A387 — the Item Book card's own details (Name above is its display name; Inventory's Description is untouched)
+                  'Specs JSON', 'Notes', 'Hidden Photos', 'Updated By', 'Updated At'],
+  // A387 — every change to an item card, only ever appended (written by saveItemDetails and the card's photos)
+  ItemBookLog:   ['Log No', 'Item ID', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
 
   // ── A320 · THE BOOKS (general ledger). See the BOOKS section near HANDLERS. ──
   Accounts:      ['Code', 'Name', 'Type', 'Subtype', 'Normal', 'Parent', 'Postable', 'Active', 'System', 'Bank Code', 'Tax Code',
@@ -860,6 +864,7 @@ var _SECURED = {
   setTravelFloat: 1, setupFlowDrive: 1, snoozeQuotation: 1, submitCommissionRequest: 1, submitDailyReport: 1, submitForPricing: 1,
   setQuotationResult: 1,   // A382 — quotation status (owner or approver, checked inside)
   getCollectionBook: 1, saveCollectionDetails: 1,   // A384 — collection details (bank, address, contacts): its read is secured too
+  getItemBook: 1, getItemCard: 1, getItemHistory: 1, getItemPhotos: 1, saveItemDetails: 1,   // A387 — the Item Book: reads are secured (costs by role)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
@@ -1139,6 +1144,482 @@ function _normItemNo(v) {
   return s;
 }
 
+/* ═══ A387 · THE ITEM BOOK ═══════════════════════════════════════════════════════════════════════
+ * Neil, 1 Nov 2026: one card per product, open to every role that works with items, so that a
+ * product's name, specs, photos, stock and every line it ever appeared on are found in one place.
+ *
+ * An item IS an Inventory row: its Item ID (ITM-NNNNN) is the only key that never repeats. The
+ * card's own details (a display name, specs, notes, hidden photos) live in ItemDetails, which the
+ * scanner already writes; Inventory's Description is never touched, because documents print it and
+ * no-code lines are matched by it.
+ *
+ * ONE RESOLVER (_ibResolve) decides which row a document line is, for the card's history and — with
+ * FlowSettings itemStrictMatch on — for every stock movement too. It never takes the first match:
+ *   1. a pick the user made          2. the line's Item ID, unless it is SUSPECT (below)
+ *   3. a real code only one row has  4. a code + the exact name
+ *   5. a no-code line whose exact name only one row has
+ *   6. otherwise unresolved, with up to six candidates to choose from.
+ * SUSPECT: an id pointing at a no-code or shared-code row whose name is not the line's. The quote
+ * builder used to stamp the FIRST N/A row's id on every N/A line, and that id travelled to the order
+ * and the invoice, where it matched "exactly". _findInventory's first-match fallback is the other half
+ * of the same bug (row 99 "PIECE INSULATED PIER" received two torches on 20 Oct).
+ *
+ * Costs (supplier prices, landed cost) reach only FlowSettings itemBookCostRoles (management and the
+ * director: Neil's decision). Admin and accounting keep their costs on Inventory, Receiving and the
+ * Supplier list, which are unchanged; the card simply does not carry them. ────────────────────────── */
+function _settingRoles(key, fallback) {
+  var raw = '';
+  try { raw = String((getFlowSettings().data || {})[key] || ''); } catch (e) { raw = ''; }
+  var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return list.length ? list : fallback;
+}
+function _settingOn(key) {
+  var v = '';
+  try { v = (getFlowSettings().data || {})[key]; } catch (e) { v = ''; }
+  return String(v === undefined || v === null || v === '' ? 'on' : v).trim().toLowerCase() !== 'off';
+}
+var _IB_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'warehouse'];
+var _IB_EDIT_ROLES = ['admin', 'director'];
+var _IB_COST_ROLES = ['management', 'director'];
+function _ibRole(p) { return String((p && p.actorRole) || '').trim().toLowerCase(); }
+function _ibMay(p) {
+  var r = _ibRole(p);
+  return { edit: _settingRoles('itemBookEditRoles', _IB_EDIT_ROLES).indexOf(r) >= 0,
+           cost: _settingRoles('itemBookCostRoles', _IB_COST_ROLES).indexOf(r) >= 0,
+           labels: !!_SCAN_COUNT_ROLES[r] };
+}
+function _ibDenied(p, edit) {
+  if (!_settingOn('itemBook')) return 'The Item Book is switched off (FlowSettings itemBook).';
+  var list = _settingRoles(edit ? 'itemBookEditRoles' : 'itemBookRoles', edit ? _IB_EDIT_ROLES : _IB_ROLES);
+  if (list.indexOf(_ibRole(p)) < 0) return edit ? 'Only ' + list.join(', ') + ' can change an item card.' : 'The Item Book is open to ' + list.join(', ') + '.';
+  if (edit && !String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save the change under.';
+  return '';
+}
+function _ibStrictOn() { return _settingOn('itemStrictMatch'); }
+
+/** A number that names no product: blank, N/A, NA, dashes, TBA, none. _normItemNo folds only the first four. */
+function _ibPlaceholder(no) { return _normItemNo(no) === 'N/A' || _sbNoCode(no); }
+function _ibWords(s) {
+  var out = [], seen = {};
+  _rawKey(s).slice(0, 80).split(/[^a-z0-9]+/).forEach(function (w) { if (w.length > 1 && !seen[w]) { seen[w] = 1; out.push(w); } });
+  return out;
+}
+/** Lookups over the Inventory rows: by id, by real code (_idNorm), by exact name (_rawKey). */
+function _ibIndex(rows, details) {
+  var ix = { rows: rows || [], byId: {}, byCode: {}, byName: {}, alt: {} };
+  ix.rows.forEach(function (r) { _ibAdd(ix, r); });
+  (details || []).forEach(function (d) {
+    var id = String(d['Item ID'] || '').trim(), n = _rawKey(d['Name']);
+    if (id && n) ix.alt[id] = n;
+  });
+  return ix;
+}
+function _ibAdd(ix, r) {
+  if (ix.rows.indexOf(r) < 0) ix.rows.push(r);
+  var id = String(r['Item ID'] || '').trim(), k = _rawKey(r['Description']);
+  if (id) ix.byId[id] = r;
+  if (!_ibPlaceholder(r['Item No'])) { var c = _idNorm(r['Item No']); (ix.byCode[c] = ix.byCode[c] || []).push(r); }
+  if (k) (ix.byName[k] = ix.byName[k] || []).push(r);
+}
+function _ibIndexNow() { return _sgMemo('ibix', function () { return _ibIndex(_rows('Inventory'), _sbRows('ItemDetails')); }); }
+/* A row with no Item ID yet (live, 1 Nov 2026: the 361 oldest rows — backfillItemIds was never run) is picked by its
+   sheet row plus a checksum of its name, so a row that moved in the meantime is refused, never guessed. */
+function _ibHash(s) { var h = 5381, t = _rawKey(s); for (var i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
+function _ibRowKey(r) { var id = String(r['Item ID'] || '').trim(); return id || 'row:' + r.rowIndex + ':' + _ibHash(r['Description']); }
+/** The row's Item ID, giving it one first if it has none (only ever inside a stock movement, which holds the lock). */
+function _ibEnsureId(r) {
+  var id = String((r && r['Item ID']) || '').trim();
+  if (id || !r || !(r.rowIndex > 1)) return id;
+  id = _nextItemId();
+  _sheet('Inventory').getRange(r.rowIndex, SCHEMA.Inventory.indexOf('Item ID') + 1, 1, 1).setValues([[id]]);
+  r['Item ID'] = id;
+  return id;
+}
+function _ibCand(r) {
+  return { itemId: String(r['Item ID'] || ''), pick: _ibRowKey(r), itemNo: String(r['Item No'] || ''), name: String(r['Description'] || '').slice(0, 160),
+           balance: _num(r['Available Balance']), type: String(r['Type'] || '') };
+}
+/** Rows whose names share most of the line's words (first 80 characters), best first; `first` leads. */
+function _ibCandidates(ix, name, n, first) {
+  var want = _ibWords(name), set = {}, scored = [];
+  want.forEach(function (w) { set[w] = 1; });
+  if (want.length) ix.rows.forEach(function (r) {
+    if (first && r === first) return;
+    var w = r._ibw || (r._ibw = _ibWords(r['Description']));
+    if (!w.length) return;
+    var hit = 0, small = Math.min(w.length, want.length);
+    w.forEach(function (x) { if (set[x]) hit++; });
+    if (hit >= Math.min(2, small) && hit / small >= 0.5) scored.push({ r: r, s: hit / small + hit / Math.max(w.length, want.length) });
+  });
+  scored.sort(function (a, b) { return b.s - a.s; });
+  return (first ? [first] : []).concat(scored.map(function (x) { return x.r; })).slice(0, n || 6);
+}
+/** Which Inventory row a line is. q = { itemId, itemNo, name, pick }; o.trustId: the id is where stock
+ *  already moved (an invoice line is stamped with the row it was costed from), so it is taken as it is. */
+function _ibResolve(ix, q, o) {
+  q = q || {}; o = o || {};
+  var pick = String(q.pick || '').trim();
+  if (pick === 'new' || pick === 'none' || pick === 'skip') return { row: null, how: pick, candidates: [] };
+  if (pick) {
+    var picked = ix.byId[pick] || (/^row:/.test(pick) ? ix.rows.filter(function (x) { return _ibRowKey(x) === pick; })[0] : null);
+    return picked ? { row: picked, how: 'pick', candidates: [] } : { row: null, how: 'badpick', candidates: [] };
+  }
+  var name = _rawKey(q.name), id = String(q.itemId || '').trim(), byId = id ? ix.byId[id] : null, suspect = null;
+  if (byId) {
+    if (o.trustId) return { row: byId, how: 'id', candidates: [] };
+    var shared = _ibPlaceholder(byId['Item No']) || (ix.byCode[_idNorm(byId['Item No'])] || []).length > 1;
+    if (!shared || !name || name === _rawKey(byId['Description']) || name === ix.alt[id]) return { row: byId, how: 'id', candidates: [] };
+    suspect = byId;
+  }
+  var done = function (row, how) { return { row: row, how: how, suspect: suspect ? id : '', candidates: [] }; };
+  var open = function (how, list) {
+    var c = list ? list.slice(0, 6) : _ibCandidates(ix, q.name, 6, suspect);
+    if (list && suspect && c.indexOf(suspect) < 0) c = [suspect].concat(c).slice(0, 6);
+    return { row: null, how: how, suspect: suspect ? id : '', candidates: c };
+  };
+  if (!_ibPlaceholder(q.itemNo)) {
+    var byCode = ix.byCode[_idNorm(q.itemNo)] || [];
+    if (byCode.length === 1) return done(byCode[0], 'code');
+    if (byCode.length > 1) {
+      var same = byCode.filter(function (x) { return _rawKey(x['Description']) === name; });
+      return same.length === 1 ? done(same[0], 'code+name') : open('ambiguous', byCode);
+    }
+    return open('unknown', null);                 // a real code no row has: a new product
+  }
+  var byName = name ? (ix.byName[name] || []) : [];
+  if (byName.length === 1) return done(byName[0], 'name');
+  return byName.length > 1 ? open('ambiguous', byName) : open('unmatched', null);
+}
+
+/* Strict matching for one document: every line is decided BEFORE anything is written. mode is
+   'receive' (an unknown product becomes a new row), 'invoice' (a line that is no stock item moves no
+   stock and costs 0; no row is ever created) or 'void' (stock goes back to the row the line carries).
+   A line is asked about only when there is real doubt: several rows fit, its id is suspect, or names
+   close to it exist. Returns { steps: [{ row | create | none | skip }], needs: [...] }. */
+function _ibPlan(ix, lines, mode) {
+  var steps = [], needs = [];
+  lines.forEach(function (l, i) {
+    if (!l) { steps.push(null); return; }
+    var r = _ibResolve(ix, { itemId: l.itemId, itemNo: l.itemNo, name: l.itemName, pick: l.pick }, { trustId: mode === 'void' });
+    var cogs = _num(l.cogs), step = { row: r.row, how: r.how };
+    var ask = function (why) {
+      needs.push({ index: i, line: l.line || (i + 1), itemNo: String(l.itemNo || ''), itemName: String(l.itemName || '').slice(0, 160),
+                   qty: _num(l.qty), how: why || r.how, suspectId: r.suspect || '', candidates: (r.candidates || []).map(_ibCand),
+                   allow: mode === 'receive' ? ['new'] : mode === 'invoice' ? ['none'] : (cogs > 0.005 ? [] : ['skip']) });
+      steps.push(null);
+    };
+    if (r.row) { steps.push(step); return; }
+    if (r.how === 'badpick') return ask('badpick');
+    if (r.how === 'new') {
+      if (mode !== 'receive') return ask('badpick');
+      if (!_ibPlaceholder(l.itemNo) && (ix.byCode[_idNorm(l.itemNo)] || []).length > 1) return ask('ambiguous');
+      step.create = true; steps.push(step); return;
+    }
+    if (r.how === 'none') { if (mode !== 'invoice') return ask('badpick'); step.none = true; steps.push(step); return; }
+    if (r.how === 'skip') { if (mode !== 'void' || cogs > 0.005) return ask('badpick'); step.skip = true; steps.push(step); return; }
+    /* Doubt: several rows fit, the id is suspect, or a no-code name is close to existing items. A real code no
+       row has ('unknown'), or a name nothing is near, is a product we do not stock yet. */
+    if (r.how === 'ambiguous' || r.suspect || (r.how === 'unmatched' && r.candidates.length)) return ask();
+    if (mode === 'receive') step.create = true;
+    else if (mode === 'invoice') step.none = true;
+    else if (cogs <= 0.005) step.skip = true;
+    else return ask();
+    steps.push(step);
+  });
+  return { steps: steps, needs: needs };
+}
+function _ibNeedsReply(needs, what) {
+  return { success: false, needsItem: needs,
+    message: 'Which stock item is ' + (needs.length === 1 ? 'this line' : 'each of these ' + needs.length + ' lines') + ' on the ' + what + '? ' +
+      needs.slice(0, 3).map(function (n) { return n.itemName || n.itemNo || ('line ' + n.line); }).join('; ') +
+      (needs.length > 3 ? '; …' : '') + '. Nothing was saved: pick the item' + (needs.length === 1 ? '' : 's') + ', then send it again.' };
+}
+
+/* ── the card's own details ─────────────────────────────────────────────────────────────────────── */
+/** Write a whole ItemDetails row in SCHEMA order, so the width always matches (the A322 lesson). */
+function _ibPut(row, obj) {
+  var vals = SCHEMA.ItemDetails.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('ItemDetails').getRange(row.rowIndex, 1, 1, vals.length).setValues([vals]);
+  else _append('ItemDetails', vals);
+}
+/* Log numbers come from the clock, not from _nextNumber: that keeps a Script Property per prefix and
+   month, and the project is close to the properties limit (A159, A338). */
+function _ibLog(itemId, kind, from, to, note, by) {
+  var no = 'IBL-' + Utilities.formatDate(_now(), 'Asia/Manila', 'yyyyMMddHHmmss') + '-' + Utilities.getUuid().slice(0, 4).toUpperCase();
+  _append('ItemBookLog', [no, itemId, kind, _webCell(from).slice(0, 190), _webCell(to).slice(0, 190), _webCell(note, true).slice(0, 500), by || '', _now()]);
+}
+function _ibSpecs(v) {
+  var a = v;
+  if (typeof a === 'string') { try { a = JSON.parse(a || '[]'); } catch (e) { return null; } }
+  if (!Array.isArray(a)) return null;
+  var out = [];
+  a.forEach(function (x) {
+    var k = _webCell(x && (x[0] !== undefined ? x[0] : x.label)).slice(0, 60), val = _webCell(x && (x[1] !== undefined ? x[1] : x.value), true).slice(0, 400);
+    if (k || val) out.push([k, val]);
+  });
+  return out.slice(0, 40);
+}
+function _ibIds(v) { return String(v || '').split(/[\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean); }
+var _IB_PHOTO_MODULES = { 'Warehouse Item': 1, 'Warehouse Piece': 1 };
+/** The item's own photos: filed under the item (Module Warehouse Item / Piece, Ref No = its id), newest first. */
+function _ibPhotoDocs(itemId) {
+  return _sbRows('Documents').filter(function (d) { return _IB_PHOTO_MODULES[_scanKey(d['Module'])] && _scanKey(d['Ref No']) === itemId && d['File ID']; })
+    .sort(function (a, b) { return String(_webIso(b['Uploaded At'])).localeCompare(String(_webIso(a['Uploaded At']))); });
+}
+/* The cost keys a card reply may carry. Every reply to a role outside itemBookCostRoles goes through
+   _ibStrip, so a field added later cannot slip a cost through by accident. */
+var _IB_COST_KEYS = { purchasePrice: 1, shippingCost: 1, landedCost: 1, totalLanded: 1, unitCost: 1, supplierPrice: 1, supplier: 1,
+                      supplierVat: 1, costCurrency: 1, lineCost: 1 };
+function _ibStrip(o) {
+  if (Array.isArray(o)) return o.map(_ibStrip);
+  if (!o || typeof o !== 'object' || o instanceof Date) return o;
+  var out = {};
+  Object.keys(o).forEach(function (k) { if (!_IB_COST_KEYS[k]) out[k] = _ibStrip(o[k]); });
+  return out;
+}
+function _ibReply(p, out) { return _ibMay(p).cost ? out : _ibStrip(out); }
+
+/** The list: every item, with what the card shows at a glance. Secured; no cost unless a cost role. */
+function getItemBook(p) {
+  var no = _ibDenied(p);
+  if (no) return { success: false, message: no };
+  var t0 = Date.now(), may = _ibMay(p);
+  var det = {}, bars = {}, tracked = {}, photos = {};
+  _sbRows('ItemDetails').forEach(function (d) { var id = _scanKey(d['Item ID']); if (id) det[id] = d; });
+  _sbRows('ItemBarcodes').forEach(function (b) { var id = _scanKey(b['Item ID']); if (id) (bars[id] = bars[id] || []).push(_scanKey(b['Barcode'])); });
+  _sbRows('TrackedItems').forEach(function (r) { var id = _scanKey(r['Item ID']); if (id) tracked[id] = String(r['Track Pieces']) === 'true' || r['Track Pieces'] === true; });
+  _sbRows('Documents').forEach(function (d) { if (_IB_PHOTO_MODULES[_scanKey(d['Module'])]) { var id = _scanKey(d['Ref No']); photos[id] = (photos[id] || 0) + 1; } });
+  var invRows = _rows('Inventory'), noId = invRows.filter(function (r) { return !_scanKey(r['Item ID']); }).length;
+  var items = invRows.filter(function (r) { return _scanKey(r['Item ID']); }).map(function (r) {
+    var id = _scanKey(r['Item ID']), d = det[id] || {}, desc = String(r['Description'] || '');
+    var hidden = _ibIds(d['Hidden Photos']).length;
+    var o = { itemId: id, itemNo: String(r['Item No'] || ''), name: desc.slice(0, 160), long: desc.length > 160, type: String(r['Type'] || ''),
+              balance: _num(r['Available Balance']), displayName: String(d['Name'] || ''), brand: String(d['Brand'] || ''),
+              model: String(d['Model'] || ''), category: String(d['Category'] || ''), tracked: !!tracked[id],
+              barcodes: (bars[id] || []).length, codes: (bars[id] || []).slice(0, 5), photos: Math.max(0, (photos[id] || 0) - hidden),
+              details: !!d['Item ID'], updated: _webIso(r['Last Updated']) };
+    if (may.cost) { o.landedCost = _num(r['Landed Cost/Unit']); o.costCurrency = String(r['Currency'] || 'PHP'); }
+    return o;
+  });
+  return _ibReply(p, { success: true, items: items, noId: noId, may: may, lists: { brands: _SCAN_BRANDS, categories: _SCAN_CATEGORIES }, ms: Date.now() - t0 });
+}
+
+/** One card. { itemId } — or { itemNo, itemName } from a document line, resolved the same way as history. */
+function getItemCard(p) {
+  var no = _ibDenied(p);
+  if (no) return { success: false, message: no };
+  var t0 = Date.now(), may = _ibMay(p), ix = _ibIndexNow(), id = _scanKey(p.itemId), resolved = null;
+  var r = id ? ix.byId[id] : null;
+  if (!r && !id) {
+    var rs = _ibResolve(ix, { itemNo: p.itemNo, name: p.itemName });
+    resolved = { how: rs.how, candidates: (rs.candidates || []).map(_ibCand) };
+    r = rs.row;
+  }
+  if (!r) return { success: true, item: null, resolved: resolved, may: may, message: id ? 'Item ' + id + ' is not in inventory.' : 'No single item matches that line.' };
+  id = _scanKey(r['Item ID']);
+  var d = _sbRows('ItemDetails').filter(function (x) { return _scanKey(x['Item ID']) === id; })[0] || null;
+  var specs = d ? (_ibSpecs(d['Specs JSON']) || []) : [];
+  var hidden = d ? _ibIds(d['Hidden Photos']) : [];
+  var item = { itemId: id, itemNo: String(r['Item No'] || ''), description: String(r['Description'] || ''), type: String(r['Type'] || ''),
+               balance: _num(r['Available Balance']), lastUpdated: _webIso(r['Last Updated']),
+               displayName: d ? String(d['Name'] || '') : '', brand: d ? String(d['Brand'] || '') : '', model: d ? String(d['Model'] || '') : '',
+               category: d ? String(d['Category'] || '') : '', specs: specs, notes: d ? String(d['Notes'] || '') : '',
+               source: d ? String(d['Source'] || '') : '', createdBy: d ? String(d['Created By'] || '') : '', createdAt: d ? _webIso(d['Created At']) : '',
+               updatedBy: d ? String(d['Updated By'] || '') : '', updatedAt: d ? _webIso(d['Updated At']) : '',
+               placeholder: _ibPlaceholder(r['Item No']) };
+  if (may.cost) {
+    item.purchasePrice = _num(r['Purchase Price/Unit']); item.shippingCost = _num(r['Shipping Cost/Unit']);
+    item.landedCost = _num(r['Landed Cost/Unit']); item.totalLanded = _num(r['Total Landed Cost']); item.costCurrency = String(r['Currency'] || 'PHP');
+  }
+  var barcodes = _sbRows('ItemBarcodes').filter(function (b) { return _scanKey(b['Item ID']) === id; })
+    .map(function (b) { return { barcode: _scanKey(b['Barcode']), by: _scanKey(b['Added By']), at: _webIso(b['Added At']) }; });
+  var labels = _sbRows('Labels').filter(function (l) { return _scanKey(l['Item ID']) === id && _scanKey(l['Kind']) === 'ITEM'; })
+    .map(function (l) { return { code: may.labels ? _scanKey(l['Code']) : '', printed: _num(l['Printed Count']), lastPrinted: _webIso(l['Last Printed At']) }; });
+  var tracked = _sbRows('TrackedItems').some(function (t) { return _scanKey(t['Item ID']) === id && (String(t['Track Pieces']) === 'true' || t['Track Pieces'] === true); });
+  var pieces = _sbRows('Assets').filter(function (a) { return _scanKey(a['Item ID']) === id; }).map(function (a) {
+    return { assetNo: _scanKey(a['Asset No']), status: _scanKey(a['Status']), location: _scanKey(a['Location']), mrNo: _scanKey(a['MR No']),
+             receivedAt: _webIso(a['Received At']), lastRef: _scanKey(a['Last Ref']), lastMoveAt: _webIso(a['Last Move At']) };
+  });
+  var photos = _ibPhotoDocs(id).map(function (x) {
+    var docId = _scanKey(x['Doc ID']);
+    return { docId: docId, type: _scanKey(x['Doc Type']), by: _scanKey(x['Uploaded By']), at: _webIso(x['Uploaded At']), hidden: hidden.indexOf(docId) >= 0 };
+  });
+  var log = _sbRows('ItemBookLog').filter(function (l) { return _scanKey(l['Item ID']) === id; }).map(function (l) {
+    return { kind: _scanKey(l['Kind']), from: String(l['From'] || ''), to: String(l['To'] || ''), note: String(l['Note'] || ''), by: _scanKey(l['By']), at: _webIso(l['At']) };
+  }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); }).slice(0, 60);
+  var key = _rawKey(r['Description']);
+  var twins = (ix.byName[key] || []).filter(function (x) { return x !== r; }).map(_ibCand);
+  return _ibReply(p, { success: true, item: item, barcodes: barcodes, labels: labels, tracked: tracked, pieces: pieces, photos: photos, log: log,
+                       twins: twins, resolved: resolved, may: may, lists: { brands: _SCAN_BRANDS, categories: _SCAN_CATEGORIES }, ms: Date.now() - t0 });
+}
+
+/* History, read-time, in three parts the page loads side by side so none of them nears the 60 s that
+   Flask gives a secured call. A line is this item when the resolver says so; a line carrying this item's
+   id that the resolver will not confirm is listed apart as "marked as this item, may be another". */
+var _IB_HISTORY_PARTS = { sell: 1, buy: 1, move: 1 };
+function getItemHistory(p) {
+  var no = _ibDenied(p);
+  if (no) return { success: false, message: no };
+  var part = String(p.part || '').toLowerCase();
+  if (!_IB_HISTORY_PARTS[part]) return { success: false, message: 'Say which part of the history: sell, buy or move.' };
+  var t0 = Date.now(), may = _ibMay(p), ix = _ibIndexNow(), id = _scanKey(p.itemId), row = ix.byId[id];
+  if (!row) return { success: false, message: 'Item ' + (id || '?') + ' is not in inventory.' };
+  var code = _ibPlaceholder(row['Item No']) ? '' : _idNorm(row['Item No']);
+  var names = {}; names[_rawKey(row['Description'])] = 1; if (ix.alt[id]) names[ix.alt[id]] = 1;
+  var lines = [], unclear = [];
+  var maybe = function (l) {                  // cheap test first: only a line that names this item can be it
+    return String(l.itemId || '') === id || (code && !_ibPlaceholder(l.itemNo) && _idNorm(l.itemNo) === code) || names[_rawKey(l.itemName)];
+  };
+  var take = function (l, base, trust) {
+    if (!maybe(l)) return;
+    var r = _ibResolve(ix, { itemId: l.itemId, itemNo: l.itemNo, name: l.itemName }, { trustId: !!trust });
+    var rec = Object.assign(base, { how: r.how, suspect: r.suspect || '' });
+    if (r.row === row) lines.push(rec);
+    else if (!r.row && String(l.itemId || '') === id) unclear.push(rec);
+  };
+  var head = function (tab, key) { var m = {}; _sbRows(tab).forEach(function (h) { m[_scanKey(h[key])] = h; }); return m; };
+  var day = function (v) { return v ? _dateStr(v) : ''; };
+  if (part === 'sell') {
+    var prs = head('PricingRequests', 'PR No'), qs = head('Quotations', 'Quotation No'), sos = head('SalesOrders', 'SO No'), invs = head('Invoices', 'INV No');
+    _sbRows('PricingRequestItems').forEach(function (x) {
+      var h = prs[_scanKey(x['PR No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'request', ref: _scanKey(x['PR No']), date: day(h['Date']), party: _scanKey(h['Customer']), by: _scanKey(h['Salesperson'] || h['Requested By']),
+             status: _scanKey(h['Status']), qty: _num(x['Qty']), uom: _scanKey(x['UOM']), price: _num(x['Final Price']),
+             supplier: _scanKey(x['Supplier']), supplierPrice: _num(x['Supplier Price (FC)']), costCurrency: _scanKey(x['Currency']) });
+    });
+    _sbRows('QuotationItems').forEach(function (x) {
+      var h = qs[_scanKey(x['Quotation No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'quotation', ref: _scanKey(x['Quotation No']), date: day(h['Date']), party: _scanKey(h['Customer']), by: _scanKey(h['Created By']),
+             status: _scanKey(h['Status']), qty: _num(x['Quoted Qty']), uom: _scanKey(x['UOM']), price: _num(x['Quoted Price']), chargeKind: _scanKey(x['Charge Kind']) });
+    });
+    _sbRows('SalesOrderItems').forEach(function (x) {
+      var h = sos[_scanKey(x['SO No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'order', ref: _scanKey(x['SO No']), date: day(h['Date']), party: _scanKey(h['Customer']), by: _scanKey(h['Created By']),
+             status: _scanKey(h['Status']), qty: _num(x['Qty']), price: _num(x['Price/Unit']), chargeKind: _scanKey(x['Charge Kind']) });
+    });
+    _sbRows('InvoiceItems').forEach(function (x) {
+      var h = invs[_scanKey(x['INV No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'invoice', ref: _scanKey(x['INV No']), so: _scanKey(h['SO No']), date: day(h['Date']), party: _scanKey(h['Customer']),
+             status: String(h['Voided'] || '') === 'true' ? 'Voided' : 'Issued', qty: _num(x['Qty']), price: _num(x['Selling Price']),
+             landedCost: _num(x['Landed Cost/Unit']), lineCost: _num(x['Line COGS']), chargeKind: _scanKey(x['Charge Kind']) }, true);
+    });
+  } else if (part === 'buy') {
+    var pos = head('PurchaseOrders', 'PO No'), mrs = head('MaterialsReceiving', 'MR No'), prLine = {};
+    _sbRows('PurchaseOrderItems').forEach(function (x) {
+      var h = pos[_scanKey(x['PO No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'po', ref: _scanKey(x['PO No']), so: _scanKey(h['SO No']), date: day(h['Date']), status: _scanKey(h['Status']), qty: _num(x['Qty']),
+             supplier: _scanKey(h['Supplier']), unitCost: _num(x['Purchase Price/Unit (FC)']), costCurrency: _scanKey(h['Currency']) });
+    });
+    _sbRows('ReceivingItems').forEach(function (x) {
+      var h = mrs[_scanKey(x['MR No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'receiving', ref: _scanKey(x['MR No']), po: _scanKey(h['PO No']), so: _scanKey(h['SO No']), date: day(h['Date']), qty: _num(x['Qty Received']),
+             by: _scanKey(h['Received By']), supplier: _scanKey(h['Supplier']), unitCost: _num(x['Purchase Price/Unit (PHP)']), landedCost: _num(x['Landed Cost/Unit']) });
+    });
+    _sbRows('PricingRequestItems').forEach(function (x) { prLine[_scanKey(x['PR No']) + '|' + _num(x['Line'])] = _scanKey(x['Item ID']); });
+    _sbRows('SupplierPrices').forEach(function (x) {
+      take({ itemId: prLine[_scanKey(x['PR No']) + '|' + _num(x['Line'])] || '', itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'supplier price', ref: _scanKey(x['PR No']), date: day(x['Priced At']), party: _scanKey(x['Customer']), by: _scanKey(x['Priced By']),
+             qty: _num(x['Qty']), uom: _scanKey(x['UOM']), supplier: _scanKey(x['Supplier']), supplierPrice: _num(x['Supplier Price (FC)']),
+             costCurrency: _scanKey(x['Currency']), supplierVat: _scanKey(x['VAT']) });
+    });
+  } else {
+    var dps = head('Dispatches', 'Dispatch No'), hires = head('Hires', 'Hire No');
+    _sbRows('DispatchItems').forEach(function (x) {
+      var h = dps[_scanKey(x['Dispatch No'])] || {};
+      take({ itemId: x['Item ID'], itemNo: x['Item No'], itemName: x['Item Name'] },
+           { kind: 'dispatch', ref: _scanKey(x['Dispatch No']), so: _scanKey(h['SO No']), date: day(h['Date']), party: _scanKey(h['Customer']),
+             by: _scanKey(h['Scanned By']), qty: _num(x['Qty Scanned']) }, true);
+    });
+    _sbRows('HireUnits').forEach(function (x) {
+      var h = hires[_scanKey(x['Hire No'])] || {};
+      take({ itemId: '', itemNo: 'N/A', itemName: x['Item Name'] },
+           { kind: 'rental', ref: _scanKey(x['Hire No']), so: _scanKey(h['SO No']), date: day(x['Out Date'] || h['Start Date']), party: _scanKey(h['Customer']),
+             status: _scanKey(x['Status']), qty: _num(x['Qty']), asset: _scanKey(x['Asset Ref']), due: day(x['Due Date']), returned: day(x['Returned Date']) });
+    });
+  }
+  var newest = function (a, b) { return String(b.date).localeCompare(String(a.date)) || String(b.ref).localeCompare(String(a.ref)); };
+  lines.sort(newest); unclear.sort(newest);
+  return _ibReply(p, { success: true, part: part, itemId: id, lines: lines.slice(0, 500), more: Math.max(0, lines.length - 500),
+                       unclear: unclear.slice(0, 50), unclearCount: unclear.length, may: may, ms: Date.now() - t0 });
+}
+
+/** The item's photos as images — only photos filed under THIS item, at most six; thumbnails unless size=full. */
+function getItemPhotos(p) {
+  var no = _ibDenied(p);
+  if (no) return { success: false, message: no };
+  var id = _scanKey(p.itemId), mine = {};
+  _ibPhotoDocs(id).forEach(function (d) { mine[_scanKey(d['Doc ID'])] = d; });
+  var want = _scanPhotoIds(p.docIds).slice(0, 6), out = [], full = String(p.size || '') === 'full';
+  want.forEach(function (docId) {
+    var d = mine[docId];
+    if (!d) return;
+    try {
+      var f = DriveApp.getFileById(d['File ID']), blob = full ? f.getBlob() : (f.getThumbnail() || f.getBlob());
+      out.push({ docId: docId, mimeType: blob.getContentType() || 'image/jpeg', base64: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) { /* a trashed file is skipped, not an error */ }
+  });
+  return { success: true, data: out };
+}
+
+/** Change a card: display name, brand, model, type, specs, notes, which photos are hidden. Admin and the
+ *  director (FlowSettings itemBookEditRoles). A field not sent keeps its value; a save over someone else's
+ *  newer one is refused; every change is its own ItemBookLog row. Inventory is never written. */
+function saveItemDetails(p) {
+  p = p || {};
+  var no = _ibDenied(p, true);
+  if (no) return { success: false, message: no };
+  var id = _scanKey(p.itemId), inv = _rows('Inventory').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0];
+  if (!inv) return { success: false, message: 'Item ' + (id || '?') + ' is not in inventory.' };
+  var row = _sbRows('ItemDetails').filter(function (r) { return _scanKey(r['Item ID']) === id; })[0] || null;
+  if (p.ifUpdatedAt !== undefined && p.ifUpdatedAt !== null && String(p.ifUpdatedAt) !== (row ? _webIso(row['Updated At']) : '')) {
+    return { success: false, stale: true, message: (row ? String(row['Updated By'] || 'Someone') : 'Someone') +
+             ' changed this card since you opened it. Reload to see their change, then make yours.' };
+  }
+  var by = String(p.actorName).trim(), has = function (k) { return p[k] !== undefined && p[k] !== null; };
+  var obj = {};
+  if (row) SCHEMA.ItemDetails.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Item ID': id, 'Created By': by, 'Created At': _now(), 'Source': 'item book' });
+  var pickFrom = function (v, other, list, was) {
+    var s = _webCell(v).slice(0, 60);
+    if (!s || s === String(was || '')) return s;
+    if (s === 'Others') return _webCell(other).slice(0, 60) || null;
+    return list.indexOf(s) >= 0 ? s : null;
+  };
+  if (has('name')) {
+    var nm = _webCell(p.name).replace(/\s+/g, ' ').slice(0, 160);
+    if (nm.length > 120) return { success: false, message: 'Keep the name under 120 characters; the full description stays as it is.' };
+    obj['Name'] = nm;
+  }
+  if (has('brand')) { var b = pickFrom(p.brand, p.brandOther, _SCAN_BRANDS, row && row['Brand']); if (b === null) return { success: false, message: 'Pick the brand, or Others and type it.' }; obj['Brand'] = b; }
+  if (has('category')) { var c = pickFrom(p.category, p.categoryOther, _SCAN_CATEGORIES, row && row['Category']); if (c === null) return { success: false, message: 'Pick the type, or Others and type it.' }; obj['Category'] = c; }
+  if (has('model')) obj['Model'] = _webCell(p.model).slice(0, 60);
+  if (has('specsJson')) { var sp = _ibSpecs(p.specsJson); if (!sp) return { success: false, message: 'The specs could not be read.' }; obj['Specs JSON'] = JSON.stringify(sp); }
+  if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 1000);
+  if (has('hideJson')) {
+    var h = []; try { h = [].concat(JSON.parse(p.hideJson || '[]')); } catch (e) { return { success: false, message: 'The hidden photos could not be read.' }; }
+    var mine = {}; _ibPhotoDocs(id).forEach(function (d) { mine[_scanKey(d['Doc ID'])] = 1; });
+    obj['Hidden Photos'] = h.map(_scanKey).filter(function (x) { return mine[x]; }).slice(0, 60).join(' ');
+  }
+  var label = { 'Name': 'name', 'Brand': 'brand', 'Model': 'model', 'Category': 'type', 'Specs JSON': 'specs', 'Notes': 'notes', 'Hidden Photos': 'hidden photos' };
+  var changed = Object.keys(label).filter(function (k) { return String(row ? (row[k] == null ? '' : row[k]) : '') !== String(obj[k] == null ? '' : obj[k]); });
+  if (!changed.length) return { success: true, unchanged: true, itemId: id, updatedAt: row ? _webIso(row['Updated At']) : '', message: 'Nothing changed.' };
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _ibPut(row, obj);
+  changed.forEach(function (k) {
+    var long = k === 'Specs JSON' || k === 'Notes' || k === 'Hidden Photos';
+    _ibLog(id, label[k], long ? '' : String(row ? row[k] || '' : ''), long ? '' : String(obj[k] || ''), long ? 'Changed the ' + label[k] + '.' : '', by);
+  });
+  return { success: true, itemId: id, refNo: id, changed: changed.map(function (k) { return label[k]; }), updatedAt: _webIso(obj['Updated At']),
+           message: 'Saved: ' + changed.map(function (k) { return label[k]; }).join(', ') + '.' };
+}
+/* ═══ end A387 ═══════════════════════════════════════════════════════════════════════════════════ */
+
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
  *  ScriptProperties is strongly consistent (immune to the Sheets read-after-write staleness that
@@ -1234,9 +1715,11 @@ function deleteInventoryItem(p) {
 /* A159: `itemId` (and the description as a fallback) let this land on the RIGHT row. Without them a
    receipt of any no-code item blended its cost into whichever 'N/A' row happened to be first, while
    the other 91 could never receive stock at all. */
-function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, currency, itemId) {
+/* A387: returns the Item ID it moved. `force` 'new' skips the lookup and adds the row: the strict matcher has
+   already decided this line is a product we do not stock yet, and a lookup here could still land on a guess. */
+function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, currency, itemId, force) {
   var sh = _sheet('Inventory');
-  var existing = _findInventory(itemNo, { itemId: itemId, description: itemName });
+  var existing = force === 'new' ? null : _findInventory(itemNo, { itemId: itemId, description: itemName });
   if (existing) {
     var oldQty = _num(existing['Available Balance']);
     var addQty = _num(deltaQty);
@@ -1264,12 +1747,15 @@ function _applyInventory(itemNo, itemName, deltaQty, newPurchase, newShipping, c
     sh.getRange(existing.rowIndex, 3, 1, 7).setValues([[balance, purchase, shipping, c.landed, c.total,
       currency || existing['Currency'] || 'PHP', _now()]]);
     if (existing['Type'] !== 'Stock') sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
+    return String(existing['Item ID'] || '');
   } else {
     var bal = Math.max(0, _num(deltaQty));
     var c2 = _invComputed(bal, newPurchase, newShipping);
+    var newId = _nextItemId();
     _append('Inventory', [_normItemNo(itemNo), String(itemName || itemNo).trim(), bal,
       _num(newPurchase), _num(newShipping), c2.landed, c2.total, currency || 'PHP', _now(), 'Stock',
-      _nextItemId()]);
+      newId]);
+    return newId;
   }
 }
 
@@ -1281,8 +1767,21 @@ function _ensureInventoryStock(itemNo, itemName, itemId) {
   var no = _normItemNo(itemNo);
   // A159: no-code items can now be identified, so they no longer have to be skipped wholesale — but a
   // PO line with neither an id nor a description is still just a misc charge (freight, fuel), not stock.
-  if (no === 'N/A' && !itemId && !String(itemName || '').trim()) return;
+  if (no === 'N/A' && !itemId && !String(itemName || '').trim()) return '';
   var sh = _sheet('Inventory');
+  /* A387 — strict: the shared resolver decides, and the id it finds (or the row it adds) goes back onto the PO
+     line. Until now a PO raised from an order kept no id, so every receiving copied from it had none either. */
+  if (_ibStrictOn()) {
+    var rs = _ibResolve(_ibIndex(_rows('Inventory'), _sbRows('ItemDetails')), { itemId: itemId, itemNo: itemNo, name: itemName });
+    if (rs.row) {
+      if (rs.row['Type'] !== 'Stock') sh.getRange(rs.row.rowIndex, 10, 1, 1).setValues([['Stock']]);
+      return _ibEnsureId(rs.row);
+    }
+    if (rs.how === 'ambiguous' || rs.suspect || (rs.how === 'unmatched' && rs.candidates.length)) return '';   // a guess is worse than nothing
+    var made = _nextItemId();
+    _append('Inventory', [no, String(itemName || no).trim(), 0, 0, 0, 0, 0, 'PHP', _now(), 'Stock', made]);
+    return made;
+  }
   var existing = _findInventory(no, { itemId: itemId, description: itemName });
   if (existing && !existing._ambiguous) {
     if (existing['Type'] !== 'Stock') sh.getRange(existing.rowIndex, 10, 1, 1).setValues([['Stock']]);
@@ -1302,17 +1801,32 @@ function importInventory(p) {
   var items = JSON.parse(p.items || '[]');
   if (!items.length) return { success: false, message: 'No items supplied.' };
   var sh = _sheet('Inventory');
-  var created = 0, updated = 0, skippedBalance = [];
+  var created = 0, updated = 0, skippedBalance = [], ambiguous = [];
+  var ibx = _ibStrictOn() ? _ibIndex(_rows('Inventory'), _sbRows('ItemDetails')) : null;   // A387
   items.forEach(function (it) {
     var no = _normItemNo(it.itemNo);
     var desc = String(it.description || no).trim();
     var qty = _num(it.qty);
+    /* A387 — strict: a line several rows fit is listed, not added as yet another duplicate. Rows added here join the
+       index, so the same item twice in one file still lands on one row. */
+    if (ibx) {
+      var rs = _ibResolve(ibx, { itemNo: it.itemNo, name: desc });
+      if (rs.how === 'ambiguous') { ambiguous.push(no + ' · ' + desc.slice(0, 60)); return; }
+      if (!rs.row) {
+        var nid = _nextItemId();
+        _append('Inventory', [no, desc, qty, 0, 0, 0, 0, 'PHP', _now(), 'Stock', nid]);
+        _ibAdd(ibx, { 'Item No': no, 'Description': desc, 'Available Balance': qty, 'Item ID': nid, 'Type': 'Stock', rowIndex: -1 });
+        created++;
+        return;
+      }
+    }
     // A159: this used to carry its own private description-matching workaround for 'N/A' rows.
     // _findInventory does that now — number first, description to disambiguate — so the workaround
     // is gone and one resolver serves every caller. An ambiguous hit is treated as "not found" here
     // rather than merged into a guessed row.
-    var existing = _findInventory(no, { description: desc });
+    var existing = ibx ? _ibResolve(ibx, { itemNo: it.itemNo, name: desc }).row : _findInventory(no, { description: desc });
     if (existing && existing._ambiguous) existing = null;
+    if (existing && existing.rowIndex < 0) { updated++; return; }   // added earlier in this file: already Stock, balance set
     if (existing) {
       var bal = _num(existing['Available Balance']);
       if (bal === 0) {
@@ -1329,9 +1843,10 @@ function importInventory(p) {
       created++;
     }
   });
-  return { success: true, created: created, updated: updated, skippedBalance: skippedBalance,
+  return { success: true, created: created, updated: updated, skippedBalance: skippedBalance, ambiguous: ambiguous,
     message: 'Inventory imported: ' + created + ' added, ' + updated + ' merged' +
-      (skippedBalance.length ? ' (' + skippedBalance.length + ' balance conflicts kept as-is)' : '') + '.' };
+      (skippedBalance.length ? ' (' + skippedBalance.length + ' balance conflicts kept as-is)' : '') +
+      (ambiguous.length ? '; ' + ambiguous.length + ' skipped because more than one item fits them' : '') + '.' };
 }
 
 /** One-time backfill: classify every un-typed inventory row — Stock when it has a balance or its
@@ -2890,12 +3405,15 @@ function createPurchaseOrder(p) {
        always thrown away — so nothing downstream could ever be checked against the order that
        started it. THE WIDTH TRAP: exactly SCHEMA.PurchaseOrders.length entries. */
     _num(p.totalPHP) > 0 ? _num(p.totalPHP) : '', String(p.fxBasis || '').slice(0, 200)]);
+  // A387 — strict: each line is matched to its stock row FIRST, so the line is written with the id it resolved to
+  var _poStrict = _ibStrictOn();
+  if (_poStrict) items.forEach(function (it) { var got = _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); if (got) it.itemId = got; });
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
   });
   // An item processed into a PO is inventory (0 qty or not): promote Catalog rows / create missing ones.
-  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
+  if (!_poStrict) items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
   // Auto-create the Accounts Payable entry. FC amount flows in; the PHP estimate (Total × exchange
   // rate, entered on the PO form) pre-fills Amount (PHP) so AP aging + the balance sheet populate.
   var apNo = _nextNumber('APAging', 1, 'AP');
@@ -3017,11 +3535,14 @@ function updatePurchaseOrder(p) {
       }
     }
   });
+  // A387 — strict: each line is matched to its stock row FIRST, so the line is written with the id it resolved to
+  var _poStrict = _ibStrictOn();
+  if (_poStrict) items.forEach(function (it) { var got = _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); if (got) it.itemId = got; });
   _writeItems('PurchaseOrderItems', 'PO No', no, items, function (it) {
     return [no, it.itemNo, it.itemName, _num(it.qty), _num(it.price), _num(it.qty) * _num(it.price),
             it.itemId || ''];   // A159 Item ID
   });
-  items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
+  if (!_poStrict) items.forEach(function (it) { _ensureInventoryStock(it.itemNo, it.itemName, it.itemId); });
   // Keep the linked AP entry's FC amount + currency in sync. Refresh the PHP estimate too when a new
   // one is supplied and the AP is still untouched (Unpaid, nothing paid) — don't clobber manual edits.
   var apSh = _sheet('APAging');
@@ -3882,11 +4403,28 @@ function voidInvoice(p) {
      writes no inventory), so voiding one puts nothing back. Without this its one '(migrated)' line
      became a new Inventory row "Migrated legacy sales" with a balance of 1. */
   var voidMigrated = String(inv['Created By'] || '').indexOf('Migrated') === 0;
-  _rows('InvoiceItems').filter(function (it) { return !voidMigrated && String(it['INV No']) === String(p.invNo); })
-    .forEach(function (it) {
+  var voidLines = _rows('InvoiceItems').filter(function (it) { return !voidMigrated && String(it['INV No']) === String(p.invNo); });
+  /* A387 — strict: the stock goes back to the row each line carries, which is the row it was costed from. A line
+     with no such row (older invoices) is matched the strict way; one that cannot be placed comes back in needsItem,
+     answered with lineItems { lineNo: itemId | 'skip' } — and 'skip' only for a line that cost nothing (COGS 0),
+     because the books' reversal puts its cost back into Inventory. Decided before anything is written. */
+  var voidPlan = null;
+  if (_ibStrictOn() && voidLines.length) {
+    var voidPicks = {};
+    try { voidPicks = typeof p.lineItems === 'string' ? JSON.parse(p.lineItems || '{}') : (p.lineItems || {}); } catch (e) { voidPicks = {}; }
+    voidPlan = _ibPlan(_ibIndex(_rows('Inventory'), _sbRows('ItemDetails')), voidLines.map(function (it, i) {
+      return _invLineKind({ chargeKind: it['Charge Kind'] }, voidSvc) === 'goods'
+        ? { itemId: it['Item ID'], itemNo: it['Item No'], itemName: it['Item Name'], qty: it['Qty'], cogs: it['Line COGS'], pick: _scanKey(voidPicks[i + 1]), line: i + 1 }
+        : null;
+    }), 'void');
+    if (voidPlan.needs.length) return _ibNeedsReply(voidPlan.needs, 'invoice');
+  }
+  voidLines.forEach(function (it, i) {
       if (_invLineKind({ chargeKind: it['Charge Kind'] }, voidSvc) !== 'goods') return;
+      var vSt = voidPlan ? voidPlan.steps[i] : null;
+      if (vSt && vSt.skip) return;
       _applyInventory(_normItemNo(it['Item No']), it['Item Name'], _num(it['Qty']), null, null, null,
-        it['Item ID']);
+        vSt ? _ibEnsureId(vSt.row) : it['Item ID']);
     });
 
   var arSh = _sheet('ARAging');
@@ -5432,6 +5970,17 @@ function createReceiving(p) {
     }
   }
 
+  /* A387 — strict: every line is matched to ONE stock row before anything is written. A line several rows fit, or
+     one whose id is suspect, comes back in needsItem and NOTHING is saved; the page asks which item each is and
+     sends again with each line's `pick` (an Item ID, or 'new' for a product we do not stock yet). */
+  var _ibRc = null, rcMade = {};
+  if (_ibStrictOn()) {
+    _ibRc = _ibPlan(_ibIndex(_rows('Inventory'), _sbRows('ItemDetails')), items.map(function (it, i) {
+      return { itemId: it.itemId, itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, pick: it.pick, line: it.line || (i + 1) };
+    }), 'receive');
+    if (_ibRc.needs.length) return _ibNeedsReply(_ibRc.needs, 'receiving');
+  }
+
   var no = p.mrNo || _nextNumber('MaterialsReceiving', 1, 'MR');
   // SO No (13th col) comes from the PO so receiving joins back to its sales order.
   var rcSoNo = (function () {
@@ -5459,7 +6008,7 @@ function createReceiving(p) {
     var _bkLocalVat = (_bkCur === 'PHP' && vat > 0) ? _cents(vat) : 0;
     _bkTotal = _pesos(_bkBasis.totalC - _bkLocalVat);
   }
-  items.forEach(function (it) {
+  items.forEach(function (it, idx) {
     var unitPriceFC = _num(it.price);
     var qty = _num(it.qty);
     // Purchase/Unit (PHP) = Paid (PHP) × Unit Price (FC) / PO Total (FC)
@@ -5468,12 +6017,21 @@ function createReceiving(p) {
     // Shipping/Unit (PHP) = inventoriable shipping (excl VAT) × Unit Price (FC) / this receiving's FC total (A316)
     var shipPerUnit = (rcFC > 0) ? (invShipping * unitPriceFC / rcFC) : (rcQty > 0 ? invShipping / rcQty : 0);   // A316
     var landed = purchasePHP + shipPerUnit;
+    /* A387 — the line records the row the stock really went to (it used to keep whatever id the browser sent). A new
+       product named twice on one receiving becomes ONE row. */
+    var rcId = it.itemId || '', rcStep = _ibRc ? _ibRc.steps[idx] : null, rcDone = false;
+    if (rcStep && rcStep.row) rcId = _ibEnsureId(rcStep.row);
+    else if (rcStep && rcStep.create) {
+      var mk = _normItemNo(it.itemNo) + '|' + _rawKey(it.itemName);
+      if (rcMade[mk]) rcId = rcMade[mk];
+      else { rcId = rcMade[mk] = _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP', null, 'new'); rcDone = true; }
+    }
     sh.appendRow([no, it.itemNo, it.itemName, qty, unitPriceFC, purchasePHP, shipPerUnit, landed, landed * qty,
-                  it.itemId || '']);   // A159 Item ID
+                  rcId]);   // A159 Item ID
     // Final inventory cost = landed (PHP); add the received quantity.
     // A145: normalize the key so N/A-ish codes hit the same row _ensureInventoryStock/_findInventory use.
     // A159: itemId (description as fallback) — without it every no-code receipt blended into one row.
-    _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP', it.itemId);
+    if (!rcDone) _applyInventory(_normItemNo(it.itemNo), it.itemName, qty, purchasePHP, shipPerUnit, 'PHP', rcId);
     purchaseTot += purchasePHP * qty;
     shipTot += shipPerUnit * qty;
     receivedFC += unitPriceFC * qty;
@@ -5550,6 +6108,7 @@ function _scanStamp(v) {
 function _scanInvId(itemId, itemNo, name) {
   if (itemId) return itemId;
   try {
+    if (_ibStrictOn()) { var rs = _ibResolve(_ibIndexNow(), { itemNo: itemNo, name: name }); return rs.row ? String(rs.row['Item ID'] || '') : ''; }   // A387
     var inv = _findInventory(_normItemNo(itemNo), { description: name });
     return inv && !inv._ambiguous ? String(inv['Item ID'] || '') : '';
   } catch (e) { return ''; }
@@ -5705,7 +6264,8 @@ var _SCAN_PHOTO_KINDS = {
   dispatch: { module: 'Sales Order',    type: 'Dispatch photo' },
   'return': { module: 'Warehouse Return', type: 'Return photo', path: ['_Warehouse', 'Returns'] },
   register: { module: 'Warehouse Piece',  type: 'Piece photo',  path: ['_Warehouse', 'Pieces'] },
-  newitem:  { module: 'Warehouse Item',   type: 'New item photo', path: ['_Warehouse', 'New items'] }   // A319
+  newitem:  { module: 'Warehouse Item',   type: 'New item photo', path: ['_Warehouse', 'New items'] },   // A319
+  item:     { module: 'Warehouse Item',   type: 'Item card photo', path: ['_Warehouse', 'Items'] }       // A387 — added on the item's card
 };
 var _SCAN_PHOTO_MAX_B64 = 6000000;                // ~4.5 MB of JPEG; the phone sends ~200 KB
 function _scanPhotoIds(v) {
@@ -5727,14 +6287,18 @@ function _scanPhotoCheck(kind, ref, v) {
   return { ids: ids };
 }
 function uploadScanPhoto(p) {
-  if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot add scan photos.' };
   var kind = _scanKey(p.mode).toLowerCase(), k = _SCAN_PHOTO_KINDS[kind];
+  /* A387 — a card photo is added by whoever may change the card (FlowSettings itemBookEditRoles) or the warehouse;
+     every other kind keeps the scanner's own role list. */
+  if (kind === 'item') {
+    if (_ibDenied(p, true) && _ibRole(p) !== 'warehouse') return { success: false, message: 'Your role cannot add photos to an item card.' };
+  } else if (!_scanRoleOk(p, _SCAN_COUNT_ROLES)) return { success: false, message: 'Your role cannot add scan photos.' };
   if (!k) return { success: false, message: 'Unknown photo kind.' };
   var ref = _scanKey(p.docNo);
   if (kind === 'receive' && !_scanPoHeader(ref)) return { success: false, message: 'Purchase order ' + (ref || '?') + ' was not found.' };
   if (kind === 'dispatch' && !_scanSoHeader(ref)) return { success: false, message: 'Sales order ' + (ref || '?') + ' was not found.' };
   if ((kind === 'return' || kind === 'newitem') && !/^CR-[A-Za-z0-9_-]{4,60}$/.test(ref)) return { success: false, message: 'This form has no reference yet. Reload the scanner.' };
-  if (kind === 'register' && !_rows('Inventory').some(function (r) { return _scanKey(r['Item ID']) === ref; })) return { success: false, message: 'Item ' + (ref || '?') + ' is not in inventory.' };
+  if ((kind === 'register' || kind === 'item') && !_rows('Inventory').some(function (r) { return _scanKey(r['Item ID']) === ref; })) return { success: false, message: 'Item ' + (ref || '?') + ' is not in inventory.' };
   var b64 = String(p.base64 || '').replace(/^data:[^,]*,/, '');
   if (!b64) return { success: false, message: 'The photo is empty.' };
   if (b64.length > _SCAN_PHOTO_MAX_B64) return { success: false, message: 'The photo is too large.' };
@@ -5745,6 +6309,7 @@ function uploadScanPhoto(p) {
   try { folder = k.path ? _ensurePath(_ymSegments(now).concat(k.path)) : _docFolder(k.module, ref, k.type, now); } catch (e) { folder = null; }
   var saved = _saveFileToDrive(b64, name, mime, folder);
   _append('Documents', [docId, k.module, ref, k.type, name, saved.url, saved.id, p.actorName || '', now]);
+  if (kind === 'item') { try { _ibLog(ref, 'photo', '', docId, 'Added a photo.', p.actorName || ''); } catch (e) {} }   // A387
   return { success: true, docId: docId, refNo: docId, message: 'Photo saved.' };
 }
 /** Photos as base64 for an <img> (a Drive /view link renders broken). Secured; at most 6 per call. */
@@ -5985,7 +6550,8 @@ function createItemByScan(p) {
   var add = addInventoryItem({ description: description, itemNo: itemNo, balance: qty, purchasePrice: 0, shippingCost: 0, currency: 'PHP', type: 'Stock' });
   if (!add || !add.success) return add || { success: false, message: 'Could not add the item.' };
   var itemId = add.itemId, now = _now(), photos = ph.ids.join(' ');
-  _append('ItemDetails', [itemId, brand, model, category, name, photos, p.actorName || '', now, 'scanner']);
+  _ibPut(null, { 'Item ID': itemId, 'Brand': brand, 'Model': model, 'Category': category, 'Name': name, 'Photos': photos,
+                 'Created By': p.actorName || '', 'Created At': now, 'Source': 'scanner' });   // A387 — SCHEMA order, 14 wide
   var idx = _labelIndex(), itemCode = _labelAppend('ITEM', itemId, '', p.actorName, idx.byCode), pieces = [];
   if (track) {
     _append('TrackedItems', [itemId, true, p.actorName || '', now]);
@@ -6247,8 +6813,12 @@ function receiveByScan(p) {
   if (whole) return { success: false, message: whole };
   var ph = _scanPhotoCheck('receive', poNo, p.photoIds);
   if (ph.error) return { success: false, message: ph.error };
+  // A387 — the phone's answers to "which stock item is this?", by PO line, ride along as each line's pick
+  var picks = {};
+  try { picks = typeof p.picks === 'string' ? JSON.parse(p.picks || '{}') : (p.picks || {}); } catch (e) { picks = {}; }
   var items = chk.rows.map(function (r) {
-    return { itemId: r.doc.itemId || r.doc.invId, itemNo: r.doc.itemNo, itemName: r.doc.name, qty: r.qty, price: r.doc.price };
+    return { itemId: r.doc.itemId || r.doc.invId, itemNo: r.doc.itemNo, itemName: r.doc.name, qty: r.qty, price: r.doc.price,
+             line: r.doc.line, pick: _scanKey(picks[r.doc.line]) };
   });
   var p2 = {
     poNo: poNo, supplier: _scanKey(po['Supplier']), currency: _scanKey(po['Currency']) || 'PHP',
@@ -6522,16 +7092,30 @@ function createInvoice(p) {
                '. (Docs → the matching type on the shipment.)' };
   }
 
+  /* A387 — strict: every goods line is matched to ONE stock row before the stock check, the cost and the deduction,
+     which all use that row. A line several rows fit (or with a suspect id) comes back in needsItem; the page asks
+     and sends each line's `pick`: an Item ID, or 'none' for a line that is not a stock item (no stock moves, COGS
+     0). A line nothing is near is not a stock item either. No row is ever created by an invoice. */
+  var _ibIv = null, notStockLines = 0;
+  if (_ibStrictOn()) {
+    _ibIv = _ibPlan(_ibIndex(_rows('Inventory'), _sbRows('ItemDetails')), items.map(function (it, i) {
+      return _kindOf(it) === 'goods' ? { itemId: it.itemId, itemNo: it.itemNo, itemName: it.itemName, qty: it.qty, pick: it.pick, line: i + 1 } : null;
+    }), 'invoice');
+    if (_ibIv.needs.length) return _ibNeedsReply(_ibIv.needs, 'invoice');
+  }
+
   /* A158 — issuing more than is on hand booked full COGS while _applyInventory clamped the balance at
      zero, so the shortfall simply disappeared and the Inventory ledger and sheet diverged for good. */
   if (!p.confirmShort) {
     var short = [];
-    items.forEach(function (it) {
+    items.forEach(function (it, i) {
       /* A276 — a hire line's quantity is a number of DAYS. Comparing it with an on-hand balance asks
          whether we have seven torque wrenches when we are billing one for a week, so every rental
          invoice would have demanded a short-stock confirmation it had no business asking for. */
       if (_kindOf(it) !== 'goods') return;
-      var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
+      var ivSt = _ibIv ? _ibIv.steps[i] : null;
+      if (ivSt && ivSt.none) return;                       // A387 — not a stock item: nothing leaves stock
+      var inv = ivSt ? ivSt.row : _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
       var have = inv ? _num(inv['Available Balance']) : 0;
       var want = _num(it.qty);
       if (want > have + 0.0001) short.push({ item: String(it.itemNo || it.itemName || ''), have: have, want: want });
@@ -6638,7 +7222,7 @@ function createInvoice(p) {
      it is tracked separately all the way to the journal. */
   var goodsSales = 0, serviceSales = 0, depositTotal = 0;
   var sh = _sheet('InvoiceItems');
-  var lines = items.map(function (it) {
+  var lines = items.map(function (it, i) {
     var kind = _kindOf(it);
     var qty = _num(it.qty), price = _num(it.price);
     /* A282 — qty x rate x DURATION. A hire line carries two multipliers: how many tools, and for
@@ -6658,14 +7242,17 @@ function createInvoice(p) {
               String(it.chargeKind || ''), String(it.rateBasis || ''), span > 1 ? span : (_num(it.duration) || '')];
     }
     // A159: resolve by id (then description) so each product costs from ITS OWN landed cost.
-    var inv = _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
+    // A387: strict — the row the plan above decided; a line that is not a stock item costs 0 and keeps no id.
+    var ivStep = _ibIv ? _ibIv.steps[i] : null;
+    var inv = ivStep ? ivStep.row : _findInventory(_normItemNo(it.itemNo), { itemId: it.itemId, description: it.itemName });
     if (inv && inv._ambiguous) ambiguousLines++;
+    if (ivStep && ivStep.none) notStockLines++;
     var landed = inv ? _num(inv['Landed Cost/Unit']) : 0;
     var lineCOGS = qty * landed;
-    if (qty > 0 && !(landed > 0)) zeroCogsLines++;   // A145: line issued with no cost basis → COGS 0
+    if (qty > 0 && !(landed > 0) && !(ivStep && ivStep.none)) zeroCogsLines++;   // A145: line issued with no cost basis → COGS 0
     totalCOGS += lineCOGS; goodsSales += lineSales;
     return [no, it.itemNo, it.itemName, qty, price, lineSales, landed, lineCOGS,
-            (inv && inv['Item ID']) || it.itemId || '',    // A159: the id we actually costed from
+            ivStep ? (inv ? _ibEnsureId(inv) : '') : ((inv && inv['Item ID']) || it.itemId || ''),    // A159: the id we actually costed from
             '', '', ''];                                   // A282: a goods line has no hire shape
   });
   /* A278 — ONE sum, in the SAME addend order the journal credits use. `totalSales` used to be
@@ -6686,7 +7273,10 @@ function createInvoice(p) {
        seven-day rental used to remove seven units of the tool from stock — permanently, for a tool
        that never left the building and is coming back anyway. Nothing moves for a service line. */
     if (_kindOf(it) !== 'goods') return;
-    _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null, it.itemId); // deduct stock
+    var dSt = _ibIv ? _ibIv.steps[i] : null;
+    if (dSt && dSt.none) return;                            // A387 — not a stock item: nothing to deduct
+    _applyInventory(_normItemNo(it.itemNo), it.itemName, -_num(it.qty), null, null, null,
+      dSt ? _ibEnsureId(dSt.row) : it.itemId); // deduct stock
   });
   /* GL entry 1: Dr Accounts Receivable / Cr Sales.  Entry 2: Dr COGS / Cr Inventory.
      A276 — the receivable is everything the client owes INCLUDING the deposit, because they do have
@@ -6720,7 +7310,7 @@ function createInvoice(p) {
   _refStore('createInvoice', p.clientRef, no);
   if (_vatType || p.zeroRatingRef) _docMetaSet('Invoice', no, { vatType: _vatType || undefined, zeroRatingRef: p.zeroRatingRef }, p.actorName);
   _booksSyncInvoice(no, null, p.actorName);   // A320
-  return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines,
+  return { success: true, invNo: no, arNo: arNo, zeroCogsLines: zeroCogsLines, notStockLines: notStockLines,
     ambiguousLines: ambiguousLines, vatRate: vatRate, vat: vat, totalSales: totalSales,
     totalDeposit: depositTotal, totalDue: totalDue,
     /* A278 — the figures are SPELLED OUT deliberately. A browser tab left open from before this
@@ -6731,6 +7321,7 @@ function createInvoice(p) {
       (depositTotal > 0 ? ' + deposit ' + depositTotal.toFixed(2) : '') +
       '); AR entry created, inventory deducted and journal posted.' +
       (zeroCogsLines > 0 ? ' ⚠ ' + zeroCogsLines + ' line(s) had no landed cost (COGS 0).' : '') +
+      (notStockLines > 0 ? ' ' + notStockLines + ' line(s) are not stock items: no stock moved for them.' : '') +   // A387
       // A159: say so rather than quietly costing from whichever row happened to match first.
       (ambiguousLines > 0 ? ' ⚠ ' + ambiguousLines + ' line(s) matched more than one catalogue item — ' +
         'their cost was taken from the first match. Re-pick the item to record it exactly.' : '') };
@@ -8421,15 +9012,39 @@ function _deleteMigratedInvoiceForSO(soNo) {
 /* A325 — `after` carries each inventory row's state from the lines before it. A PO can list one item
    twice (the scanner allows it): both lines were backed out of the SAME current balance and written
    one after the other, so 10 − 5 − 3 ended at 7, not 2, with the cost wrong to match. */
-function _rcvReversalLine(it, after) {
+/* A387 — `ix` (strict) and `pick`: a line whose id is on file reverses out of that row, where receiving put it. A line
+   with none (older receivings) reverses only when the strict match and the old rule agree on one row; otherwise it is
+   not exact, lists the candidates and names the row the old rule would have used, and waits for a pick. */
+function _rcvReversalLine(it, after, ix, pick) {
   var itemNo = _normItemNo(it['Item No']);
   // Column names read from SCHEMA.ReceivingItems, not from memory: 'Qty Received' and
   // 'Purchase Price/Unit (PHP)' — a near-miss here would silently reverse zero and report success.
   var q = _num(it['Qty Received']);
   var c = _num(it['Purchase Price/Unit (PHP)']), s = _num(it['Shipping/Unit (PHP)']);
-  var inv = _findInventory(itemNo, { itemId: it['Item ID'], description: it['Item Name'] });
+  var inv = null, unclear = null;
+  if (ix) {
+    var lineId = _scanKey(it['Item ID']), old = _findInventory(itemNo, { itemId: it['Item ID'], description: it['Item Name'] });
+    var rs = _ibResolve(ix, { itemNo: it['Item No'], name: it['Item Name'] });
+    var pr = pick ? _ibResolve(ix, { pick: pick }) : null;
+    if (pr && pr.row) inv = pr.row;
+    else if (lineId && ix.byId[lineId]) inv = ix.byId[lineId];
+    else if (rs.row && old && !old._ambiguous && rs.row.rowIndex === old.rowIndex) inv = rs.row;
+    else if (rs.row || old || rs.candidates.length) unclear = { old: old, rs: rs };
+  } else {
+    inv = _findInventory(itemNo, { itemId: it['Item ID'], description: it['Item Name'] });
+  }
   var out = { itemNo: itemNo, itemName: it['Item Name'], qty: q, purchasePerUnit: c, shippingPerUnit: s,
               found: !!inv, exact: false, reason: '' };
+  if (unclear) {
+    var cands = [];
+    [unclear.rs.row, unclear.old].concat(unclear.rs.candidates).forEach(function (r) { if (r && cands.every(function (x) { return x.rowIndex !== r.rowIndex; })) cands.push(r); });
+    out.found = true;
+    out.candidates = cands.slice(0, 6).map(_ibCand);
+    out.suggested = unclear.old ? String(unclear.old['Item ID'] || '') : '';
+    out.reason = 'which stock row this line went into is not certain — say which' +
+      (unclear.old ? ' (the old rule would have used ' + String(unclear.old['Item ID'] || unclear.old['Description'] || '') + ')' : '');
+    return out;
+  }
   if (!inv) { out.reason = 'no inventory row — nothing to reverse'; return out; }
   var prev = after && after[inv.rowIndex];
   var Qn = prev ? prev.Q : _num(inv['Available Balance']), Cn = prev ? prev.C : _num(inv['Purchase Price/Unit']),
@@ -8456,7 +9071,9 @@ function previewReceivingReversal(p) {
   if (!mr) return { success: false, message: 'Receiving ' + p.mrNo + ' not found.' };
   var its = _rows('ReceivingItems').filter(function (r) { return String(r['MR No']) === String(p.mrNo); });
   var after = {};                                                   // A325 — lines on one item chain
-  var lines = its.map(function (it) { return _rcvReversalLine(it, after); });
+  var rvIx = _ibStrictOn() ? _ibIndex(_rows('Inventory'), _sbRows('ItemDetails')) : null, rvPicks = {};   // A387
+  try { rvPicks = typeof p.lineItems === 'string' ? JSON.parse(p.lineItems || '{}') : (p.lineItems || {}); } catch (e) { rvPicks = {}; }
+  var lines = its.map(function (it, i) { return _rcvReversalLine(it, after, rvIx, _scanKey(rvPicks[i + 1])); });
   var blocked = lines.filter(function (l) { return !l.exact; });
   var jrn = _rows('Journal').filter(function (j) { return String(j['Source']) === 'MR' && String(j['Source No']) === String(p.mrNo); });
   return { success: true, mrNo: String(p.mrNo), poNo: mr['PO No'] || '', soNo: mr['SO No'] || '',
@@ -12579,7 +13196,12 @@ var _FLOW_SETTING_DEFAULTS = {
   /* A385 — the sales side's switches, so each change can be turned off in the FlowSettings sheet without a deploy.
      prArchiveDays: a purchase request with no update for this many days is archived (hidden from every work list,
      kept in every history); 0 archives nothing. The other three are 'on' / 'off' for the pages. */
-  prArchiveDays: 30, salesListsOrganizer: 'on', quoteOneStep: 'on', quoteNoSuggest: 'on'
+  prArchiveDays: 30, salesListsOrganizer: 'on', quoteOneStep: 'on', quoteNoSuggest: 'on',
+  /* A387 — the Item Book. itemBook / itemStrictMatch are 'on' / 'off'; the role lists are comma lists of portal roles.
+     itemStrictMatch off puts every stock movement back on the pre-A387 first-match code path, exactly. */
+  itemBook: 'on', itemStrictMatch: 'on',
+  itemBookRoles: 'sales,admin,accounting,management,director,warehouse', itemBookEditRoles: 'admin,director',
+  itemBookCostRoles: 'management,director'
 };
 function getFlowSettings() {
   var out = {};
@@ -20826,6 +21448,8 @@ var HANDLERS = {
   getSupplierBook: getSupplierBook, saveSupplierBookSupplier: saveSupplierBookSupplier, mergeSupplierBookSupplier: mergeSupplierBookSupplier,   // A374
   archiveSupplierBookSupplier: archiveSupplierBookSupplier, importSupplierBookHistory: importSupplierBookHistory, importSupplierBookList: importSupplierBookList,
   getCollectionBook: getCollectionBook, saveCollectionDetails: saveCollectionDetails,   // A384
+  getItemBook: getItemBook, getItemCard: getItemCard, getItemHistory: getItemHistory, getItemPhotos: getItemPhotos,   // A387
+  saveItemDetails: saveItemDetails,
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -20941,6 +21565,7 @@ var MUTATIONS = {
   saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369
   saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374
   saveCollectionDetails: 1,   // A384 — one client's collection details, and its log row
+  saveItemDetails: 1,   // A387 — one item card's details, and its log rows
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -20969,6 +21594,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A387 THE ITEM BOOK (194; A380 holds 190; A327 takes 197 or later, after A388 195 and A389 196). Neil, 1 Nov 2026: one card per product, open to every role that works with items, with its specs, photos, stock and every line it ever appeared on; costs only for management and the director. ItemDetails grows from 9 to 14 columns (Specs JSON, Notes, Hidden Photos, Updated By, Updated At; createItemByScan writes it through _ibPut in SCHEMA order) and a new append-only ItemBookLog tab. Secured reads getItemBook, getItemCard, getItemHistory (sell / buy / move) and getItemPhotos; saveItemDetails (admin and the director; a field not sent keeps its value; ifUpdatedAt refuses a stale save; one log row per change; Inventory is never written). uploadScanPhoto gains an 'item' kind (Item card photo, _Warehouse/Items). ONE RESOLVER, _ibResolve: a pick, the Item ID unless it is suspect (a no-code or shared-code row whose name is not the line's), a unique real code, code + exact name, a no-code exact name only one row has; otherwise unresolved with candidates, never the first match. With FlowSettings itemStrictMatch on, createReceiving, receiveByScan, createInvoice, voidInvoice, the receiving reversal, _ensureInventoryStock (POs now keep the id their line resolved to), importInventory and _scanInvId all use it: a line with real doubt comes back in needsItem and nothing is written; the page asks and sends picks. An invoice never creates a row (a line that is no stock item moves no stock and costs 0); _applyInventory returns the id it moved. Off puts every caller back on the pre-A387 code path. FlowSettings: itemBook, itemStrictMatch, itemBookRoles, itemBookEditRoles, itemBookCostRoles.
 A385 THE SALES LISTS (193; it carries A384's 192 and A382's 191; A380 holds 190; A327 takes 194 or later). Neil, 30 Oct 2026: purchase requests and quotations organized for the reps, old requests out of the way, and fewer steps from a priced request to a sent quotation; "prepare also so that we can easily revert this back". getPricingRequests returns updatedAt (the newest of Updated At, Created At, Date and the dates of the quotations it became) and archived (no update for prArchiveDays, FlowSettings, default 30; 0 = off), and archiveDays; it still returns every request, so every history and lookup is untouched and only the work lists hide archived ones. updatePRSourcing (at a later stage) and setPricingRequestSalesperson now stamp Updated At (_prTouch). restorePricingRequest (owner, admin, director; secured) stamps Updated At to bring one back. createQuotationFromPR answers a retried call (its clientRef already made a quotation) with that quotation before the stage gate, which used to call it an error. suggestQuotationNo: the year's next sequence number. New FlowSettings defaults: prArchiveDays 30, salesListsOrganizer, quoteOneStep, quoteNoSuggest (on/off, read by the pages).
 A384 COLLECTION DETAILS (192; it carries A382's 191; A380 holds 190; A327 takes 193 or later). Neil, 29 Oct 2026: each client's collection details (what bank, address, contact person, contact number); accounting and admin edit them, the director reads them, and AR aging shows them read-only. New tabs CollectionBook (16 wide, CC-) and CollectionBookLog (8, CCL-), written only by saveCollectionDetails (accounting, admin; upserts on _cdKey, a new spelling joins Aliases; ifUpdatedAt refuses a save over someone else's; a field not sent keeps its value). getCollectionBook (accounting, admin, director; secured, never creates the tabs) returns the records, the log, the lists (Pays By = AR aging's Method words; Pays Into = our banks from _fieldPlaces) and the banks seen on each client's cheques in FieldCollections. _cdKey is _canonKey without the business-unit drop: fourteen Aboitiz Power units are fourteen clients here. Also: _cbContacts no longer stores the formula guard's apostrophe inside Contacts JSON ('+63 ...), and every reader (_cbParse) takes an old one off, so the 22 Client Book phones read right with no data rewritten.
 A382 QUOTATION STATUS (191; A380 holds 190; A327 takes 192 or later). Neil, 29 Oct 2026: for each sales rep their own list of every quotation, each set to Won, Pending (the last follow-up: a picked email, or a date and Call / Viber / Visit, and where it stands) or Lost with a reason — "we just need to have the status of all the quotations". Quotations gains nine columns (38 wide): Result ('' | Pending | Won, beside Status — never a new status), Result At, Result By, Result Reason, Result Note, Last Follow Up, Follow Up Via, Follow Up Status, Closed From; _sheet widens a tab narrower than its schema; createQuotation and seedCommissionDemo append the blanks. setQuotationResult({quotationNo | quotationNos ≤25, result won|pending|lost|open, reason, note, followUpDate, followUpVia, followUpStatus, email, keep, approvalNote, ifResultAt}) — secured, owner or creator (case-insensitive) or admin / management / director, under the lock, audited (Quotation / Status Updated): won and pending need a sent or approved quotation (a closed one is first restored to the status it was closed from); one with a sales order is won already; lost takes a reason from eight (Price, Lead time, Specs did not fit, Went with a competitor → Lost; No budget, No reply from the client → Not Pursued; Duplicate quotation → Cancelled; Other → Lost, with a note) and leaves the result and follow-up fields alone, so its Undo ({open, keep}) restores the row; a picked email is linked in the same call (as a follow-up once the quotation has gone out). closeQuotation records Closed From; reopenQuotation clears Result, Result Reason and Closed From; reviseQuotation clears Result; linkQuotationEmail never lets an explicit Follow-up write Sent At. getQuotations returns the nine fields.

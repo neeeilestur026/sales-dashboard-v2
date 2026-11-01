@@ -159,6 +159,7 @@ const FLOW_SECURED_ACTIONS = [
   'setQuotationSalesperson', 'setSOSupplierType', 'setTravelFloat', 'setupFlowDrive', 'snoozeQuotation',
   'setQuotationResult',   // A382 — quotation status
   'getCollectionBook', 'saveCollectionDetails',   // A384 — collection details
+  'getItemBook', 'getItemCard', 'getItemHistory', 'getItemPhotos', 'saveItemDetails',   // A387 — the Item Book
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
   'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
   'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',
@@ -438,6 +439,16 @@ function flowComingSoonHtml(title, body) {
 }
 
 let _flowVerPromise = null;
+/** A387 — is the Item Book switched on? The FlowSettings key exists only from FlowAPI 194, so an older backend answers no
+ *  and the pages show no link to a page that would only say "paste 194". */
+function flowItemBookOn() {
+  return fetchFlow('getFlowSettings').then(r => String(((r && r.data) || {}).itemBook || '').trim().toLowerCase() === 'on').catch(() => false);
+}
+/** A387 — the link to an item's card: by its id, else by the line's code and name (the card resolves it the same way). */
+function flowItemCardHref(itemId, itemNo, itemName) {
+  return 'item-book.html?' + (itemId ? 'id=' + encodeURIComponent(itemId) : 'no=' + encodeURIComponent(itemNo || 'N/A') + '&name=' + encodeURIComponent(itemName || ''));
+}
+
 function flowVersionAtLeast(n) {
   if (!_flowVerPromise) {
     _flowVerPromise = fetchFlow('getVersion')

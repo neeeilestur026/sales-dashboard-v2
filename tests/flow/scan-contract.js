@@ -39,8 +39,8 @@ console.log('\n1 · pages and app files');
 const SCAN = read('scan.html'), LAB = read('labels.html');
 const scripts = (h) => (h.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(',');
 const sheets = (h) => (h.match(/<link rel="stylesheet" href="css\/([^"]+)"/g) || []).map(s => s.match(/css\/([^"]+)/)[1]).join(',');
-eq('scan.html scripts', scripts(SCAN), 'theme.js,api.js,auth.js,flow-api.js,scan.js');
-eq('scan.html sheets', sheets(SCAN), 'styles.css,scan.css');
+eq('scan.html scripts', scripts(SCAN), 'theme.js,api.js,auth.js,flow-api.js,item-match.js,item-picker.js,scan.js');   // A387 — the item picker
+eq('scan.html sheets', sheets(SCAN), 'styles.css,scan.css,item-picker.css');
 eq('labels.html scripts', scripts(LAB), 'theme.js,api.js,auth.js,flow-api.js,labels.js');
 eq('labels.html sheets', sheets(LAB), 'styles.css,labels.css');
 [['scan.html', SCAN], ['labels.html', LAB]].forEach(([n, h]) => {

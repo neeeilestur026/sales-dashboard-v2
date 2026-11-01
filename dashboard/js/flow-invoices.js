@@ -87,7 +87,7 @@ function ivFind(it) {
     const byDesc = byNo.filter(x => String(x.description || '').trim().toLowerCase() === d);
     if (byDesc.length === 1) return byDesc[0];
   }
-  return byNo[0] || null;
+  return byNo.length === 1 ? byNo[0] : null;   // A387 — never the first of several (it showed row 99's cost for every N/A line)
 }
 function landedFor(it) { const i = ivFind(it); return i ? flowNum(i.landedCost) : 0; }
 function onHand(it)    { const i = ivFind(it); return i ? flowNum(i.balance) : 0; }
@@ -273,7 +273,7 @@ async function saveInvoice() {
     const extra = {};
     /* Each answer goes back with the same payload (same clientRef); the server may ask its questions
        in any order, so answer whichever comes back until it saves, refuses, or the user stops. */
-    for (let ask = 0; ask < 4 && !res.success; ask++) {
+    for (let ask = 0; ask < 6 && !res.success; ask++) {
       if (res.needsConfirm === 'shortStock') {
         // A158: issuing more than is on hand — stock clamps at zero and the shortfall is untracked.
         if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled — check the stock first.', false); return; }
@@ -282,6 +282,12 @@ async function saveInvoice() {
         // A158: the sales order already carries an invoice — a second one bills the customer twice.
         if (!confirm(res.message)) { flowMsg('formMsg', 'Invoice cancelled.', false); return; }
         extra.confirmReinvoice = true;
+      } else if (res.needsItem && res.needsItem.length && typeof ipPick === 'function') {
+        /* A387 — the server would not guess which stock row a line is, and saved nothing. Ask, then send the
+           same invoice again with each line's pick (an item, or "not a stock item"). */
+        const picks = await ipPick(res.needsItem, { what: 'invoice', stock: ivInventory });
+        if (!picks) { flowMsg('formMsg', 'Invoice not issued: say which stock item each line is.', false); return; }
+        payload.items = JSON.stringify(JSON.parse(payload.items).map((it, i) => picks[i] !== undefined ? Object.assign({}, it, { pick: picks[i] }) : it));
       } else if (ivSg && res.needsReason) {
         // A331 — re-invoicing, billing above the order, the same amount twice, another VAT type: a
         // recorded reason instead of a yes/no.
@@ -380,7 +386,15 @@ async function voidInvoiceAction(invNo) {
   if (reason === null) return;
   if (!reason.trim()) { alert('A reason is required to void an invoice.'); return; }
   try {
-    const res = await postFlow('voidInvoice', { invNo, reason: reason.trim() });
+    let res = await postFlow('voidInvoice', { invNo, reason: reason.trim() });
+    /* A387 — an older line the server cannot place back in stock by itself: say which item it came out of. */
+    if (res && !res.success && res.needsItem && res.needsItem.length && typeof ipPick === 'function') {
+      const picks = await ipPick(res.needsItem, { what: 'invoice void', stock: ivInventory });
+      if (!picks) return;
+      const lineItems = {};
+      res.needsItem.forEach(n => { if (picks[n.index] !== undefined) lineItems[n.line] = picks[n.index]; });
+      res = await postFlow('voidInvoice', { invNo, reason: reason.trim(), lineItems: JSON.stringify(lineItems) });
+    }
     if (!res || !res.success) throw new Error((res && res.message) || 'Could not void this invoice.');
     alert(res.message);
     await loadInventory();
