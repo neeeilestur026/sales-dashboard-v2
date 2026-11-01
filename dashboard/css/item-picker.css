@@ -1,0 +1,68 @@
+/* item-picker.css — A387 · "Which stock item is this?" (js/item-picker.js). Tokens only.
+   The apple-design skill: a centred sheet on a desk, a bottom sheet on a phone that rises and leaves along the same path;
+   whole-row options with feedback on press; a translucent header and footer over the scrolling lines; the main button
+   waits for every answer. A cross-fade under reduced motion, solid bars under reduced transparency. */
+.ip-overlay { position: fixed; inset: 0; z-index: 1040; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: var(--hx-scrim); opacity: 0; transition: opacity .2s ease-out; }
+.ip-overlay.in { opacity: 1; }
+.ip-sheet { display: flex; flex-direction: column; width: min(640px, 100%); max-height: min(88dvh, 860px); overflow: hidden;
+  border-radius: var(--hx-r-lg); background: var(--hx-card); box-shadow: var(--hx-sh-3), 0 0 0 .5px var(--hx-hair);
+  transform: translateY(10px) scale(.985); transition: transform .32s cubic-bezier(.2, .8, .2, 1); }
+.ip-overlay.in .ip-sheet { transform: none; }
+.ip-head, .ip-foot { flex: none; padding: 16px 20px; background: var(--hx-card); background: color-mix(in srgb, var(--hx-card) 82%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+.ip-head { border-bottom: 1px solid var(--hx-hair-2); }
+.ip-head h2 { margin: 0; font: 700 19px/1.2 var(--hx-text); letter-spacing: -.016em; color: var(--hx-ink); }
+.ip-lede { margin: 6px 0 0; font: 400 13px/1.45 var(--hx-text); color: var(--hx-ink-2); }
+.ip-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 20px 6px; }
+.ip-line { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.ip-lh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; padding: 0; margin: 0 0 4px; }
+.ip-ln { font: 700 11px/1.4 var(--hx-text); letter-spacing: .04em; color: var(--hx-ink-3); }
+.ip-lname { flex: 1; min-width: 0; font: 600 14.5px/1.35 var(--hx-text); color: var(--hx-ink); overflow-wrap: anywhere; }
+.ip-lq { font: 500 12.5px/1.35 var(--hx-text); color: var(--hx-ink-2); font-variant-numeric: tabular-nums; }
+.ip-why { margin: 0 0 8px; font: 400 12.5px/1.45 var(--hx-text); color: var(--hx-ink-2); }
+.ip-opts, .ip-found { display: flex; flex-direction: column; border: 1px solid var(--hx-hair-2); border-radius: 12px; overflow: hidden; }
+.ip-found { margin-top: 8px; }
+.ip-found:empty { display: none; }
+.ip-opt { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; border-bottom: 1px solid var(--hx-hair-2); background: var(--hx-card);
+  cursor: pointer; transition: transform 100ms ease-out, background-color 120ms ease-out; }
+.ip-opt:last-child { border-bottom: 0; }
+.ip-opt:hover { background: var(--hx-row-hover); }
+.ip-opt:active { transform: scale(.985); }
+.ip-opt:has(input:checked) { background: var(--hx-navy-soft); }
+.ip-opt input { flex: none; margin: 3px 0 0; accent-color: var(--hx-navy); }
+.ip-opt input:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+.ip-ot { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ip-on { font: 600 13.5px/1.35 var(--hx-text); color: var(--hx-ink); overflow-wrap: anywhere; }
+.ip-os { font: 400 12px/1.4 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
+.ip-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: var(--hx-r-pill); background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-line);
+  color: var(--hx-ink); font: 600 10.5px/1.6 var(--hx-text); vertical-align: 1px; }
+.ip-find { display: flex; margin-top: 8px; }
+.ip-q { width: 100%; box-sizing: border-box; padding: 8px 10px; font: 400 13px/1.35 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid);
+  border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.ip-q:focus { outline: none; border-color: var(--hx-cyan); box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+.ip-none { margin: 0; padding: 10px 14px; font: 400 12.5px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+.ip-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ip-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--hx-hair-2); }
+.ip-count { margin-right: auto; font: 500 12.5px/1.3 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
+.ip-foot .btn:active { transform: scale(.97); }
+body.ip-open { overflow: hidden; }
+
+/* a phone: a bottom sheet, entering and leaving along the same path */
+@media (max-width: 600px) {
+  .ip-overlay { align-items: flex-end; padding: 0; }
+  .ip-sheet { width: 100%; max-height: 92dvh; border-radius: 16px 16px 0 0; transform: translateY(100%); }
+  .ip-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .ip-foot .btn { flex: 1; }
+  .ip-count { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ip-sheet, .ip-overlay.in .ip-sheet { transform: none; transition: none; }
+  .ip-opt, .ip-opt:active { transition: none; transform: none; }
+}
+html[data-motion="off"] .ip-sheet { transform: none; transition: none; }
+@media (prefers-reduced-transparency: reduce) { .ip-head, .ip-foot { background: var(--hx-card); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-contrast: more) {
+  .ip-opts, .ip-found, .ip-opt { border-color: var(--hx-ink-3); }
+  .ip-opt:has(input:checked) { box-shadow: inset 0 0 0 2px var(--hx-navy); }
+}

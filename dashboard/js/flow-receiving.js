@@ -257,6 +257,15 @@ async function saveReceiving() {
         res = await postFlow('createReceiving', Object.assign({}, payload, extra));
       } else { flowMsg('formMsg', 'Receiving cancelled — record the AP payment first.', false); return; }
     }
+    /* A387 — the server would not guess which stock row a line is, and saved nothing. Ask, then send the same
+       receiving again (with every confirmation already given) and each line's pick: an item, or "new item". */
+    for (let ask = 0; ask < 2 && !res.success && res.needsItem && res.needsItem.length && typeof ipPick === 'function'; ask++) {
+      const inv = await fetchFlow('getInventory').then(r => (r && r.data) || []).catch(() => []);
+      const picks = await ipPick(res.needsItem, { what: 'receiving', stock: inv });
+      if (!picks) { flowMsg('formMsg', 'Receiving cancelled: nothing was saved.', false); return; }
+      payload.items = JSON.stringify(JSON.parse(payload.items).map((it, i) => picks[i] !== undefined ? Object.assign({}, it, { pick: picks[i] }) : it));
+      res = await postFlow('createReceiving', Object.assign({}, payload, extra));
+    }
     if (!res.success) throw new Error(res.message);
     flowMsg('formMsg', `${res.message} (${res.mrNo})`, true);
     resetForm();

@@ -295,7 +295,7 @@ sec('10 · photos are the proof of every post');
   eq('  no ActivityLog row for a photo', store.ActivityLog.length, 0);
   eq('a receiving photo files under 06 Receiving & Shipping', ctx._docSubfolder('Purchase Order', 'Receiving photo'), '06 Receiving & Shipping');
   eq('a dispatch photo too', ctx._docSubfolder('Sales Order', 'Dispatch photo'), '06 Receiving & Shipping');
-  ['Receiving photo', 'Dispatch photo', 'Return photo', 'Piece photo'].forEach(t =>
+  ['Receiving photo', 'Dispatch photo', 'Return photo', 'Piece photo', 'Item card photo'].forEach(t =>   // A387 — the card's own photos
     eq('"' + t + '" is never a gated document type', ctx._docTypeKey(t), t.toLowerCase()));
 
   const L = W([{ line: 1, itemId: 'ITM-00001', qty: 1 }]);
@@ -596,6 +596,7 @@ sec('19 · A319 · a brand-new item from Stock in');
   eq('  no journal entry', store.Journal.length, before);
   const det = store.ItemDetails.filter(x => x['Item ID'] === r.itemId)[0];
   ok('  the details are kept apart from Inventory', det && det['Brand'] === 'CEJN' && det['Model'] === '10-560' && det['Category'] === 'Coupler' && det['Name'] === 'Quick connect 10 mm' && det['Photos'] === pid && det['Source'] === 'scanner', det);
+  eq('  A387: the details row is the full 14-wide SCHEMA row (written through _ibPut)', det && det.__arity, 14);
   ok('  its item label is opaque', CODE_RE.test(r.itemCode) && store.Labels.some(l => l['Code'] === r.itemCode && l['Kind'] === 'ITEM' && l['Item ID'] === r.itemId), r.itemCode);
   ok('  the scanned barcode is linked to it', store.ItemBarcodes.some(b => b['Barcode'] === '7310000000012' && b['Item ID'] === r.itemId));
   eq('  the photo is re-filed under the Item ID', store.Documents.filter(d => d['Doc ID'] === pid)[0]['Ref No'], r.itemId);

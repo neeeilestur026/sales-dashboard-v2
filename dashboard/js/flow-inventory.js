@@ -1,6 +1,7 @@
 /* flow-inventory.js — costed inventory CRUD */
 let invData = [];
 let invSession = null;
+let invItemBook = false;    // A387 — each row links to its Item Book card once FlowAPI 194 is live
 let invCanDelete = false;   // only admin/accounting may remove items; sales can add/edit only
 let invReadOnly = false;    // management/director can view only (no add/edit/delete)
 let invOrderedSet = new Set();   // Item Nos that appear in any Purchase Order (= "ordered already")
@@ -73,10 +74,12 @@ async function loadInventory() {
   c.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   try {
     // Inventory + Purchase Orders in parallel; an item is "ordered already" when its Item No is on any PO.
-    const [inv, po] = await Promise.all([
+    const [inv, po, ib] = await Promise.all([
       fetchFlow('getInventory'),
-      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] }))
+      fetchFlow('getPurchaseOrders').catch(() => ({ data: [] })),
+      typeof flowItemBookOn === 'function' ? flowItemBookOn() : Promise.resolve(false)   // A387
     ]);
+    invItemBook = !!ib;
     invData = (inv && inv.data) || [];
     invOrderedSet = new Set();
     ((po && po.data) || []).forEach(p => (p.items || []).forEach(it => {
@@ -176,7 +179,8 @@ function invDescCell(r) {
   const d = String(r.description || '');
   const long = d.length > 120;
   return `<td><div class="inv-desc${long ? ' clamp' : ''}">${flowEsc(d)}</div>` +
-    `${long ? '<span class="inv-more"></span>' : ''}</td>`;
+    `${long ? '<span class="inv-more"></span>' : ''}` +
+    (invItemBook && r.itemId ? `<a class="inv-card" href="${flowItemCardHref(r.itemId)}">Open card</a>` : '') + '</td>';   // A387
 }
 
 function invActionsCell(r) {

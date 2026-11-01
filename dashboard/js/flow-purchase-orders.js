@@ -160,7 +160,7 @@ function loadFromSO() {
   poSyncCurrencyOptions(src._currency || undefined);
   (s.items || []).forEach(it => {
     const p = src[String(it.itemNo).toLowerCase()] || 0;   // sourced FC price, else 0 (editable)
-    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: p });
+    addRow({ itemNo: it.itemNo, itemName: it.itemName, qty: flowNum(it.qty), price: p, itemId: it.itemId || '' });   // A387 — the PO keeps the order line's item
   });
   if (!s.items || !s.items.length) addRow();
   recalc();

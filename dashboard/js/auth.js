@@ -365,6 +365,22 @@ function requireSupplierListAccess() {
   return session;
 }
 
+/* A387 — the Item Book (item-book.html): every role that works with items. Mirrors FlowAPI.gs FlowSettings itemBookRoles'
+   default; the server decides, from its own list, who may read (getItemBook) and who may change a card (saveItemDetails). */
+const FLOW_ITEM_BOOK_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'warehouse'];
+function requireItemBookAccess() {
+  const session = getSession();
+  if (!session) {
+    window.location.href = 'index.html';
+    return null;
+  }
+  if (!FLOW_ITEM_BOOK_ROLES.includes(session.role)) {
+    window.location.href = _homeForRole(session.role);
+    return null;
+  }
+  return session;
+}
+
 /* A384 — collection details (collection-details.html): accounting and admin keep them, the director reads them. Mirrors
    FlowAPI.gs _CD_VIEW (who reads) — the server decides who may change them (_CD_EDIT: accounting and admin). */
 const FLOW_COLLECTION_DETAILS_ROLES = ['accounting', 'admin', 'director'];
@@ -738,6 +754,7 @@ function renderNavbar(activePage) {
             <a href="flow-receiving.html" class="${activePage === 'flow-receiving' ? 'active' : ''}">Materials Receiving</a>
             <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
             <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+            <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
             <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           </div>
           <div class="dd-group">
@@ -805,6 +822,7 @@ function renderNavbar(activePage) {
           <a href="flow-lifecycle.html" class="${activePage === 'flow-lifecycle' ? 'active' : ''}">SO Lifecycle Tracker</a>
           <a href="flow-accounting.html" class="${activePage === 'flow-accounting' ? 'active' : ''}">Accounting</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="quotation-board.html" class="${activePage === 'quotation-board' ? 'active' : ''}">Quotation Board</a>
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
@@ -928,6 +946,7 @@ function renderNavbar(activePage) {
           <a href="flow-ar-aging.html" class="${activePage === 'flow-ar-aging' ? 'active' : ''}">AR Aging</a>
           <a href="month-check.html" class="${activePage === 'flow-month-check' ? 'active' : ''}">Month check</a>   <!-- A331 -->
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
           <!-- A271 — management-sales-orders.html removed from management's nav. Sales Orders —
                Operations below is the one page, and it now shows the lines and prices on click. -->
         </div>
@@ -1083,6 +1102,7 @@ function renderNavbar(activePage) {
           <a href="email-setup.html" class="${activePage === 'email-setup' ? 'active' : ''}">Connect Email</a>
           <a href="pf-admin.html" class="${activePage === 'pf-admin' ? 'active' : ''}">PF Data Admin</a>
           <a href="scan.html" class="${activePage === 'scan' ? 'active' : ''}">Scanner</a>
+          <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
           <a href="collect.html" class="${activePage === 'collect' ? 'active' : ''}">Collect</a>
           <a href="collection-details.html" class="${activePage === 'collection-details' ? 'active' : ''}">Collection details</a>   <!-- A384 -->
           <a href="change-password.html" class="${activePage === 'change-password' ? 'active' : ''}">Change Password</a>
@@ -1257,6 +1277,7 @@ function renderNavbar(activePage) {
           <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">My Quotations</a>   <!-- A382 -->
           <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
+          <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 — the new itinerary -->
           <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>

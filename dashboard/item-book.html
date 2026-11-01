@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Items</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/item-book.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content ib-main">
+    <!-- A387 — the Item Book (Neil, 1 Nov 2026): one card per product, with its specs, photos, stock and every line it
+         appeared on, so it can be found and identified in one place. Laid out like the Client Book: the list on the left,
+         the card on the right, each scrolling on its own; on a tablet or phone the card opens as a sheet. js/item-book.js. -->
+    <header class="ib-head">
+      <div>
+        <h1>Items</h1>
+        <p class="ib-lede">Every product we stock or have quoted: its specs, photos and stock, and every request, quotation, order and invoice it appears on.</p>
+      </div>
+    </header>
+    <div id="ibNotice"></div>
+    <div class="ib-tools" role="search">
+      <label class="ib-search"><span class="ib-sr">Search the items</span><input type="search" id="ibQ" autocomplete="off" placeholder="Search: name, code, brand, model or barcode"></label>
+      <label class="ib-sortw"><span class="ib-sr">Sort</span><select id="ibSort"></select></label>
+    </div>
+    <div class="ib-chips" id="ibChips" role="group" aria-label="Show"></div>
+    <div class="ib-split" id="ibSplit">
+      <section class="ib-listcol" aria-label="Items">
+        <p class="ib-count" id="ibCount" aria-live="polite"></p>
+        <div class="ib-list" id="ibList" role="list"></div>
+      </section>
+      <section class="ib-pane" id="ibPane" aria-label="The item"></section>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/sales-lists-model.js"></script>
+  <script src="js/hx-split.js"></script>
+  <script src="js/item-book-model.js"></script>
+  <script src="js/item-book.js"></script>
+</body>
+</html>

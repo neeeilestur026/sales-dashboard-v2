@@ -259,7 +259,9 @@ console.log('\n== the money-bearing widths ==');
  ['Invoices', 13, 'A278 appended VAT Rate + VAT — Total Sales stays NET (revenue); the RECEIVABLE and the GL carry the gross'],
  ['PricingRequestItems', 19, 'A242 appended Quoted On'],
  ['PaymentRequests', 41, ''], ['PurchaseOrders', 17, ''], ['APAging', 13, ''],
- ['Expenses', 17, ''], ['Shipments', 16, ''], ['QuotationEmails', 18, ''], ['WeeklyItineraries', 16, '']]
+ ['Expenses', 17, ''], ['Shipments', 16, ''], ['QuotationEmails', 18, ''], ['WeeklyItineraries', 16, ''],
+ ['ItemDetails', 14, 'A387 appended Specs JSON, Notes, Hidden Photos, Updated By, Updated At — createItemByScan and saveItemDetails write it through _ibPut in SCHEMA order'],
+ ['ItemBookLog', 8, 'A387 — the item card log, only ever appended']]
   .forEach(([s, w, why]) =>
     ok(s + ' is ' + w + ' wide' + (why ? '  (' + why + ')' : ''), SCHEMA[s] && SCHEMA[s].length === w,
        'now ' + (SCHEMA[s] ? SCHEMA[s].length : 'MISSING')));

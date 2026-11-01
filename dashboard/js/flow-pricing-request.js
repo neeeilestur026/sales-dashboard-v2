@@ -972,8 +972,10 @@ function _prFinalCell(i) {
 function prItemCell(i) {
   const sp = typeof slmItemSpecs === 'function' ? slmItemSpecs(i.itemName || '') : { title: i.itemName || '', specs: [] };
   const code = i.itemNo && !/^(n\/?a|none|tba|-+)$/i.test(String(i.itemNo)) ? `<span class="sl2-code">${flowEsc(i.itemNo)}</span>` : '';
+  const card = prSettings && String(prSettings.itemBook || '').toLowerCase() === 'on' && typeof flowItemCardHref === 'function'
+    ? `<a class="sl2-card" href="${flowItemCardHref(i.itemId, i.itemNo, i.itemName)}">Open item card</a>` : '';   // A387 — the Item Book
   return `${code}<b class="sl2-ititle">${flowEsc(sp.title || i.itemNo || 'Item')}</b>` + (sp.specs.length
-    ? `<dl class="sl2-specs">${sp.specs.map(x => `<div><dt>${flowEsc(x[0])}</dt><dd>${flowEsc(x[1])}</dd></div>`).join('')}</dl>` : '');
+    ? `<dl class="sl2-specs">${sp.specs.map(x => `<div><dt>${flowEsc(x[0])}</dt><dd>${flowEsc(x[1])}</dd></div>`).join('')}</dl>` : '') + card;
 }
 function readonlyTable(r, priced) {
   return `<div style="overflow-x:auto;"><table class="flow-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>UOM</th>

@@ -100,6 +100,7 @@ const EXCEPTIONS = {
     importSupplierBookHistory:   'A374 — a run-once fill from past requests; each supplier gets its own SupplierBookLog row',
     importSupplierBookList:      'A374 — the director loads the company\'s supplier file; each supplier gets its own SupplierBookLog row',
     saveCollectionDetails:       'A384 — collection details: each change is its own CollectionBookLog row',
+    saveItemDetails:             'A387 — the Item Book: each change is its own ItemBookLog row',
     uploadScanPhoto:    'A318 — one row per photo would drown the report; the post that cites it is logged',
     ensureItemLabels:   'A318 — making a label code is bookkeeping, not a task',
     logLabelPrint:      'A318 — printing a label is not a task'
@@ -151,6 +152,10 @@ const EXCEPTIONS = {
     getVisitPlans:                 'A369 — a secured READ (client visits: each role its own scope)',
     getSupplierBook:               'A374 — a secured READ (the supplier list: contact people and buy prices)',
     getCollectionBook:             'A384 — a secured READ (collection details: client contacts and banks)',
+    getItemBook:                   'A387 — a secured READ (the Item Book list: costs only for the cost roles)',
+    getItemCard:                   'A387 — a secured READ (one item card)',
+    getItemHistory:                'A387 — a secured READ (an item\'s lines: supplier prices only for the cost roles)',
+    getItemPhotos:                 'A387 — a secured READ (an item\'s own photos)',
     collectWebsiteRequestsNow:     'A338 — fetches from the website first, then takes its own short tryLock to file; holding the 20 s mutation lock across a network call would stall every user action',
     peGetTables:                   'A340 — a secured READ (the director\'s pricing tables)',
     peListRecords:                 'A340 — a secured READ (the director\'s priced quotations)',
