@@ -20,7 +20,7 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u;
 const HEX = /#(?:[0-9a-fA-F]{3}){1,2}\b/g;
 
-const STUBS = ['director-recommender.html', 'clients.html'];   // A385 — clients.html is a redirect now
+const STUBS = ['director-recommender.html', 'clients.html', 'hr-memos.html'];   // A385 — clients.html is a redirect now; A390 — hr-memos.html too
 const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_') && STUBS.indexOf(f) < 0).sort();
 const read = (f) => fs.readFileSync(D + f, 'utf8');
 
@@ -72,7 +72,8 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'supplier-list.html',
   'quotation-status.html',   // A382
   'collection-details.html',   // A384 (A385: clients.html left the list — it is a redirect stub now)
-  'item-book.html'];   // A387 — the Item Book
+  'item-book.html',   // A387 — the Item Book
+  'bulletin.html', 'shutdown-calendar.html'];   // A390 — the bulletin board · A391 — the shutdown calendar
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

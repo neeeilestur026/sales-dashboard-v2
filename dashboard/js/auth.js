@@ -365,6 +365,23 @@ function requireSupplierListAccess() {
   return session;
 }
 
+/* A390 — the bulletin board (bulletin.html): everyone reads it; the server decides who may post (FlowSettings bulletinWriteRoles). */
+const FLOW_BULLETIN_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'hr', 'marketing', 'leadgen', 'warehouse'];
+function requireBulletinAccess() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (!FLOW_BULLETIN_ROLES.includes(session.role)) { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+/* A391 — the shutdown calendar (shutdown-calendar.html): sales, the director and management (FlowSettings shutdownRoles). */
+const FLOW_SHUTDOWN_ROLES = ['sales', 'director', 'management'];
+function requireShutdownAccess() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (!FLOW_SHUTDOWN_ROLES.includes(session.role)) { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+
 /* A387 — the Item Book (item-book.html): every role that works with items. Mirrors FlowAPI.gs FlowSettings itemBookRoles'
    default; the server decides, from its own list, who may read (getItemBook) and who may change a card (saveItemDetails). */
 const FLOW_ITEM_BOOK_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'warehouse'];
@@ -712,7 +729,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status' || activePage === 'collection-details') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status' || activePage === 'collection-details' || activePage === 'bulletin') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -779,6 +796,7 @@ function renderNavbar(activePage) {
             <div class="dd-title">Team</div>
             <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">All Daily Reports</a>
             <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">Team Performance</a>
+            <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">Bulletin Board</a>   <!-- A390 -->
           </div>
         </div>
       </div>
@@ -889,7 +907,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'];   // A207 · A216 · A217 · A226 · A369
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status', 'shutdown-calendar'];   // A207 · A216 · A217 · A226 · A369 · A391
     const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
@@ -927,6 +945,7 @@ function renderNavbar(activePage) {
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
           <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
+          <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon(session.role)}</a>
         </div>
       </div>
@@ -987,6 +1006,10 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Team Performance
       </a>
+      <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">   <!-- A390 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        Bulletin Board
+      </a>
       <a href="marketing-home.html" class="${activePage === 'marketing-home' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Marketing
@@ -1009,7 +1032,7 @@ function renderNavbar(activePage) {
   } else if (session.role === 'director') {
     const dirPayablesActive = ['supplier-list', 'flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
-    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits'].includes(activePage);   // A216, A366, A369
+    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits', 'shutdown-calendar', 'bulletin'].includes(activePage);   // A216, A366, A369, A390, A391
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin', 'collection-details'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
     const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests', 'quotation-status'].includes(activePage);   // A217 · A338
@@ -1089,6 +1112,8 @@ function renderNavbar(activePage) {
           <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
           <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">Team Performance</a>
+          <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
+          <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">Bulletin Board</a>   <!-- A390 -->
         </div>
       </div>
       <div class="nav-dropdown">
@@ -1231,6 +1256,10 @@ function renderNavbar(activePage) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Daily Report
       </a>
+      <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">   <!-- A390 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        Bulletin Board
+      </a>
       <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Team Performance
@@ -1256,7 +1285,7 @@ function renderNavbar(activePage) {
       </a>`;
   } else {
     const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
-    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary'].includes(activePage);
+    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary', 'shutdown-calendar'].includes(activePage);   // A391
     const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -1294,6 +1323,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">Client Book</a>
+          <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="performance.html" class="${activePage === 'performance' ? 'active' : ''}">Client Tracker</a>
           <a href="pending-items.html" class="${activePage === 'pending-items' ? 'active' : ''}">Pending Items</a>
           <a href="quotation-summary.html" class="${activePage === 'quotation-summary' ? 'active' : ''}">Quotation Summary</a>
@@ -1809,6 +1839,26 @@ async function flowComputeActions(session) {
     }).catch(() => {}));
   }
 
+  /* A390 — new announcements, and A391 — clients' plant shutdowns starting within a week. Counts only (the item text is
+     HTML), kept for three minutes in this tab so a page view does not ask twice; quiet before FlowAPI 195. */
+  const _cnt = (key, read) => {
+    try { const c = JSON.parse(sessionStorage.getItem(key) || 'null'); if (c && Date.now() - c.t < 180000) return Promise.resolve(c.r); } catch (e) {}
+    return read().then(r => { if (r && r.success) { try { sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), r })); } catch (e) {} } return r; });
+  };
+  if (typeof postFlow === 'function') {
+    jobs.push(_cnt('hx_bb_n', () => postFlow('getBulletin', { countOnly: true })).then(r => {
+      const n = r && r.success ? (+r.count || 0) : 0;
+      if (n) add('report', 'info', n + ' new announcement' + (n === 1 ? '' : 's') + ' on the bulletin board', 'bulletin.html');
+    }).catch(() => {}));
+  }
+  if ((isSales || isDir || isMgmt) && typeof postFlow === 'function') {
+    jobs.push(_cnt('hx_shd_n', () => postFlow('getShutdowns', { countOnly: true })).then(r => {
+      if (!r || !r.success) return;
+      const n = isSales ? (+r.mine || 0) : (+r.count || 0);
+      if (n) add('report', 'info', n + ' client plant shutdown' + (n === 1 ? ' starts' : 's start') + ' within ' + (+r.days || 7) + ' days', 'shutdown-calendar.html?view=upcoming');
+    }).catch(() => {}));
+  }
+
   await Promise.all(jobs);
   return items;
 }
@@ -1846,6 +1896,7 @@ async function flowActionsStrip(containerId) {
   el.innerHTML = '<div class="fa-loading">Loading your action items…</div>';
   let items = [];
   try { items = await flowComputeActionsOnce(session); } catch (e) { items = []; }
+  if (document.getElementById('hxBoard')) items = items.filter(n => n.link !== 'bulletin.html');   // A390 — the board above already says so
   if (!items.length) {
     el.innerHTML = '<div class="fa-empty">You\'re all caught up — nothing needs your action right now.</div>';
     return;
@@ -1891,72 +1942,5 @@ async function loadNotifications() {
 // Auto-load notification badge count on page load
 setTimeout(() => { loadNotifications(); }, 2000);
 
-async function _showMemoModalsIfNeeded() {
-  try {
-    const session = getSession();
-    if (!session || !session.name) return;
-    const today = hxToday();
-    const checkKey = 'lastMemoCheckDate_' + session.name;
-    if (localStorage.getItem(checkKey) === today) return;
-    if (typeof apiGetActiveMemosForUser !== 'function') return;
-    const res = await apiGetActiveMemosForUser(session.name, session.role);
-    if (!res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
-      localStorage.setItem(checkKey, today);
-      return;
-    }
-    const dismissedKey = 'dismissedMemos_' + session.name;
-    let dismissed = [];
-    try { dismissed = JSON.parse(localStorage.getItem(dismissedKey) || '[]'); } catch (e) { dismissed = []; }
-    const queue = res.data.filter(m => dismissed.indexOf(m.rowIndex) === -1);
-    if (queue.length === 0) { localStorage.setItem(checkKey, today); return; }
-    _renderMemoQueue(queue, 0, dismissed, dismissedKey, checkKey, today);
-  } catch (e) { /* ignore */ }
-}
-
-function _renderMemoQueue(queue, idx, dismissed, dismissedKey, checkKey, today) {
-  if (idx >= queue.length) {
-    localStorage.setItem(checkKey, today);
-    localStorage.setItem(dismissedKey, JSON.stringify(dismissed));
-    return;
-  }
-  const memo = queue[idx];
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
-  const card = document.createElement('div');
-  card.className = 'modal memo';
-  const pri = (memo.priority || '').toLowerCase();
-  const priorityTone = pri === 'urgent' ? 'urgent' : pri === 'high' ? 'warn' : 'info';
-  card.innerHTML = `
-    <div class="memo-head">
-      <span class="memo-pri" data-tone="${priorityTone}">${(memo.priority || 'Normal')}</span>
-      <span>${memo.type || 'Memo'}, ${memo.createdAt || ''}</span>
-      <span style="margin-left:auto;">${idx+1} / ${queue.length}</span>
-    </div>
-    <h3>${(memo.title || '').replace(/</g,'&lt;')}</h3>
-    <div class="memo-body">${(memo.content || '').replace(/</g,'&lt;')}</div>
-    <div class="memo-from">From: ${memo.createdBy || 'HR'}. For: ${memo.target || 'All'}</div>
-    <div class="modal-actions">
-      <button type="button" id="memoDismissBtn" class="btn btn-primary">Mark as Read</button>
-    </div>
-  `;
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-  card.querySelector('#memoDismissBtn').addEventListener('click', () => {
-    dismissed.push(memo.rowIndex);
-    overlay.remove();
-    _renderMemoQueue(queue, idx + 1, dismissed, dismissedKey, checkKey, today);
-  });
-}
-
-/* A258 — THE MEMO POPUP IS OFF.
-   auth.js loads on every page, so this fired a full-screen modal 2.5s after EVERY navigation until
-   the reader dismissed each memo one by one — over the page they had just opened to work in. It
-   landed on top of the quotation builder, the AR aging screen and the flow pages alike.
-
-   The memos themselves are untouched: they are still written, still targeted, still listed on
-   hr-memos.html, and the notification bell still counts them. Only the interruption is gone.
-
-   Left in place rather than deleted — _showMemoModalsIfNeeded and _renderMemoQueue still work, so
-   restoring the popup is uncommenting one line, and any future "show me unread memos" button can
-   call it directly. */
-// setTimeout(() => { _showMemoModalsIfNeeded(); }, 2500);
+/* A390 — the A258 memo popup (switched off since then, its "Mark as read" kept only in this browser) is gone with HR Memos:
+   announcements now live on the bulletin board (bulletin.html, the card on each home), where "Got it" is recorded. */

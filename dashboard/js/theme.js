@@ -166,4 +166,17 @@
       var fj = document.createElement('script'); fj.src = 'js/hx-feedback.js'; fh.appendChild(fj);
     }
   } catch (e) {}
+  /* A390 — the bulletin board (js/bulletin.js, css/bulletin.css), only on the signed-in person's own home. BB_HOMES mirrors
+     auth.js _homeForRole; tests/flow/bulletin-page.js keeps them equal. */
+  try {
+    var BB_HOMES = { admin: 'admin.html', accounting: 'accounting-home.html', management: 'management-home.html', director: 'director-home.html',
+                     hr: 'hr-home.html', marketing: 'marketing-home.html', leadgen: 'leadgen-home.html', warehouse: 'scan.html' };
+    var bw = JSON.parse(localStorage.getItem('session') || 'null'), br = bw && typeof bw.role === 'string' ? bw.role : '';
+    var bp = (location.pathname.split('/').pop() || 'index.html');
+    if (br && bw.name && bp === (BB_HOMES[br] || 'dashboard.html') && document.head && !window.hxBoardLoaded) {
+      window.hxBoardLoaded = true;
+      var bl = document.createElement('link'); bl.rel = 'stylesheet'; bl.href = 'css/bulletin.css'; document.head.appendChild(bl);
+      var bj = document.createElement('script'); bj.src = 'js/bulletin.js'; document.head.appendChild(bj);
+    }
+  } catch (e) {}
 })();

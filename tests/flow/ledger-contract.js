@@ -117,7 +117,7 @@ sec('2 · contrast meets WCAG AA in both themes');
 
 /* ── 3 · the pages ─────────────────────────────────────────────────────────────────────────── */
 sec('3 · exactly the in-scope pages carry the look');
-const EXCLUDED = ['scan.html', 'collect.html', 'labels.html', 'index.html', 'director-recommender.html', 'clients.html',   // A385: a redirect stub
+const EXCLUDED = ['scan.html', 'collect.html', 'labels.html', 'index.html', 'director-recommender.html', 'clients.html', 'hr-memos.html',   // A385 · A390: redirect stubs
   'reconcile-2026-costs.html', 'replace-2026-sos.html', 'update-2025-costs.html'];
 const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_')).sort();
 const IN = PAGES.filter(f => !EXCLUDED.includes(f) && !f.startsWith('migrate-'));
@@ -250,7 +250,7 @@ const HOME_EXTRA = {
   accounting: ['accounting-billing.html'],
   management: ['management-sales-orders.html'],
   sales: [], marketing: [], leadgen: [],
-  hr: ['hr-accreditations.html', 'hr-campaigns.html', 'hr-content-calendar.html', 'hr-grievances.html', 'hr-memos.html', 'hr-reviews.html', 'hr-training.html']
+  hr: ['hr-accreditations.html', 'hr-campaigns.html', 'hr-content-calendar.html', 'hr-grievances.html', 'hr-reviews.html', 'hr-training.html']
 };
 function guardAdmits(page, role) {
   const src = read(page), js = [...src.matchAll(/<script src="js\/([^"]+)"/g)].map(m => m[1]).filter(j => !['theme.js', 'api.js', 'auth.js', 'flow-api.js', 'ledger-nav.js'].includes(j));

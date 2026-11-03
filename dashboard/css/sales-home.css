@@ -108,6 +108,23 @@ body.sl #leadsForYou .lfy-top { display: flex; justify-content: space-between; g
 body.sl #leadsForYou .lfy-co { font: 700 13.5px/1.3 var(--hx-text); color: var(--hx-ink); }
 body.sl #leadsForYou .lfy-card b { color: var(--hx-ink); font-weight: 600; }
 /* A358 — My clients (js/my-clients-card.js) */
+/* A391 — Coming shutdowns: the next 30 days of clients' plant shutdowns (js/shutdowns-card.js) */
+body.sl #comingShutdowns .cs-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+body.sl #comingShutdowns .cs-head h3 { margin: 0; font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); }
+body.sl #comingShutdowns .cs-head span { flex: 1 1 220px; font: 500 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+body.sl #comingShutdowns .cs-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--hx-hair-2); border-radius: var(--hx-r-md); overflow: hidden; }
+body.sl #comingShutdowns .cs-row { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 2px 12px; padding: 9px 12px; border-bottom: 1px solid var(--hx-hair-2); color: var(--hx-ink); text-decoration: none; }
+body.sl #comingShutdowns li:last-child .cs-row { border-bottom: 0; }
+body.sl #comingShutdowns .cs-row:hover { background: var(--hx-row-hover); }
+body.sl #comingShutdowns .cs-when { grid-row: 1 / 3; font: 600 12.5px/1.4 var(--hx-text); color: var(--hx-navy-text); font-variant-numeric: tabular-nums; }
+body.sl #comingShutdowns .cs-what { font: 400 13px/1.4 var(--hx-text); overflow-wrap: anywhere; }
+body.sl #comingShutdowns .cs-meta { font: 400 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+body.sl #comingShutdowns .cs-empty, body.sl #comingShutdowns .cs-more { margin: 0; font: 400 13px/1.45 var(--hx-text); color: var(--hx-ink-3); }
+body.sl #comingShutdowns .cs-more a { color: var(--hx-navy-text); font-weight: 600; }
+@media (max-width: 640px) {   /* a phone: the dates sit above the client, so the name keeps the full width */
+  body.sl #comingShutdowns .cs-row { grid-template-columns: minmax(0, 1fr); gap: 1px; padding: 10px 14px; }
+  body.sl #comingShutdowns .cs-when { grid-row: auto; }
+}
 body.sl #myClients .mc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 body.sl #myClients .mc-head h3 { margin: 0; font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); }
 body.sl #myClients .mc-head span { flex: 1 1 220px; font: 500 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }

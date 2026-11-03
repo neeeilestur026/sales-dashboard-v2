@@ -44,9 +44,11 @@ async function checkAlreadySubmitted() {
 
 async function loadFeed() {
   const date = _todayISO();
-  const [autofillRes, emailRes] = await Promise.all([
+  const [autofillRes, emailRes, boardRes] = await Promise.all([
     apiGetHrDailyAutofill(session.name, date).catch(() => ({ success: false })),
-    apiFetchEmailLogToday().catch(() => ({ success: false }))
+    apiFetchEmailLogToday().catch(() => ({ success: false })),
+    // A390 — HR Memos moved to the bulletin board: today's posts by this person come from there (the old memos before FlowAPI 195)
+    typeof postFlow === 'function' ? postFlow('getBulletin', { view: 'manage' }).catch(() => null) : Promise.resolve(null)
   ]);
   const data = (autofillRes && autofillRes.success && autofillRes.data) || {};
   const emails = (emailRes && emailRes.success && emailRes.emails) || (emailRes && emailRes.data) || [];
@@ -55,7 +57,7 @@ async function loadFeed() {
     recruitment: data.recruitment || [],
     onboarding: data.onboarding || [],
     hrTasks: data.hrTasks || [],
-    memos: data.memos || [],
+    memos: _hrBoardToday(boardRes, date) || data.memos || [],
     campaigns: data.campaigns || [],
     content: data.content || [],
     emails: Array.isArray(emails) ? emails : []
@@ -87,7 +89,7 @@ function renderSummary(snap) {
     { label: 'Recruitment', value: snap.recruitment.length },
     { label: 'Onboarding', value: snap.onboarding.length },
     { label: 'HR Tasks', value: snap.hrTasks.length },
-    { label: 'Memos', value: snap.memos.length },
+    { label: 'Announcements', value: snap.memos.length },
     { label: 'Campaigns', value: snap.campaigns.length },
     { label: 'Content', value: snap.content.length },
     { label: 'Emails', value: snap.emails.length }
@@ -115,11 +117,22 @@ function renderTasks(rows) {
     `<tr><td>${_escape(r.title)}</td><td>${_escape(r.type)}</td><td>${_statusPill(r.status)}</td><td>${_escape(r.notes)}</td></tr>`
   ).join('') : _emptyRow(4, 'No HR tasks today.');
 }
+/* A390 — the posts this person put up or changed today on the bulletin board, in the old memo shape {title, type, target,
+   priority} so the report and its Code.gs record are unchanged. null when the board cannot be read (the old memos then). */
+function _hrBoardToday(r, date) {
+  if (!r || !r.success) return null;
+  const me = String(session.name || '').trim().toLowerCase(), day = (iso) => (typeof flowDate === 'function' ? flowDate(iso) : String(iso || '').slice(0, 10));
+  const touched = {};
+  (r.log || []).forEach(l => { if (String(l.by || '').trim().toLowerCase() === me && day(l.at) === date) touched[l.bulletinNo] = 1; });
+  const names = { sales: 'Sales', admin: 'Admin', accounting: 'Accounting', management: 'Management', director: 'Director', hr: 'HR', marketing: 'Marketing', leadgen: 'Lead generation', warehouse: 'Warehouse' };
+  return (r.items || []).filter(it => touched[it.bulletinNo]).map(it => ({ title: it.title, type: it.kind,
+    target: (it.audience || []).indexOf('all') >= 0 ? 'Everyone' : (it.audience || []).map(a => names[a] || a).join(', '), priority: it.pinned ? 'Pinned' : '' }));
+}
 function renderMemos(rows) {
   _setCount('memoCount', rows.length);
   document.getElementById('memoBody').innerHTML = rows.length ? rows.map(r =>
     `<tr><td>${_escape(r.title)}</td><td>${_escape(r.type)}</td><td>${_escape(r.target)}</td><td>${_escape(r.priority)}</td></tr>`
-  ).join('') : _emptyRow(4, 'No memos created today.');
+  ).join('') : _emptyRow(4, 'No announcements posted today.');
 }
 function renderCamp(rows) {
   _setCount('campCount', rows.length);
