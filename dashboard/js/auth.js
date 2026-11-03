@@ -294,7 +294,7 @@ function requireWebRequestsAccess() {
 
 /** A358 — the Client Book: the director (every client) and the sales reps (their own; the server scopes the rows). */
 /* A363 — the new daily report (my-daily-report.html): each person's own, for the roles that have one. The director has
-   the same reports on his dashboard (and reads everyone's there), so he is sent home. */
+   none of his own; he reads everyone's on team-daily-reports.html (A366; A392 took the copies off his dashboard). */
 function requireNewDailyReportAccess() {
   const session = getSession();
   if (!session) {

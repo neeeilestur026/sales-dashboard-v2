@@ -34,8 +34,8 @@ eq('the scripts the reports need, in order', (H.match(/<script src="js\/([^"]+)"
    ['theme.js', 'api.js', 'auth.js', 'ledger-nav.js', 'flow-api.js', 'itinerary-week.js', 'sales-report-model.js', 'sales-report.js', 'team-report-model.js', 'team-report.js', 'my-daily-report.js']);
 ok('no inline script or style', !/<script>/.test(H) && !/style="/.test(H) && !/<style/.test(H));
 const DH = read('director-home.html'), DCSS = read('css/director-home.css'), RCSS = read('css/daily-report.css');
-ok('the director\'s dashboard keeps its reports (now drawn from the shared daily-report.css)', /href="css\/director-home\.css">\s*<link rel="stylesheet" href="css\/daily-report\.css">/.test(DH) &&
-   /id="proof"/.test(DH) && /id="acctReport"/.test(DH) && /body\.dh \.sr-tile/.test(RCSS) && /body\.dh \.tr-pick/.test(RCSS) && !/\.sr-tile|\.tr-pick/.test(DCSS));
+ok('A392: the director\'s dashboard no longer carries the reports, nor their sheet; the rules live only in daily-report.css', !/daily-report\.css/.test(DH) &&
+   !/id="proof"/.test(DH) && !/id="acctReport"/.test(DH) && /body\.dh \.sr-tile/.test(RCSS) && /body\.dh \.tr-pick/.test(RCSS) && !/\.sr-tile|\.tr-pick/.test(DCSS));
 {
   const noComments = RCSS.replace(/\/\*[\s\S]*?\*\//g, ''), bad = [];
   const re = /(?:^|[{}])\s*([^{}@]+?)\s*\{/g; let m;

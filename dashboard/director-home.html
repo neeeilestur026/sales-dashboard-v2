@@ -9,7 +9,6 @@
   <!-- A288 — the director's shared system (tokens, both themes, glass, buttons, tables) then this page's own look. -->
   <link rel="stylesheet" href="css/director.css">
   <link rel="stylesheet" href="css/director-home.css">
-  <link rel="stylesheet" href="css/daily-report.css">   <!-- A363: the new daily reports, shared with my-daily-report.html -->
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
 </head>
@@ -48,10 +47,6 @@
         </section>
 
         <nav class="dh-rail-nav" aria-label="On this page">
-          <a href="#acctReport">Accounting report</a>
-          <a href="#lgReport">Lead gen report</a>
-          <a href="#adminReport">Admin report</a>
-          <a href="#proof">Sales report</a>
           <a href="#inbox">Needs you <span class="dh-count" id="inboxCount">0</span></a>
           <a href="#pulse">Pulse</a>
           <a href="#team">Team</a>
@@ -85,34 +80,11 @@
           </a>
         </header>
 
-        <!-- A351 — the accounting, lead gen and admin daily reports (Neil, 22 Oct 2026), a private trial like the sales one: each
-             reads the day of the person picked in "Whose records" and saves what the director types under his own name.
-             js/team-report.js draws them; nothing here touches the real records. -->
-        <section class="dh-glass dh-sr dh-tr" id="acctReport">
-          <div class="dh-head sr-head" data-tr="head"></div>
-          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
-        </section>
-        <section class="dh-glass dh-sr dh-tr" id="lgReport">
-          <div class="dh-head sr-head" data-tr="head"></div>
-          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
-        </section>
-        <section class="dh-glass dh-sr dh-tr" id="adminReport">
-          <div class="dh-head sr-head" data-tr="head"></div>
-          <div class="sr-body" data-tr="body"><div class="dh-empty">Reading the day…</div></div>
-        </section>
-
         <!-- A350 — the Client Book (Neil, 21 Oct 2026), a private trial: its counts and the way in. js/client-book-card.js fills
              it from the trial's own store; the page is director-client-book.html. -->
         <section class="dh-glass dh-cbc" id="clientBook">
           <div class="dh-head"><h2>Client Book</h2><span class="cbc-trial">Trial</span><div class="dh-actions"><a href="director-client-book.html" class="dh-btn">Open the Client Book</a></div></div>
           <div class="cbc-body" id="cbcBody"><div class="dh-empty">Reading the Client Book…</div></div>
-        </section>
-
-        <!-- A348 — the Sales Daily Report (Neil, 21 Oct 2026), a private trial: the portal's numbers, one-line log lines with
-             links, the 8:00 plan and the 4:30 blocker. js/sales-report.js draws it; nothing here touches the real records. -->
-        <section class="dh-glass dh-sr" id="proof">
-          <div class="dh-head sr-head" id="srHead"></div>
-          <div class="sr-body" id="srBody"><div class="dh-empty">Reading your day…</div></div>
         </section>
 
         <!-- The one inbox. Three loaders write into their own containers; this section only PLACES
@@ -459,12 +431,8 @@
   <script src="js/itinerary-week-panel.js"></script> <!-- A216 -->
   <script src="js/director-approvals.js"></script>   <!-- A190 -->
   <script src="js/director-pulse.js"></script>       <!-- A288: the Pulse band -->
-  <script src="js/sales-report-model.js"></script>  <!-- A348: the numbers -->
-  <script src="js/sales-report.js"></script>        <!-- A348: the Sales Daily Report -->
   <script src="js/client-book-model.js"></script>   <!-- A350: the Client Book's counts -->
   <script src="js/client-book-card.js"></script>    <!-- A350: its card -->
-  <script src="js/team-report-model.js"></script>   <!-- A351: what the three role reports count -->
-  <script src="js/team-report.js"></script>         <!-- A351: the accounting, lead gen and admin reports -->
   <script src="js/director-home-inline.js"></script>
 </body>
 </html>

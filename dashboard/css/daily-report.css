@@ -1,5 +1,5 @@
-/* daily-report.css — A363 · the new daily reports, shared by the director's dashboard (director-home.html, his trial and
- * the read-only view of each person's report) and each person's own page (my-daily-report.html). Moved here unchanged
+/* daily-report.css — A363 · the new daily reports, shared by each person's own page (my-daily-report.html) and the
+ * read-only team view (team-daily-reports.html, A366). The director's dashboard carried them too until A392. Moved here unchanged
  * from director-home.css sections 9 (A348, the Sales Daily Report — js/sales-report.js) and 11 (A351, the accounting,
  * lead gen and admin reports — js/team-report.js), so both pages draw the reports from one sheet. Like the rest of the
  * director's system, every rule hangs off body.dh, so it cannot reach a page that is not one. */

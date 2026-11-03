@@ -94,24 +94,21 @@ ok('the theme script is the FIRST child of <body> (no flash, and it is a src scr
    /<body class="dh">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
 eq('the exact script list (A305: the page script last, where its inline block was)', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,sales-report-model.js,sales-report.js,client-book-model.js,client-book-card.js,team-report-model.js,team-report.js,director-home-inline.js');
-/* A347/A348 — the Sales Daily Report: first in the column, its own rail link, the two scripts after itinerary-week.js (it
-   uses iwSameCompany) and before the page script that mounts it first. */
-/* A350 — the Client Book card sits first, a slim strip of counts above the Sales Daily Report. */
-/* A351 — the accounting, lead gen and admin reports come first, then the Client Book card, then the sales report. */
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,client-book-model.js,client-book-card.js,director-home-inline.js');
+/* A347/A348 — the Sales Daily Report and A351 — the accounting, lead gen and admin reports were private trials first in the
+   column. A392 (Neil, 3 Nov 2026) took all four off the dashboard: the director reads everyone's on team-daily-reports.html
+   (A366), each person keeps their own on my-daily-report.html (A363). The column now opens with the Client Book card. */
 const C_ = '\\s*(?:<!--(?:(?!-->)[\\s\\S])*-->\\s*)?';
-ok('A351: the column opens with the accounting, lead gen and admin reports, then the Client Book card, then #proof', new RegExp('<div class="dh-col">\\s*<header class="dh-mast">(?:(?!<section)[\\s\\S])*?<\\/header>' + C_ +
-   '<section class="dh-glass dh-sr dh-tr" id="acctReport">[\\s\\S]*?<\\/section>' + C_ + '<section class="dh-glass dh-sr dh-tr" id="lgReport">[\\s\\S]*?<\\/section>' + C_ +
-   '<section class="dh-glass dh-sr dh-tr" id="adminReport">[\\s\\S]*?<\\/section>' + C_ + '<section class="dh-glass dh-cbc" id="clientBook">[\\s\\S]*?<\\/section>' + C_ +
-   '<section class="dh-glass dh-sr" id="proof">').test(HTML));
-ok('  each report has its head and body for team-report.js', ['acctReport', 'lgReport', 'adminReport'].every(id => new RegExp('id="' + id + '">\\s*<div class="dh-head sr-head" data-tr="head"><\\/div>\\s*<div class="sr-body" data-tr="body">').test(HTML)));
+ok('A392: the column opens with the Client Book card, then the inbox', new RegExp('<div class="dh-col">\\s*<header class="dh-mast">(?:(?!<section)[\\s\\S])*?<\\/header>' + C_ +
+   '<section class="dh-glass dh-cbc" id="clientBook">[\\s\\S]*?<\\/section>' + C_ + '<section class="dh-glass dh-inbox" id="inbox"').test(HTML));
+ok('  no daily report is left on the page (sections, rail links, mounts or engines)', !/id="(?:acctReport|lgReport|adminReport|proof|srHead|srBody)"|data-tr=|href="#(?:acctReport|lgReport|adminReport|proof)"/.test(HTML) &&
+   !/(?:sales|team)-report(?:-model)?\.js/.test(HTML) && !/teamReport\(|salesReport\(|'acctReport'|'proof'/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
+ok('  the rail starts at Needs you, and the page script watches what is left', /<nav class="dh-rail-nav"[^>]*>\s*<a href="#inbox">Needs you/.test(HTML) &&
+   /\['inbox', 'pulse', 'team', 'payroll'\]/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
+ok('  the director still reaches every report: Team, New daily reports (both menus)', /team-daily-reports\.html', 'New daily reports'/.test(fs.readFileSync(D + 'js/ledger-nav.js', 'utf8')) &&
+   /href="team-daily-reports\.html"[^>]*>New Daily Reports<\/a>/.test(fs.readFileSync(D + 'js/auth.js', 'utf8')));
 ok('  it opens the Client Book page and is filled by client-book-card.js', /id="clientBook">[\s\S]{0,300}<a href="director-client-book\.html" class="dh-btn">Open the Client Book<\/a>/.test(HTML) && tagOf('cbcBody') === 'div' &&
    /if \(typeof clientBookCard === 'function'\) clientBookCard\('cbcBody'\);/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
-ok('  the rail links the three reports first, then the sales report', /<nav class="dh-rail-nav"[^>]*>\s*<a href="#acctReport">Accounting report<\/a>\s*<a href="#lgReport">Lead gen report<\/a>\s*<a href="#adminReport">Admin report<\/a>\s*<a href="#proof">Sales report<\/a>/.test(HTML));
-ok('  #srHead and #srBody exist', tagOf('srHead') === 'div' && tagOf('srBody') === 'div');
-ok('  the page script mounts the reports first and watches them for the rail', /if \(typeof teamReport === 'function'\) \{ teamReport\('acctReport', 'accounting'\); teamReport\('lgReport', 'leadgen'\); teamReport\('adminReport', 'admin'\); \}[^\n]*\n\s*if \(typeof salesReport === 'function'\) salesReport\('proof'\);\s*\/\/[^\n]*\n\s*dhLoadPoStrip\(\);/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')) &&
-   /\['acctReport', 'lgReport', 'adminReport', 'proof', 'inbox', 'pulse', 'team', 'payroll'\]/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
-ok('  its scripts load after itinerary-week.js', /itinerary-week\.js[\s\S]*sales-report-model\.js[\s\S]*sales-report\.js[\s\S]*director-home-inline\.js/.test(HTML));
 ok('A350: the card reads only getClientBook and writes nothing', (() => { const c = fs.readFileSync(D + 'js/client-book-card.js', 'utf8'); return (c.match(/(?:postFlow|fetchFlow)\('(\w+)'/g) || []).join() === "postFlow('getClientBook'"; })());
 const TAGS2 = { button: ['themeToggle'], canvas: ['pulseCost'], aside: ['rail'], section: ['pulse', 'team', 'payroll'],
                 div: ['pulseAccrual', 'pulseHeads', 'pulseDed', 'pulseCostBox', 'pulseCostFallback', 'spotTotal'], dd: ['kpiNet', 'kpiShare', 'kpi13', 'kpiActive', 'spotGross', 'spotDed'] };
