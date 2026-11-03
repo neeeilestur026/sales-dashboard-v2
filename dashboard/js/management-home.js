@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiGetPerformanceReviews(),
     apiGetTrainingPrograms(),
     apiGetHRTasks(),
-    apiGetMemos(),
+    _mgmtBoardOrMemos(),   // A390 — HR Memos moved to the bulletin board
     apiGetGrievances(),
     apiGetCampaigns(),
     apiGetContentCalendar(),
@@ -147,6 +147,20 @@ function renderHRSummary(result) {
 // ═══════════════════════════════════════════════
 // HR Module Cards (HR Insights section detail)
 // ═══════════════════════════════════════════════
+
+/* A390 — the HR section's memo list reads the bulletin board (HR Memos moved there, Neil 2 Nov 2026), in the old memo shape
+   so the table and the "Active" count below stay as they were; before FlowAPI 195 it falls back to the old Code.gs memos. */
+function _mgmtBoardOrMemos() {
+  if (typeof postFlow !== 'function') return apiGetMemos();
+  return postFlow('getBulletin', { view: 'manage' }).then(function (r) {
+    if (!r || !r.success) return apiGetMemos();
+    var roles = { sales: 'Sales', admin: 'Admin', accounting: 'Accounting', management: 'Management', director: 'Director', hr: 'HR', marketing: 'Marketing', leadgen: 'Lead generation', warehouse: 'Warehouse' };
+    return { success: true, data: (r.items || []).map(function (it) {
+      var aud = (it.audience || []).indexOf('all') >= 0 ? 'Everyone' : (it.audience || []).map(function (a) { return roles[a] || a; }).join(', ');
+      return { title: it.title, type: it.kind, target: aud, priority: it.pinned ? 'Pinned' : '', status: it.status === 'Live' ? 'Active' : it.status };
+    }) };
+  }).catch(function () { return apiGetMemos(); });
+}
 
 function _hrData(result) {
   if (!result || result.status !== 'fulfilled') return [];

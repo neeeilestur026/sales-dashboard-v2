@@ -78,13 +78,13 @@
   };
   /* the + button: [the page and its ?new= form, the label, the icon]; an action shows only where the role has that page */
   var CREATE = {
-    sales: [['flow-pricing-request.html?new=1', 'New purchase request', 'file'], ['my-daily-report.html?new=call', 'Log a call', 'clip'], ['client-visits.html?new=1', 'Plan a visit', 'pin'], ['director-client-book.html?new=1', 'Add a client', 'users']],
+    sales: [['flow-pricing-request.html?new=1', 'New purchase request', 'file'], ['my-daily-report.html?new=call', 'Log a call', 'clip'], ['client-visits.html?new=1', 'Plan a visit', 'pin'], ['director-client-book.html?new=1', 'Add a client', 'users'], ['shutdown-calendar.html?new=1', 'New shutdown', 'cal']],
     admin: [['flow-purchase-orders.html?new=1', 'New purchase order', 'cart'], ['flow-payment-requests.html?new=1', 'Payment request', 'card'], ['flow-receiving.html?new=1', 'Receive goods', 'box'], ['website-requests.html', 'Website requests', 'inbox']],
     accounting: [['flow-invoices.html?new=1', 'New invoice', 'file'], ['flow-ar-aging.html', 'Record a collection', 'inbox'], ['flow-expenses.html?new=1', 'New expense', 'book'], ['flow-payment-requests.html?new=1', 'Payment request', 'card']],
-    director: [['director-pricing-engine.html', 'Price a quotation', 'tag'], ['collect.html', 'Collect a payment', 'inbox'], ['director-home.html#inbox', 'Approvals', 'check']],
-    management: [['management-home.html#inbox', 'Approvals', 'check'], ['leave-request.html', 'Request leave', 'cal']],
+    director: [['director-pricing-engine.html', 'Price a quotation', 'tag'], ['collect.html', 'Collect a payment', 'inbox'], ['director-home.html#inbox', 'Approvals', 'check'], ['bulletin.html?new=1', 'New announcement', 'pen'], ['shutdown-calendar.html?new=1', 'New shutdown', 'cal']],
+    management: [['management-home.html#inbox', 'Approvals', 'check'], ['leave-request.html', 'Request leave', 'cal'], ['bulletin.html?new=1', 'New announcement', 'pen'], ['shutdown-calendar.html?new=1', 'New shutdown', 'cal']],
     leadgen: [['leadgen-home.html?new=log', 'Log activity', 'clip']],
-    hr: [['hr-employees.html?new=1', 'Add an employee', 'users'], ['hr-memos.html?new=1', 'New memo', 'pen']],
+    hr: [['hr-employees.html?new=1', 'Add an employee', 'users'], ['bulletin.html?new=1', 'New announcement', 'pen']],   // A390 — the board replaced HR Memos
     marketing: [['marketing-home.html?new=leads', 'New lead', 'users']]
   };
   /* a home's long sections, each a row that opens its own screen: [selector, title, icon] */

@@ -46,7 +46,7 @@ const LEDGER_NAV = {
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['item-book.html', 'Items'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
     ['Collect', 'inbox', [['flow-invoices.html', 'Invoices'], ['flow-ar-aging.html', 'AR aging'], ['flow-collections.html', 'Collections'], ['collection-details.html', 'Collection details'], ['month-check.html', 'Month check']]],
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet']]],
-    ['Team', 'chart', [['admin-summary.html', 'Summary'], ['admin-team.html', 'Team'], ['admin-reports.html', 'Reports'], ['all-daily-reports.html', 'All daily reports'], ['admin-daily-report.html', 'Admin daily report'], ['my-daily-report.html', 'New daily report'], ['team-performance.html', 'Team performance']]],
+    ['Team', 'chart', [['admin-summary.html', 'Summary'], ['admin-team.html', 'Team'], ['admin-reports.html', 'Reports'], ['all-daily-reports.html', 'All daily reports'], ['admin-daily-report.html', 'Admin daily report'], ['my-daily-report.html', 'New daily report'], ['team-performance.html', 'Team performance'], ['bulletin.html', 'Bulletin board']]],   // A390
     ['Guide', 'compass', [['flow-home.html', 'Process overview'], ['flow-guide.html', 'Process guide']]],
     ['System', 'sliders', [['admin-users.html', 'User management'], ['admin-login-log.html', 'Login log']]]
   ],
@@ -57,7 +57,7 @@ const LEDGER_NAV = {
     ['Quotes', 'file', [['website-requests.html', 'Website requests'], ['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
     ['Payables', 'card', [['supplier-list.html', 'Supplier list'], ['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-payments.html', 'Payment register'], ['director-expenses.html', 'Expenses'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Commissions for payroll'], ['commission-rates.html', 'Commission rates']]],
     ['Reports', 'chart', [['director-sales-orders.html', 'Sales orders'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['month-check.html', 'Month check']]],
-    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['client-visits.html', 'Client visits'], ['management-itinerary.html', 'Weekly itineraries'], ['team-performance.html', 'Team performance']]],   // A366 · A369
+    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['client-visits.html', 'Client visits'], ['management-itinerary.html', 'Weekly itineraries'], ['team-performance.html', 'Team performance'], ['shutdown-calendar.html', 'Shutdown calendar'], ['bulletin.html', 'Bulletin board']]],   // A366 · A369 · A390 · A391
     ['Tools', 'tool', [['director-emails.html', 'Email'], ['pf-admin.html', 'Product finder data'], ['scan.html', 'Scanner'], ['item-book.html', 'Items'], ['collect.html', 'Collect'], ['collection-details.html', 'Collection details']]]
   ],
   accounting: [
@@ -72,17 +72,17 @@ const LEDGER_NAV = {
   management: [
     ['Home', 'home', 'management-home.html'],
     ['Approvals', 'check', [['flow-quotations.html', 'Quotation approvals'], ['flow-purchase-orders.html', 'PO approvals'], ['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-pricing-request.html', 'Pricing requests'], ['purchase-request-tracker.html', 'PR tracker'], ['management-leave.html', 'Leave approvals']]],
-    ['Sell', 'cart', [['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-tracker.html', 'Client tracker'], ['flow-sales-orders.html', 'Sales orders, operations'], ['management-sales-orders.html', 'Sales orders, all'], ['flow-lifecycle.html', 'SO lifecycle'], ['flow-clients.html', 'Client master']]],
+    ['Sell', 'cart', [['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-tracker.html', 'Client tracker'], ['flow-sales-orders.html', 'Sales orders, operations'], ['management-sales-orders.html', 'Sales orders, all'], ['flow-lifecycle.html', 'SO lifecycle'], ['flow-clients.html', 'Client master'], ['shutdown-calendar.html', 'Shutdown calendar']]],   // A391
     ['Money', 'trend', [['flow-invoices.html', 'Invoices'], ['flow-collections.html', 'Collections'], ['flow-ar-aging.html', 'AR aging'], ['month-check.html', 'Month check'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Sales commissions']]],
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet']]],
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['item-book.html', 'Items'], ['flow-shipments.html', 'Shipments'], ['flow-suppliers.html', 'Suppliers']]],
-    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['team-performance.html', 'Team performance'], ['client-visits.html', 'Client visits'], ['management-itinerary.html', 'Weekly itineraries'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],   // A366 · A369
+    ['Team', 'users', [['all-daily-reports.html', 'Daily reports'], ['team-daily-reports.html', 'New daily reports'], ['team-performance.html', 'Team performance'], ['client-visits.html', 'Client visits'], ['management-itinerary.html', 'Weekly itineraries'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen'], ['bulletin.html', 'Bulletin board']]],   // A366 · A369 · A390
     ['Guide', 'compass', [['flow-home.html', 'Process overview'], ['flow-guide.html', 'Process guide']]]
   ],
   sales: [   // A385 — PR tracker and Quotation board left the sales menu: the two lists are organized instead
     ['Home', 'home', 'dashboard.html'],
     ['Quote', 'file', [['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['flow-quotations.html', 'Quotations'], ['quotation-status.html', 'My quotations'], ['flow-inventory.html', 'Inventory'], ['item-book.html', 'Items']]],
-    ['Clients', 'users', [['director-client-book.html', 'Client Book'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
+    ['Clients', 'users', [['director-client-book.html', 'Client Book'], ['shutdown-calendar.html', 'Shutdown calendar'], ['performance.html', 'My client tracker'], ['client-tracker.html', 'Client tracker'], ['pending-items.html', 'Pending items'], ['quotation-summary.html', 'Quotation summary']]],   // A358 — the Client Book
     ['Field', 'pin', [['client-visits.html', 'Client visits'], ['weekly-itinerary.html', 'Weekly itinerary'], ['flow-travel.html', 'Travel allowance'], ['flow-commissions.html', 'Commission requests'], ['sales-emails.html', 'My emails']]],   // A369 — client visits, the new itinerary
     ['Reports', 'clip', [['report.html', 'Daily report'], ['my-daily-report.html', 'New daily report'], ['my-reports.html', 'My reports']]],
     ['Guide', 'compass', 'flow-guide.html']
@@ -101,7 +101,7 @@ const LEDGER_NAV = {
     ['Home', 'home', 'hr-home.html'],
     ['People', 'users', [['hr-employees.html', 'Employees'], ['hr-recruitment.html', 'Recruitment'], ['hr-reviews.html', 'Reviews'], ['hr-accreditations.html', 'Accreditations'], ['hr-training.html', 'Training'], ['hr-grievances.html', 'Grievances']]],
     ['Leave', 'cal', 'hr-leave.html'],
-    ['Work', 'bag', [['hr-tasks.html', 'Tasks'], ['hr-daily-report.html', 'Daily report'], ['hr-memos.html', 'Memos']]],
+    ['Work', 'bag', [['hr-tasks.html', 'Tasks'], ['hr-daily-report.html', 'Daily report'], ['bulletin.html', 'Bulletin board']]],   // A390 — the board replaced HR Memos
     ['Content', 'pen', [['hr-campaigns.html', 'Campaigns'], ['hr-content-calendar.html', 'Content calendar']]],
     ['Reports', 'chart', [['team-performance.html', 'Team performance'], ['hr-analytics.html', 'Analytics'], ['payroll-books.html', 'Contribution tables']]]
   ]
@@ -350,6 +350,7 @@ function _apWire(nav, side, scrim, openKey) {
    the amount when the item carries one, and the one verb that says what the row is for. The row
    stays a single link; the verb is its label, not a second control. */
 const LEDGER_VERBS = [
+  [/new announcements? on the bulletin board/i, 'Read'], [/plant shutdowns? starts?/i, 'Prepare'],   // A390 · A391
   [/website requests? to answer/i, 'Answer'], [/not reaching the portal/i, 'Check'],   // A338
   [/past due — collect|collect\b/i, 'Collect'], [/to pay\b/i, 'Pay'], [/past due/i, 'Settle'], [/acknowledge/i, 'Acknowledge'],
   [/sent back|rejected|returned/i, 'Fix'], [/awaiting your (approval|verification)|waiting for your (signature|final pricing)/i, 'Review'],

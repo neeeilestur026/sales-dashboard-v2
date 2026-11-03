@@ -1,0 +1,81 @@
+/* bulletin.css — A390 · the bulletin board card on each home (js/bulletin.js) and the posts bulletin.html draws. Tokens only.
+   The apple-design skill: one quiet card under the greeting, at most three posts; feedback on press; "Got it" collapses on
+   press (a cross-fade under reduced motion); a pinned post is marked in words, not colour alone. On a phone the card sits
+   above "Needs you" (the order rule below; apple-phone.css puts #inbox at 3 and every other section at 5). */
+#hxBoard[hidden] { display: none; }
+.bb-card { display: flex; flex-direction: column; gap: 10px; }
+#hxBoard[hidden] { display: none; }   /* a host card class may set display: no empty card while it loads */
+.bb-card.bb-solo { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-md); background: var(--hx-card); }
+.bb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.bb-head h2 { margin: 0; font: 700 15px/1.3 var(--hx-text); letter-spacing: -.01em; color: var(--hx-ink); }
+.bb-acts { display: flex; gap: 12px; align-items: baseline; }
+.bb-acts a, .bb-more a { font: 600 12.5px/1.3 var(--hx-text); color: var(--hx-navy-text); text-decoration: none; }
+.bb-acts a:hover, .bb-more a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.bb-new { padding: 3px 11px; border-radius: var(--hx-r-pill); background: var(--hx-navy-soft); }
+.bb-list { display: flex; flex-direction: column; gap: 8px; }
+.bb-quiet, .bb-more { margin: 0; font: 400 13px/1.45 var(--hx-text); color: var(--hx-ink-3); }
+.bb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
+
+/* a post */
+.bb-item { position: relative; padding: 12px 14px; border: 1px solid var(--hx-hair-2); border-radius: 12px; background: var(--hx-card);
+  transition: opacity .22s ease-out, transform .22s ease-out; }
+.bb-item.pinned { border-color: var(--hx-navy-line); background: var(--hx-navy-soft); }
+.bb-item.archived, .bb-item.ended { opacity: .7; }
+.bb-item.bb-out { opacity: 0; transform: translateY(-4px) scale(.98); }
+.bb-it-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 4px; }
+.bb-kind, .bb-pin, .bb-state { display: inline-block; padding: 0 8px; border-radius: var(--hx-r-pill); font: 700 10.5px/1.7 var(--hx-text); }
+.bb-kind { background: var(--hx-inset); color: var(--hx-ink-2); }
+.bb-pin { background: var(--hx-navy); color: var(--hx-card); }
+.bb-state { background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-line); color: var(--hx-ink); }
+.bb-when { margin-left: auto; font: 400 12px/1.4 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
+.bb-title { margin: 0; font: 600 14.5px/1.35 var(--hx-text); letter-spacing: -.008em; color: var(--hx-ink); overflow-wrap: anywhere; }
+/* the scanner's one-line post: the title opens the post on the board, "Got it" stays at the right */
+.bb-compact { display: flex; align-items: center; gap: 8px 10px; padding: 10px 12px; }
+.bb-compact .bb-title { flex: 1 1 auto; min-width: 0; color: var(--hx-ink); text-decoration: none; }
+.bb-compact .bb-title:hover { text-decoration: underline; }
+.bb-compact .bb-got, .bb-compact .bb-seen { flex: none; }
+.bb-body { margin: 4px 0 0; font: 400 13.5px/1.5 var(--hx-text); color: var(--hx-ink-2); overflow-wrap: anywhere; }
+.bb-body.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.bb-thumb { display: block; margin: 8px 0 0; padding: 0; border: 1px solid var(--hx-hair-2); border-radius: 10px; overflow: hidden; background: var(--hx-inset); cursor: zoom-in; }
+.bb-img { display: block; width: 180px; max-width: 100%; aspect-ratio: 4 / 3; }
+.bb-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+#hxBoard .bb-img { width: 88px; }   /* the home card keeps a small picture; the full one opens on tap, the page shows it large */
+.bb-file { display: inline-flex; align-items: baseline; gap: 8px; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-pill);
+  background: var(--hx-card); color: var(--hx-navy-text); font: 600 12.5px/1.3 var(--hx-text); cursor: pointer; max-width: 100%; }
+.bb-fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-fs { flex: none; font-weight: 500; color: var(--hx-ink-3); }
+.bb-it-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 0; }
+.bb-it-foot:empty, .bb-it-foot:has(> .bb-until:only-child:empty) { display: none; }
+.bb-until { margin-right: auto; font: 500 12px/1.3 var(--hx-text); color: var(--hx-ink-3); }
+.bb-it-foot > .bb-thumb, .bb-it-foot > .bb-file { margin: 0; }
+.bb-it-foot > .bb-thumb { align-self: flex-end; }
+.bb-it-foot > .bb-got, .bb-it-foot > .bb-seen { margin-left: auto; }   /* stays at the right when the file takes the row */
+.bb-got { padding: 5px 14px; border: 0; border-radius: var(--hx-r-pill); background: var(--hx-navy); color: var(--hx-card); font: 600 12.5px/1.2 var(--hx-text); cursor: pointer; }
+.bb-seen { font: 600 12px/1.3 var(--hx-text); color: var(--hx-ok); }
+
+/* feedback on press, instant */
+.bb-got, .bb-file, .bb-thumb, .bb-new { transition: transform 100ms ease-out; }
+.bb-got:active, .bb-file:active, .bb-thumb:active, .bb-new:active { transform: scale(.97); }
+.bb-got:focus-visible, .bb-file:focus-visible, .bb-thumb:focus-visible, .bb-acts a:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+
+/* a phone (the Apple shell at apple-phone.css's own 640px): the board above "Needs you" — #inbox is order 3 and the
+   board comes first in the page; on a desktop the deck is a grid and the board simply follows the top bar */
+@media screen and (max-width: 640px) {
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell .hx-deck > .hx-col > #hxBoard,
+  html[data-skin="ledger"][data-look="apple"][data-phone="on"].ap-shell body.dh .dh-deck > .dh-col > #hxBoard { order: 3; }
+}
+@media (max-width: 600px) {
+  .bb-when { margin-left: 0; width: 100%; }
+  .bb-img { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bb-item { transition: opacity .12s linear; }
+  .bb-item.bb-out { transform: none; }
+  .bb-got:active, .bb-file:active, .bb-thumb:active, .bb-new:active { transform: none; }
+}
+html[data-motion="off"] .bb-item { transition: none; }
+@media (prefers-contrast: more) {
+  .bb-item { border-color: var(--hx-ink-3); }
+  .bb-item.pinned { box-shadow: inset 0 0 0 1px var(--hx-navy); }
+}
+@media print { .bb-got, .bb-acts { display: none; } }

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulletin board</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/bulletin.css">
+  <link rel="stylesheet" href="css/bulletin-page.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen bbp">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content bbp-main">
+    <!-- A390 — the bulletin board (Neil, 2 Nov 2026): announcements for everyone or chosen teams. HR, admin, the director and
+         management post and edit them; everyone marks "Got it". It replaced HR Memos. js/bulletin-page.js draws it. -->
+    <header class="bbp-head">
+      <div>
+        <h1>Bulletin board</h1>
+        <p class="bbp-lede">Announcements for everyone, or for your team. Mark each one "Got it" once you have read it.</p>
+      </div>
+      <button type="button" class="btn btn-primary primary" id="bbpNew" hidden>New announcement</button>
+    </header>
+    <div id="bbpNotice"></div>
+    <div id="bbpImport"></div>
+    <div class="bbp-tools">
+      <div class="bbp-seg" id="bbpSeg" role="tablist" aria-label="Show"></div>
+      <label class="bbp-search"><span class="bb-sr">Search the board</span><input type="search" id="bbpQ" autocomplete="off" placeholder="Search the board"></label>
+    </div>
+    <div class="bbp-list" id="bbpList" aria-live="polite"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/bulletin.js"></script>
+  <script src="js/bulletin-model.js"></script>
+  <script src="js/bulletin-page.js"></script>
+</body>
+</html>

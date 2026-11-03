@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 194;   // A387 — the Item Book: one card per product, and stock never lands on a guessed row. History: see CHANGELOG.
+var FLOW_VERSION = 195;   // A390 · A391 — the bulletin board on every home, and the sales shutdown calendar. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -617,7 +617,16 @@ var SCHEMA = {
   // and a log that is only ever appended to. Written only by saveCollectionDetails.
   CollectionBook: ['Client No', 'Client', 'Key', 'Aliases', 'Pays By', 'Their Bank', 'Bank Note', 'Pays Into', 'Collection Address',
                    'When To Collect', 'Contacts JSON', 'Notes', 'Created By', 'Created At', 'Updated By', 'Updated At'],
-  CollectionBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
+  CollectionBookLog: ['Log No', 'Client No', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
+  // A390 — the bulletin board: posts (clock ids BB-), one "Got it" row per person per post, and the posts' log. No Script Properties.
+  Bulletin: ['Bulletin No', 'Title', 'Body', 'Kind', 'Audience', 'Pinned', 'Show Until', 'Status', 'File ID', 'File Name', 'File Type', 'File Size',
+             'Source', 'Source Ref', 'Client Ref', 'Created By', 'Created By User', 'Created At', 'Updated By', 'Updated At', 'Archived By', 'Archived At', 'Archive Reason'],
+  BulletinAcks: ['Bulletin No', 'Username', 'Name', 'Role', 'At'],
+  BulletinLog: ['Log No', 'Bulletin No', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
+  // A391 — client plant shutdowns (clock ids SH-); Start / End are yyyy-MM-dd text, read back through _dateStr
+  Shutdowns: ['Shutdown No', 'Company', 'Client Key', 'Client No', 'Site', 'Site Kind', 'Start', 'End', 'Scope', 'Offer', 'Opportunity', 'Contact', 'Status',
+              'Follow Up By', 'Notes', 'Client Ref', 'Created By', 'Created By User', 'Created At', 'Updated By', 'Updated At', 'Archived By', 'Archived At', 'Archive Reason'],
+  ShutdownLog: ['Log No', 'Shutdown No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -865,6 +874,8 @@ var _SECURED = {
   setQuotationResult: 1,   // A382 — quotation status (owner or approver, checked inside)
   getCollectionBook: 1, saveCollectionDetails: 1,   // A384 — collection details (bank, address, contacts): its read is secured too
   getItemBook: 1, getItemCard: 1, getItemHistory: 1, getItemPhotos: 1, saveItemDetails: 1,   // A387 — the Item Book: reads are secured (costs by role)
+  getBulletin: 1, getBulletinFile: 1, saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, previewBulletinMemos: 1, importBulletinMemos: 1,   // A390
+  getShutdowns: 1, saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar (reads secured: names and plans)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
@@ -1619,6 +1630,516 @@ function saveItemDetails(p) {
            message: 'Saved: ' + changed.map(function (k) { return label[k]; }).join(', ') + '.' };
 }
 /* ═══ end A387 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A390 · THE BULLETIN BOARD ══════════════════════════════════════════════════════════════════
+ * Neil, 2 Nov 2026: announcements on every user's dashboard; HR, admin, the director and management add and edit them.
+ * Each post goes to everyone or to chosen roles, can be pinned, can end on a date, carries "Got it" (the writers see who
+ * has and has not seen it) and one file or image. It replaces HR Memos (Code.gs): the memos still active move here once
+ * (previewBulletinMemos / importBulletinMemos); the old Memos sheet is kept as it was.
+ *
+ * Nothing here takes a Script Property (the project is near the limit): ids come from the clock, a retried post is caught
+ * by its Client Ref column, and an attachment is a PRIVATE Drive file (no anyone-with-link) kept off the Documents
+ * register, whose read is unsecured — it is served only by getBulletinFile, which checks the audience first. ────────── */
+var _BB_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'hr', 'marketing', 'leadgen', 'warehouse'];
+var _BB_WRITE = ['hr', 'admin', 'director', 'management'];
+var _BB_KINDS = ['Announcement', 'Memo', 'Policy update'];
+var _BB_PIN_MAX = 3, _BB_BODY_MAX = 3000, _BB_B64_MAX = 14000000;
+var _BB_MIME = { 'image/jpeg': 'image', 'image/png': 'image', 'image/webp': 'image', 'image/gif': 'image', 'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'spreadsheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'slides', 'text/plain': 'text', 'text/csv': 'text' };
+function _bbList(v, fallback) {
+  var l = String(v == null ? '' : v).toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return l.length ? l : fallback;
+}
+function _bbSwitch(v) { return String(v === undefined || v === null || v === '' ? 'on' : v).trim().toLowerCase() !== 'off'; }
+/** The settings, read ONCE per call (inside a mutation every getFlowSettings re-reads the tab). */
+function _bbCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  return { on: _bbSwitch(d.bulletin), home: _bbSwitch(d.bulletinHome), roles: _bbList(d.bulletinRoles, _BB_ROLES), write: _bbList(d.bulletinWriteRoles, _BB_WRITE) };
+}
+function _bbDenied(p, cfg, write) {
+  if (!cfg.on) return 'The bulletin board is switched off (FlowSettings bulletin).';
+  var r = _ibRole(p);
+  if ((write ? cfg.write : cfg.roles).indexOf(r) < 0) return write ? 'Only ' + cfg.write.join(', ') + ' can post on the bulletin board.' : 'The bulletin board is not open to your role.';
+  if (!String((p && (p.actorUsername || p.actorName)) || '').trim()) return 'Sign in again — there is no name to save this under.';
+  return '';
+}
+function _bbId(prefix) { return prefix + '-' + Utilities.formatDate(_now(), 'Asia/Manila', 'yyyyMMddHHmmss') + '-' + Utilities.getUuid().slice(0, 4).toUpperCase(); }
+function _bbTrue(v) { return v === true || String(v).toLowerCase() === 'true'; }
+function _bbUser(p) { return String((p && p.actorUsername) || '').trim().toLowerCase(); }
+/** Is this row (an ack, a post) the caller's? By username first, by name only when the row has no username. */
+function _bbIsMe(user, name, p) {
+  var u = String(user || '').trim().toLowerCase();
+  return u ? u === _bbUser(p) : _cbSame(name, p && p.actorName);
+}
+/** 'all' or a list of known roles. Returns the list, ['all'], or null when a word is not a role. */
+function _bbAudience(v) {
+  var raw = Array.isArray(v) ? v : String(v == null ? '' : v).split(',');
+  var l = raw.map(function (x) { return String(x).trim().toLowerCase(); }).filter(Boolean);
+  if (!l.length || l.indexOf('all') >= 0) return ['all'];
+  for (var i = 0; i < l.length; i++) if (_BB_ROLES.indexOf(l[i]) < 0) return null;
+  return l.filter(function (x, i) { return l.indexOf(x) === i; });
+}
+function _bbFor(r, role) { var a = _bbAudience(r['Audience']) || ['all']; return a[0] === 'all' || a.indexOf(role) >= 0; }
+function _bbState(r, today) {
+  if (String(r['Status'] || '') === 'Archived' || r['Archived At']) return 'Archived';
+  var until = _cbDate(_dateStr(r['Show Until']));
+  return until && until < today ? 'Ended' : 'Live';
+}
+/** Write a whole post row in SCHEMA order (the A322 lesson). */
+function _bbPut(row, obj) {
+  var vals = SCHEMA.Bulletin.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('Bulletin').getRange(row.rowIndex, 1, 1, vals.length).setValues([vals]);
+  else _append('Bulletin', vals);
+}
+function _bbLog(no, kind, from, to, note, by) {
+  _append('BulletinLog', [_bbId('BBL'), no, kind, _webCell(from).slice(0, 190), _webCell(to).slice(0, 190), _webCell(note, true).slice(0, 500), by || '', _now()]);
+}
+function _bbOut(r, today, mine) {
+  var aud = _bbAudience(r['Audience']) || ['all'], fid = String(r['File ID'] || '');
+  return { bulletinNo: String(r['Bulletin No']), title: String(r['Title'] || ''), body: String(r['Body'] || ''), kind: String(r['Kind'] || 'Announcement'),
+           audience: aud, pinned: _bbTrue(r['Pinned']), showUntil: _cbDate(_dateStr(r['Show Until'])), status: _bbState(r, today),
+           file: fid ? { name: String(r['File Name'] || ''), type: String(r['File Type'] || ''), size: _num(r['File Size']), kind: _BB_MIME[String(r['File Type'] || '')] || 'file' } : null,
+           source: String(r['Source'] || ''), createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']),
+           updatedBy: String(r['Updated By'] || ''), updatedAt: _webIso(r['Updated At']), archivedBy: String(r['Archived By'] || ''), archivedAt: _webIso(r['Archived At']),
+           gotIt: mine ? (mine[String(r['Bulletin No'])] || '') : '' };
+}
+function _bbSort(a, b) {
+  var pa = a.pinned && a.status === 'Live' ? 1 : 0, pb = b.pinned && b.status === 'Live' ? 1 : 0;
+  return (pb - pa) || String(b.createdAt).localeCompare(String(a.createdAt)) || ((b._i || 0) - (a._i || 0));   // a tie: the later row is the newer
+}
+
+/** The board. view: board (live posts for my role) · history (my role's ended posts) · manage (writers: every post, with
+ *  who has seen each, and the log). countOnly: how many live posts for me I have not marked "Got it" (not my own, not
+ *  the memos brought over from HR Memos — they arrive all at once and are not news). */
+function getBulletin(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var role = _ibRole(p), today = _fieldToday(), may = { write: cfg.write.indexOf(role) >= 0 };
+  var rows = _sbRows('Bulletin'), acks = _sbRows('BulletinAcks'), mine = {};
+  acks.forEach(function (a) { if (_bbIsMe(a['Username'], a['Name'], p)) mine[String(a['Bulletin No'])] = _webIso(a['At']) || 'yes'; });
+  if (p.countOnly) {
+    var n = rows.filter(function (r) {
+      return _bbState(r, today) === 'Live' && _bbFor(r, role) && !mine[String(r['Bulletin No'])] && String(r['Source'] || '') !== 'memo' &&
+             !_bbIsMe(r['Created By User'], r['Created By'], p);
+    }).length;
+    return { success: true, count: cfg.home ? n : 0, home: cfg.home };
+  }
+  var view = String(p.view || 'board').toLowerCase();
+  if (view === 'manage' && !may.write) return { success: false, message: 'Only ' + cfg.write.join(', ') + ' can see every post and who has seen it.' };
+  var items = rows.filter(function (r) {
+    if (view === 'manage') return true;
+    if (!_bbFor(r, role)) return false;
+    return _bbState(r, today) === (view === 'history' ? 'Ended' : 'Live');
+  }).map(function (r, i) { var o = _bbOut(r, today, mine); o._i = r.rowIndex || i; return o; }).sort(_bbSort);
+  items.forEach(function (o) { delete o._i; });
+  var out = { success: true, items: items, may: may, home: cfg.home, today: today, roles: _BB_ROLES, kinds: _BB_KINDS, pinMax: _BB_PIN_MAX };
+  if (view === 'manage') {
+    var by = {};
+    acks.forEach(function (a) { var k = String(a['Bulletin No']); (by[k] = by[k] || []).push({ username: String(a['Username'] || ''), name: String(a['Name'] || ''), role: String(a['Role'] || ''), at: _webIso(a['At']) }); });
+    items.forEach(function (it) { it.acks = by[it.bulletinNo] || []; });
+    out.log = _sbRows('BulletinLog').map(function (l) {
+      return { bulletinNo: String(l['Bulletin No']), kind: String(l['Kind'] || ''), from: String(l['From'] || ''), to: String(l['To'] || ''), note: String(l['Note'] || ''), by: String(l['By'] || ''), at: _webIso(l['At']) };
+    }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); }).slice(0, 300);
+  }
+  return out;
+}
+
+/** A post's attachment as base64, for those it is addressed to (and the writers). Images can come as a thumbnail. */
+function getBulletinFile(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var role = _ibRole(p), writer = cfg.write.indexOf(role) >= 0;
+  var r = _sbRows('Bulletin').filter(function (x) { return String(x['Bulletin No']) === String(p.bulletinNo || ''); })[0];
+  if (!r || (!writer && !_bbFor(r, role))) return { success: false, message: 'That announcement is not addressed to you.' };
+  if (!writer && _bbState(r, _fieldToday()) === 'Archived') return { success: false, message: 'That announcement was taken down.' };
+  var type = String(r['File Type'] || '');
+  if (!r['File ID']) return { success: false, message: 'That announcement has no file.' };
+  if (!_BB_MIME[type]) return { success: false, message: 'That file cannot be shown.' };
+  try {
+    var f = DriveApp.getFileById(String(r['File ID'])), thumb = String(p.size || '') === 'thumb' && _BB_MIME[type] === 'image';
+    var blob = thumb ? (f.getThumbnail() || f.getBlob()) : f.getBlob();
+    return { success: true, mimeType: thumb ? (blob.getContentType() || type) : type, fileName: String(r['File Name'] || 'file'), base64: Utilities.base64Encode(blob.getBytes()) };
+  } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
+}
+
+/** A private Drive file (no sharing) under <yyyy>/<MM Month>/_Internal/Announcements/<post>. */
+function _bbSaveFile(b64, name, mime, no) {
+  var folder = null;
+  try { folder = _ensurePath(_ymSegments(_now()).concat(['_Internal', 'Announcements', no])); } catch (e) { folder = null; }
+  var file = (folder || _flowFolder()).createFile(Utilities.newBlob(Utilities.base64Decode(b64), mime, name));
+  return String(file.getId());
+}
+
+/** Post or edit. Writers (FlowSettings bulletinWriteRoles); any of them may edit any post, and every change is logged.
+ *  A field not sent keeps its value; a save over someone else's newer one is refused; a retry is answered once. */
+function saveBulletin(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName || p.actorUsername).trim(), today = _fieldToday(), all = _sbRows('Bulletin');
+  var row = p.bulletinNo ? all.filter(function (r) { return String(r['Bulletin No']) === String(p.bulletinNo); })[0] || null : null;
+  if (p.bulletinNo && !row) return { success: false, message: 'That announcement was not found.' };
+  if (!row && p.clientRef) {
+    var dup = all.filter(function (r) { return String(r['Client Ref'] || '') && String(r['Client Ref']) === String(p.clientRef); })[0];
+    if (dup) return { success: true, duplicate: true, bulletinNo: String(dup['Bulletin No']), refNo: String(dup['Bulletin No']), item: _bbOut(dup, today), message: 'Already posted.' };
+  }
+  if (row && _bbState(row, today) === 'Archived') return { success: false, message: 'This announcement is archived. Restore it first, then change it.' };
+  if (row && p.ifUpdatedAt !== undefined && p.ifUpdatedAt !== null && String(p.ifUpdatedAt) !== _webIso(row['Updated At'])) {
+    return { success: false, stale: true, message: String(row['Updated By'] || 'Someone') + ' changed this announcement since you opened it. Reload to see their change, then make yours.' };
+  }
+  var has = function (k) { return !row || (p[k] !== undefined && p[k] !== null); };
+  var obj = {};
+  if (row) SCHEMA.Bulletin.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Bulletin No': _bbId('BB'), 'Kind': 'Announcement', 'Audience': 'all', 'Status': 'Live', 'Created By': by,
+                            'Created By User': _bbUser(p), 'Created At': _now(), 'Client Ref': _webCell(p.clientRef).slice(0, 80) });
+  var bn = String(obj['Bulletin No']);
+  if (has('title')) {
+    var t = String(p.title == null ? '' : p.title).replace(/\s+/g, ' ').trim();
+    if (!t) return { success: false, message: 'Give the announcement a title.' };
+    if (t.length > 120) return { success: false, message: 'Keep the title under 120 characters; the rest can go in the message.' };
+    obj['Title'] = _webCell(t);
+  }
+  if (has('body')) {
+    var b = String(p.body == null ? '' : p.body);
+    if (b.length > _BB_BODY_MAX) return { success: false, message: 'Keep the message under ' + _BB_BODY_MAX + ' characters, or attach it as a file.' };
+    obj['Body'] = _webCell(b, true);
+  }
+  if (has('kind') && p.kind !== undefined) {
+    if (_BB_KINDS.indexOf(String(p.kind)) < 0) return { success: false, message: 'The kind is one of: ' + _BB_KINDS.join(', ') + '.' };
+    obj['Kind'] = String(p.kind);
+  }
+  if (has('audience') && p.audience !== undefined) {
+    var aud = _bbAudience(p.audience);
+    if (!aud) return { success: false, message: 'Send it to everyone, or to roles from: ' + _BB_ROLES.join(', ') + '.' };
+    obj['Audience'] = aud.join(',');
+  }
+  if (has('showUntil') && p.showUntil !== undefined) {
+    var u = String(p.showUntil == null ? '' : p.showUntil).trim();
+    if (u && !_cbDate(u)) return { success: false, message: 'Show until is a date (yyyy-mm-dd), or leave it blank to keep it up.' };
+    if (u && u < today) return { success: false, message: 'Show until is in the past; pick today or later.' };
+    var far = new Date(today + 'T00:00:00Z'); far.setUTCDate(far.getUTCDate() + 366);
+    if (u && u > far.toISOString().slice(0, 10)) return { success: false, message: 'Show until is at most a year ahead.' };
+    obj['Show Until'] = u;
+  }
+  if (has('pinned') && p.pinned !== undefined) {
+    var pin = p.pinned === true || String(p.pinned).toLowerCase() === 'true';
+    if (pin && !_bbTrue(row && row['Pinned'])) {
+      var pinned = all.filter(function (r) { return String(r['Bulletin No']) !== bn && _bbTrue(r['Pinned']) && _bbState(r, today) === 'Live'; }).length;
+      if (pinned >= _BB_PIN_MAX) return { success: false, message: _BB_PIN_MAX + ' announcements are pinned already. Unpin one first.' };
+    }
+    obj['Pinned'] = pin;
+  }
+  if (p.fileBase64) {
+    var mime = String(p.mimeType || '').toLowerCase(), b64 = String(p.fileBase64).replace(/^data:[^,]*,/, '');
+    if (!_BB_MIME[mime]) return { success: false, message: 'Attach a picture (JPEG, PNG, WebP, GIF), a PDF, a Word, Excel or PowerPoint file, or a text file.' };
+    if (b64.length > _BB_B64_MAX) return { success: false, message: 'The file is too large: keep it under 10 MB.' };
+    var fname = _webCell(p.fileName || 'attachment').replace(/[\\/:*?"|]/g, '-').slice(0, 120) || 'attachment';
+    obj['File ID'] = _bbSaveFile(b64, fname, mime, bn);
+    obj['File Name'] = fname; obj['File Type'] = mime; obj['File Size'] = Math.round(b64.length * 3 / 4);
+  } else if (p.removeFile === true || String(p.removeFile) === 'true') {
+    obj['File ID'] = ''; obj['File Name'] = ''; obj['File Type'] = ''; obj['File Size'] = '';
+  }
+  if (!String(obj['Body'] || '').trim() && !obj['File ID']) return { success: false, message: 'Write the message, or attach a file.' };
+  var label = { 'Title': 'title', 'Body': 'message', 'Kind': 'kind', 'Audience': 'audience', 'Pinned': 'pin', 'Show Until': 'end date', 'File ID': 'file' };
+  var changed = row ? Object.keys(label).filter(function (k) { return String(row[k] == null ? '' : row[k]) !== String(obj[k] == null ? '' : obj[k]); }) : [];
+  if (row && !changed.length) return { success: true, unchanged: true, bulletinNo: bn, refNo: bn, updatedAt: _webIso(row['Updated At']), item: _bbOut(row, today), message: 'Nothing changed.' };
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _bbPut(row, obj);
+  if (!row) _bbLog(bn, 'posted', '', String(obj['Title']), 'Posted to ' + (obj['Audience'] === 'all' ? 'everyone' : String(obj['Audience']).split(',').join(', ')) + '.', by);
+  else changed.forEach(function (k) {
+    var long = k === 'Body' || k === 'File ID';
+    _bbLog(bn, label[k], long ? '' : String(row[k] == null ? '' : row[k]), long ? (k === 'File ID' ? String(obj['File Name'] || 'removed') : '') : String(obj[k] == null ? '' : obj[k]),
+           long ? (k === 'File ID' ? (obj['File ID'] ? 'Attached a file (the earlier one is kept in Drive).' : 'Took the file off.') : 'Changed the message.') : '', by);
+  });
+  return { success: true, bulletinNo: bn, refNo: bn, updatedAt: _webIso(obj['Updated At']), item: _bbOut(obj, today),
+           message: row ? 'Saved: ' + changed.map(function (k) { return label[k]; }).join(', ') + '.' : 'Posted.' };
+}
+
+/** Take a post down, or (restore) put it back — the Undo. Writers. */
+function archiveBulletin(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var row = _sbRows('Bulletin').filter(function (r) { return String(r['Bulletin No']) === String(p.bulletinNo || ''); })[0];
+  if (!row) return { success: false, message: 'That announcement was not found.' };
+  var restore = p.restore === true || String(p.restore) === 'true', today = _fieldToday(), by = String(p.actorName || p.actorUsername).trim();
+  var isArch = _bbState(row, today) === 'Archived';
+  if (restore && !isArch) return { success: false, message: 'This announcement is not archived.' };
+  if (!restore && isArch) return { success: false, message: 'This announcement is archived already.' };
+  var obj = {};
+  SCHEMA.Bulletin.forEach(function (h) { obj[h] = row[h]; });
+  if (restore) Object.assign(obj, { 'Status': 'Live', 'Archived By': '', 'Archived At': '', 'Archive Reason': '' });
+  else Object.assign(obj, { 'Status': 'Archived', 'Archived By': by, 'Archived At': _now(), 'Archive Reason': _webCell(p.reason).slice(0, 160) });
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _bbPut(row, obj);
+  _bbLog(String(row['Bulletin No']), restore ? 'restored' : 'archived', '', '', restore ? 'Put back on the board.' : ('Taken down' + (obj['Archive Reason'] ? ': ' + obj['Archive Reason'] : '') + '.'), by);
+  return { success: true, refNo: String(row['Bulletin No']), bulletinNo: String(row['Bulletin No']), item: _bbOut(obj, today), updatedAt: _webIso(obj['Updated At']),
+           message: restore ? 'Back on the board.' : 'Taken down.' };
+}
+
+/** "Got it": once per person per post, only for a live post addressed to them. */
+function ackBulletin(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var role = _ibRole(p), row = _sbRows('Bulletin').filter(function (r) { return String(r['Bulletin No']) === String(p.bulletinNo || ''); })[0];
+  if (!row || !_bbFor(row, role)) return { success: false, message: 'That announcement is not addressed to you.' };
+  if (_bbState(row, _fieldToday()) !== 'Live') return { success: false, message: 'This announcement has ended.' };
+  var had = _sbRows('BulletinAcks').filter(function (a) { return String(a['Bulletin No']) === String(row['Bulletin No']) && _bbIsMe(a['Username'], a['Name'], p); })[0];
+  if (had) return { success: true, already: true, at: _webIso(had['At']), refNo: String(row['Bulletin No']) };
+  var now = _now();
+  _append('BulletinAcks', [String(row['Bulletin No']), _bbUser(p), String(p.actorName || '').trim(), role, now]);
+  return { success: true, at: _webIso(now), refNo: String(row['Bulletin No']) };
+}
+
+/* The HR memos, brought over once. The browser reads them from Code.gs (apiGetMemos) and sends them here: preview first
+   (a read, so nothing is logged for an import that never happened), then the import, which skips what is already on the
+   board (Source Ref), so a second run creates nothing. Each memo keeps its author and date; Urgent becomes pinned while
+   fewer than three are pinned; a Target that names no role is read as everyone, and the preview says so. */
+var _BB_ROLE_WORDS = [['sales', /\bsales\b/], ['admin', /\badmin/], ['accounting', /\baccount/], ['management', /\bmanage/], ['director', /\bdirector/],
+                      ['hr', /\bhr\b|human resource/], ['marketing', /\bmarketing\b/], ['leadgen', /lead ?gen/], ['warehouse', /\bwarehouse\b/]];
+function _bbMemoPlan(memos, all) {
+  var have = {};
+  all.forEach(function (r) { if (String(r['Source Ref'] || '')) have[String(r['Source Ref'])] = 1; });
+  return memos.map(function (m) {
+    m = m || {};
+    var title = String(m.title || '').replace(/\s+/g, ' ').trim(), at = String(m.createdAt || '').trim(), who = String(m.createdBy || '').trim();
+    var ref = 'memo:' + _ibHash(title + '|' + at + '|' + who), target = String(m.target || '').trim(), t = target.toLowerCase(), notes = [];
+    var roles = [];
+    if (t && !/\b(all|everyone|everybody)\b/.test(t)) _BB_ROLE_WORDS.forEach(function (w) { if (w[1].test(t)) roles.push(w[0]); });
+    if (t && !/\b(all|everyone|everybody)\b/.test(t) && !roles.length) notes.push('“' + target + '” names no role, so it goes to everyone');
+    var type = String(m.type || '').toLowerCase(), kind = /announce/.test(type) ? 'Announcement' : /policy/.test(type) ? 'Policy update' : 'Memo';
+    var when = (function () {
+      var mm = at.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+      if (mm) return new Date(+mm[3], +mm[1] - 1, +mm[2], +(mm[4] || 0), +(mm[5] || 0), +(mm[6] || 0));
+      var d = new Date(at);
+      return isNaN(d.getTime()) ? null : d;
+    })();
+    if (!when) notes.push('no readable date, so it is dated today');
+    if (title.length > 120) notes.push('title cut to 120 characters');
+    var skip = String(m.status || '').trim().toLowerCase() !== 'active' ? 'not active' : have[ref] ? 'already on the board' : !title ? 'no title' : '';
+    return { ref: ref, title: title.slice(0, 120), body: String(m.content || ''), kind: kind, audience: roles.length ? roles : ['all'], urgent: /urgent/i.test(String(m.priority || '')),
+             createdBy: who, createdAt: when, note: notes.join('; '), skip: skip };
+  });
+}
+function _bbMemoInput(p) {
+  var list = p.memos;
+  if (typeof list === 'string') { try { list = JSON.parse(list || '[]'); } catch (e) { return null; } }
+  return Array.isArray(list) ? list.slice(0, 200) : null;
+}
+function previewBulletinMemos(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var memos = _bbMemoInput(p);
+  if (!memos) return { success: false, message: 'The memos could not be read.' };
+  var plan = _bbMemoPlan(memos, _sbRows('Bulletin'));
+  return { success: true, plan: plan.map(function (x) {
+    return { title: x.title, kind: x.kind, audience: x.audience, pinned: x.urgent, createdBy: x.createdBy, createdAt: x.createdAt ? _webIso(x.createdAt) : '', note: x.note, skip: x.skip };
+  }), toImport: plan.filter(function (x) { return !x.skip; }).length };
+}
+function importBulletinMemos(p) {
+  p = p || {};
+  var cfg = _bbCfg(), no = _bbDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var memos = _bbMemoInput(p);
+  if (!memos) return { success: false, message: 'The memos could not be read.' };
+  var all = _sbRows('Bulletin'), today = _fieldToday(), by = String(p.actorName || p.actorUsername).trim();
+  var pinned = all.filter(function (r) { return _bbTrue(r['Pinned']) && _bbState(r, today) === 'Live'; }).length, created = 0, skipped = 0;
+  _bbMemoPlan(memos, all).forEach(function (x) {
+    if (x.skip) { skipped++; return; }
+    var pin = x.urgent && pinned < _BB_PIN_MAX;
+    if (pin) pinned++;
+    var bn = _bbId('BB'), obj = { 'Bulletin No': bn, 'Title': _webCell(x.title), 'Body': _webCell(x.body, true) || '(no text)', 'Kind': x.kind,
+      'Audience': x.audience.join(','), 'Pinned': pin, 'Status': 'Live', 'Source': 'memo', 'Source Ref': x.ref, 'Created By': _webCell(x.createdBy) || 'HR',
+      'Created At': x.createdAt || _now(), 'Updated By': by, 'Updated At': _now() };
+    _bbPut(null, obj);
+    _bbLog(bn, 'imported', '', x.title, 'From the HR memos, imported by ' + by + '.' + (x.note ? ' ' + x.note.charAt(0).toUpperCase() + x.note.slice(1) + '.' : ''), by);
+    created++;
+  });
+  return { success: true, created: created, skipped: skipped, refNo: 'HR memos',
+           message: created ? created + ' memo' + (created === 1 ? '' : 's') + ' brought onto the board.' : 'Nothing to bring over: every active memo is on the board already.' };
+}
+
+/* ═══ A391 · THE SHUTDOWN CALENDAR ═════════════════════════════════════════════════════════════════
+ * Neil, 2 Nov 2026: client plant shutdowns (maintenance and turnaround windows), so the reps prepare the quotes, the
+ * rentals and the tools before they start. Sales, the director and management add them; EVERY rep sees every entry;
+ * only the rep who added one, the director and management change it. Archived, never deleted. Each change is its own
+ * ShutdownLog row (the A369 visits precedent). Dates are yyyy-MM-dd text, read back through _dateStr like VisitPlans. */
+var _SHD_ROLES = ['sales', 'director', 'management'], _SHD_EDIT_ALL = ['director', 'management'];
+var _SHD_STATUSES = ['Tentative', 'Confirmed', 'Postponed', 'Done'], _SHD_OFFERS = ['Sale', 'Rental', 'Service'], _SHD_SITE_KINDS = ['Plant', 'Head office', 'Other'];
+var _SHD_SPAN_MAX = 120;
+function _shdCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  var n = function (v, f) { var x = parseInt(v, 10); return x > 0 && x < 400 ? x : f; };
+  return { on: _bbSwitch(d.shutdowns), roles: _bbList(d.shutdownRoles, _SHD_ROLES), editAll: _bbList(d.shutdownEditAllRoles, _SHD_EDIT_ALL),
+           remind: n(d.shutdownRemindDays, 7), card: n(d.shutdownCardDays, 30) };
+}
+function _shdDenied(p, cfg) {
+  if (!cfg.on) return 'The shutdown calendar is switched off (FlowSettings shutdowns).';
+  if (cfg.roles.indexOf(_ibRole(p)) < 0) return 'The shutdown calendar is open to ' + cfg.roles.join(', ') + '.';
+  if (!String((p && (p.actorUsername || p.actorName)) || '').trim()) return 'Sign in again — there is no name to save this under.';
+  return '';
+}
+function _shdCanEdit(p, cfg, r) { return cfg.editAll.indexOf(_ibRole(p)) >= 0 || _bbIsMe(r['Created By User'], r['Created By'], p); }
+function _shdAdd(ymd, n) { var d = new Date(ymd + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function _shdDays(a, b) { return Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000); }
+function _shdPut(row, obj) {
+  var vals = SCHEMA.Shutdowns.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet('Shutdowns').getRange(row.rowIndex, 1, 1, vals.length).setValues([vals]);
+  else _append('Shutdowns', vals);
+}
+function _shdLog(no, kind, from, to, note, by) {
+  _append('ShutdownLog', [_bbId('SHL'), no, kind, _webCell(from).slice(0, 190), _webCell(to).slice(0, 190), _webCell(note, true).slice(0, 500), by || '', _now()]);
+}
+function _shdOut(r, p, cfg) {
+  return { shutdownNo: String(r['Shutdown No']), company: String(r['Company'] || ''), clientNo: String(r['Client No'] || ''), site: String(r['Site'] || ''),
+           siteKind: String(r['Site Kind'] || ''), start: _cbDate(_dateStr(r['Start'])), end: _cbDate(_dateStr(r['End'])) || _cbDate(_dateStr(r['Start'])),
+           scope: String(r['Scope'] || ''), offer: String(r['Offer'] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean),
+           opportunity: String(r['Opportunity'] || ''), contact: String(r['Contact'] || ''), status: String(r['Status'] || 'Tentative'),
+           followUpBy: String(r['Follow Up By'] || ''), notes: String(r['Notes'] || ''), createdBy: String(r['Created By'] || ''), createdAt: _webIso(r['Created At']),
+           updatedBy: String(r['Updated By'] || ''), updatedAt: _webIso(r['Updated At']), archived: !!r['Archived At'], archivedBy: String(r['Archived By'] || ''),
+           archiveReason: String(r['Archive Reason'] || ''), canEdit: _shdCanEdit(p, cfg, r), mine: _bbIsMe(r['Created By User'], r['Created By'], p) || _cbSame(r['Follow Up By'], p.actorName),
+           // the bell reminds whoever follows it up (the creator only when nobody was named)
+           follow: r['Follow Up By'] ? _cbSame(r['Follow Up By'], p.actorName) : _bbIsMe(r['Created By User'], r['Created By'], p) };
+}
+/** Every entry, for every rep. upcomingDays: only those still ahead or under way within N days. countOnly: how many start
+ *  within shutdownRemindDays (all, and mine = the ones I follow up), for the bell. */
+function getShutdowns(p) {
+  p = p || {};
+  var cfg = _shdCfg(), no = _shdDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var today = _fieldToday(), rows = _sbRows('Shutdowns');
+  var live = function (it) { return !it.archived && it.status !== 'Done' && it.status !== 'Postponed'; };
+  if (p.countOnly) {
+    var to = _shdAdd(today, cfg.remind), soon = rows.map(function (r) { return _shdOut(r, p, cfg); }).filter(function (it) { return live(it) && it.start >= today && it.start <= to; });
+    return { success: true, count: soon.length, mine: soon.filter(function (it) { return it.follow; }).length, days: cfg.remind };
+  }
+  var items = rows.map(function (r) { return _shdOut(r, p, cfg); }).filter(function (it) { return it.start && (p.archived || !it.archived); });
+  var days = parseInt(p.upcomingDays, 10);
+  if (days > 0) {
+    var until = _shdAdd(today, Math.min(days, 366));
+    items = items.filter(function (it) { return !it.archived && it.status !== 'Done' && it.end >= today && it.start <= until; });
+  }
+  items.sort(function (a, b) { return a.start.localeCompare(b.start) || a.company.localeCompare(b.company); });
+  var log = p.log ? _sbRows('ShutdownLog').map(function (l) {
+    return { shutdownNo: String(l['Shutdown No']), kind: String(l['Kind'] || ''), from: String(l['From'] || ''), to: String(l['To'] || ''), note: String(l['Note'] || ''), by: String(l['By'] || ''), at: _webIso(l['At']) };
+  }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); }).slice(0, 300) : [];
+  return { success: true, items: items, log: log, today: today, may: { add: true, editAll: cfg.editAll.indexOf(_ibRole(p)) >= 0 }, cardDays: cfg.card,
+           lists: { statuses: _SHD_STATUSES, offers: _SHD_OFFERS, siteKinds: _SHD_SITE_KINDS } };
+}
+/** Add, or change one: the rep who added it, the director, management. */
+function saveShutdown(p) {
+  p = p || {};
+  var cfg = _shdCfg(), no = _shdDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var by = String(p.actorName || p.actorUsername).trim(), today = _fieldToday(), all = _sbRows('Shutdowns');
+  var row = p.shutdownNo ? all.filter(function (r) { return String(r['Shutdown No']) === String(p.shutdownNo); })[0] || null : null;
+  if (p.shutdownNo && !row) return { success: false, message: 'That shutdown was not found.' };
+  if (row && !_shdCanEdit(p, cfg, row)) return { success: false, message: 'Only ' + (String(row['Created By'] || 'the rep who added it')) + ', the director or management can change this shutdown.' };
+  if (!row && p.clientRef) {
+    var dup = all.filter(function (r) { return String(r['Client Ref'] || '') && String(r['Client Ref']) === String(p.clientRef); })[0];
+    if (dup) return { success: true, duplicate: true, shutdownNo: String(dup['Shutdown No']), refNo: String(dup['Shutdown No']), item: _shdOut(dup, p, cfg), message: 'Already added.' };
+  }
+  if (row && row['Archived At']) return { success: false, message: 'This shutdown is archived. Restore it first, then change it.' };
+  if (row && p.ifUpdatedAt !== undefined && p.ifUpdatedAt !== null && String(p.ifUpdatedAt) !== _webIso(row['Updated At'])) {
+    return { success: false, stale: true, message: String(row['Updated By'] || 'Someone') + ' changed this shutdown since you opened it. Reload to see their change, then make yours.' };
+  }
+  var has = function (k) { return !row || (p[k] !== undefined && p[k] !== null); };
+  var obj = {};
+  if (row) SCHEMA.Shutdowns.forEach(function (h) { obj[h] = row[h]; });
+  else Object.assign(obj, { 'Shutdown No': _bbId('SH'), 'Status': 'Tentative', 'Created By': by, 'Created By User': _bbUser(p), 'Created At': _now(),
+                            'Client Ref': _webCell(p.clientRef).slice(0, 80), 'Follow Up By': by });
+  if (has('company')) {
+    var co = String(p.company == null ? '' : p.company).replace(/\s+/g, ' ').trim();
+    if (!co) return { success: false, message: 'Say which client is shutting down.' };
+    if (co.length > 120) return { success: false, message: 'Keep the company name under 120 characters.' };
+    obj['Company'] = _webCell(co); obj['Client Key'] = _canonKey(co);
+  }
+  if (has('clientNo')) obj['Client No'] = _webCell(p.clientNo).slice(0, 40);
+  if (has('site')) obj['Site'] = _webCell(p.site).slice(0, 190);
+  if (has('siteKind') && p.siteKind !== undefined && String(p.siteKind)) {
+    if (_SHD_SITE_KINDS.indexOf(String(p.siteKind)) < 0) return { success: false, message: 'The site is one of: ' + _SHD_SITE_KINDS.join(', ') + '.' };
+    obj['Site Kind'] = String(p.siteKind);
+  }
+  if (has('start') || has('end')) {
+    var s = has('start') ? String(p.start == null ? '' : p.start).trim() : _cbDate(_dateStr(obj['Start']));
+    var e = has('end') ? String(p.end == null ? '' : p.end).trim() : _cbDate(_dateStr(obj['End']));
+    if (!_cbDate(s)) return { success: false, message: 'Give the day the shutdown starts.' };
+    if (!e) e = s;
+    if (!_cbDate(e)) return { success: false, message: 'The end is a date (yyyy-mm-dd).' };
+    if (e < s) return { success: false, message: 'The shutdown ends before it starts. Check the dates.' };
+    if (_shdDays(s, e) + 1 > _SHD_SPAN_MAX) return { success: false, message: 'A shutdown longer than ' + _SHD_SPAN_MAX + ' days is probably a typo in the dates.' };
+    if (s < _shdAdd(today, -366) || s > _shdAdd(today, 731)) return { success: false, message: 'The start is more than a year ago or two years ahead. Check the year.' };
+    obj['Start'] = s; obj['End'] = e;
+  }
+  if (has('scope')) obj['Scope'] = _webCell(p.scope, true).slice(0, 1000);
+  if (has('offer') && p.offer !== undefined) {
+    var off = (Array.isArray(p.offer) ? p.offer : String(p.offer == null ? '' : p.offer).split(',')).map(function (x) { return String(x).trim(); }).filter(Boolean);
+    for (var i = 0; i < off.length; i++) if (_SHD_OFFERS.indexOf(off[i]) < 0) return { success: false, message: 'What we can offer is from: ' + _SHD_OFFERS.join(', ') + '.' };
+    obj['Offer'] = off.filter(function (x, j) { return off.indexOf(x) === j; }).join(',');
+  }
+  if (has('opportunity')) obj['Opportunity'] = _webCell(p.opportunity, true).slice(0, 1000);
+  if (has('contact')) obj['Contact'] = _webCell(p.contact).slice(0, 190);
+  if (has('status') && p.status !== undefined) {
+    if (_SHD_STATUSES.indexOf(String(p.status)) < 0) return { success: false, message: 'The status is one of: ' + _SHD_STATUSES.join(', ') + '.' };
+    obj['Status'] = String(p.status);
+  }
+  if (has('followUpBy') && p.followUpBy !== undefined) obj['Follow Up By'] = _webCell(p.followUpBy).slice(0, 120) || by;
+  if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 1000);
+  if (!obj['Company'] || !_cbDate(_dateStr(obj['Start']))) return { success: false, message: 'A shutdown needs the client and its start date.' };
+  /* a twin: the same client and site, live, overlapping dates — the second rep is shown the first entry instead */
+  var sNo = String(obj['Shutdown No']), siteKey = _rawKey(obj['Site']), os = _cbDate(_dateStr(obj['Start'])), oe = _cbDate(_dateStr(obj['End'])) || os;
+  var twin = all.filter(function (r) {
+    if (String(r['Shutdown No']) === sNo || r['Archived At'] || String(r['Status']) === 'Done') return false;
+    if (String(r['Client Key'] || '') !== String(obj['Client Key'] || '') || _rawKey(r['Site']) !== siteKey) return false;
+    var rs = _cbDate(_dateStr(r['Start'])), re = _cbDate(_dateStr(r['End'])) || rs;
+    return rs && rs <= oe && re >= os;
+  })[0];
+  if (twin) return { success: false, duplicate: _shdOut(twin, p, cfg), message: String(twin['Created By'] || 'Someone') + ' already added ' + String(twin['Company']) +
+                     (twin['Site'] ? ' (' + String(twin['Site']) + ')' : '') + ' for ' + _cbDate(_dateStr(twin['Start'])) + '. Open that entry instead.' };
+  var label = { 'Company': 'client', 'Site': 'site', 'Start': 'start', 'End': 'end', 'Scope': 'scope', 'Offer': 'offer', 'Opportunity': 'opportunity',
+                'Contact': 'contact', 'Status': 'status', 'Follow Up By': 'follow-up', 'Notes': 'notes' };
+  var changed = row ? Object.keys(label).filter(function (k) { return String(row[k] == null ? '' : _dateStrIf(k, row[k])) !== String(obj[k] == null ? '' : _dateStrIf(k, obj[k])); }) : [];
+  if (row && !changed.length) return { success: true, unchanged: true, shutdownNo: sNo, refNo: sNo, updatedAt: _webIso(row['Updated At']), item: _shdOut(row, p, cfg), message: 'Nothing changed.' };
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _shdPut(row, obj);
+  if (!row) _shdLog(sNo, 'added', '', String(obj['Company']), 'Added: ' + os + (oe !== os ? ' to ' + oe : '') + '.', by);
+  else changed.forEach(function (k) {
+    var long = k === 'Scope' || k === 'Opportunity' || k === 'Notes';
+    _shdLog(sNo, label[k], long ? '' : String(_dateStrIf(k, row[k]) || ''), long ? '' : String(_dateStrIf(k, obj[k]) || ''), long ? 'Changed the ' + label[k] + '.' : '', by);
+  });
+  return { success: true, shutdownNo: sNo, refNo: sNo, updatedAt: _webIso(obj['Updated At']), item: _shdOut(obj, p, cfg), message: row ? 'Saved.' : 'Added to the calendar.' };
+}
+function _dateStrIf(k, v) { return k === 'Start' || k === 'End' ? _cbDate(_dateStr(v)) : (v == null ? '' : v); }
+/** Archive one (with a reason), or restore it — the Undo. The same people who may change it. */
+function archiveShutdown(p) {
+  p = p || {};
+  var cfg = _shdCfg(), no = _shdDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var row = _sbRows('Shutdowns').filter(function (r) { return String(r['Shutdown No']) === String(p.shutdownNo || ''); })[0];
+  if (!row) return { success: false, message: 'That shutdown was not found.' };
+  if (!_shdCanEdit(p, cfg, row)) return { success: false, message: 'Only ' + (String(row['Created By'] || 'the rep who added it')) + ', the director or management can archive this shutdown.' };
+  var restore = p.restore === true || String(p.restore) === 'true', by = String(p.actorName || p.actorUsername).trim();
+  if (restore && !row['Archived At']) return { success: false, message: 'This shutdown is not archived.' };
+  if (!restore && row['Archived At']) return { success: false, message: 'This shutdown is archived already.' };
+  var obj = {};
+  SCHEMA.Shutdowns.forEach(function (h) { obj[h] = row[h]; });
+  if (restore) Object.assign(obj, { 'Archived By': '', 'Archived At': '', 'Archive Reason': '' });
+  else Object.assign(obj, { 'Archived By': by, 'Archived At': _now(), 'Archive Reason': _webCell(p.reason).slice(0, 160) });
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _shdPut(row, obj);
+  _shdLog(String(row['Shutdown No']), restore ? 'restored' : 'archived', '', '', restore ? 'Put back on the calendar.' : ('Archived' + (obj['Archive Reason'] ? ': ' + obj['Archive Reason'] : '') + '.'), by);
+  return { success: true, refNo: String(row['Shutdown No']), shutdownNo: String(row['Shutdown No']), item: _shdOut(obj, p, cfg), updatedAt: _webIso(obj['Updated At']),
+           message: restore ? 'Back on the calendar.' : 'Archived.' };
+}
+/* ═══ end A390 · A391 ════════════════════════════════════════════════════════════════════════════ */
 
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
@@ -13201,7 +13722,12 @@ var _FLOW_SETTING_DEFAULTS = {
      itemStrictMatch off puts every stock movement back on the pre-A387 first-match code path, exactly. */
   itemBook: 'on', itemStrictMatch: 'on',
   itemBookRoles: 'sales,admin,accounting,management,director,warehouse', itemBookEditRoles: 'admin,director',
-  itemBookCostRoles: 'management,director'
+  itemBookCostRoles: 'management,director',
+  /* A390 — the bulletin board ('on' / 'off'; bulletinHome off quiets the home card and the bell only) and its role lists.
+     A391 — the shutdown calendar: who opens it, who may change any entry, the bell's look-ahead and the sales card's window. */
+  bulletin: 'on', bulletinHome: 'on', bulletinRoles: 'sales,admin,accounting,management,director,hr,marketing,leadgen,warehouse',
+  bulletinWriteRoles: 'hr,admin,director,management',
+  shutdowns: 'on', shutdownRoles: 'sales,director,management', shutdownEditAllRoles: 'director,management', shutdownRemindDays: 7, shutdownCardDays: 30
 };
 function getFlowSettings() {
   var out = {};
@@ -16061,6 +16587,7 @@ var _MODULE_MAP = {
   setCollectionMeta: ['Collection', 'Updated'],   // A265
   correctCollection: ['Collection', 'Corrected'],
   backfillItemIds: ['Inventory', 'Item IDs Assigned'],
+  saveBulletin: ['Bulletin board', 'Saved'], archiveBulletin: ['Bulletin board', 'Archived'], importBulletinMemos: ['Bulletin board', 'Memos imported'],   // A390
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -21450,6 +21977,9 @@ var HANDLERS = {
   getCollectionBook: getCollectionBook, saveCollectionDetails: saveCollectionDetails,   // A384
   getItemBook: getItemBook, getItemCard: getItemCard, getItemHistory: getItemHistory, getItemPhotos: getItemPhotos,   // A387
   saveItemDetails: saveItemDetails,
+  getBulletin: getBulletin, getBulletinFile: getBulletinFile, saveBulletin: saveBulletin, archiveBulletin: archiveBulletin, ackBulletin: ackBulletin,   // A390
+  previewBulletinMemos: previewBulletinMemos, importBulletinMemos: importBulletinMemos,
+  getShutdowns: getShutdowns, saveShutdown: saveShutdown, archiveShutdown: archiveShutdown,   // A391
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -21566,6 +22096,8 @@ var MUTATIONS = {
   saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374
   saveCollectionDetails: 1,   // A384 — one client's collection details, and its log row
   saveItemDetails: 1,   // A387 — one item card's details, and its log rows
+  saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, importBulletinMemos: 1,   // A390 — the bulletin board
+  saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -21594,6 +22126,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A390 THE BULLETIN BOARD + A391 THE SHUTDOWN CALENDAR (195; it carries A387's 194; A388/A389 are set aside and renumber when they resume; A327 takes 196 or later). Neil, 2 Nov 2026: announcements on every user's dashboard, written by HR, admin, the director and management (any of them edits any post), to everyone or chosen roles, with pin (at most 3), show-until, "Got it" (BulletinAcks, one row per person; writers see who has and has not) and one attachment (a PRIVATE Drive file under _Internal/Announcements, kept off the unsecured Documents register, served by getBulletinFile after an audience check; an allow-list of types, never SVG or HTML). New tabs Bulletin (23), BulletinAcks (5), BulletinLog (8). getBulletin (board / history / manage, countOnly for the bell), saveBulletin, archiveBulletin (Undo = restore), ackBulletin, previewBulletinMemos / importBulletinMemos (the active HR memos brought over once, by Source Ref; the Code.gs Memos sheet untouched). A391: client plant shutdowns; sales, the director and management add them, every rep sees all, only the creator (by username), the director and management change them. Tabs Shutdowns (24), ShutdownLog (8). getShutdowns (upcomingDays, countOnly all / mine), saveShutdown (a twin — same client and site, overlapping dates — is refused with the existing entry), archiveShutdown. Ids come from the clock and a retry is caught by a Client Ref column: no Script Properties. FlowSettings: bulletin, bulletinHome, bulletinRoles, bulletinWriteRoles, shutdowns, shutdownRoles, shutdownEditAllRoles, shutdownRemindDays, shutdownCardDays.
 A387 THE ITEM BOOK (194; A380 holds 190; A327 takes 197 or later, after A388 195 and A389 196). Neil, 1 Nov 2026: one card per product, open to every role that works with items, with its specs, photos, stock and every line it ever appeared on; costs only for management and the director. ItemDetails grows from 9 to 14 columns (Specs JSON, Notes, Hidden Photos, Updated By, Updated At; createItemByScan writes it through _ibPut in SCHEMA order) and a new append-only ItemBookLog tab. Secured reads getItemBook, getItemCard, getItemHistory (sell / buy / move) and getItemPhotos; saveItemDetails (admin and the director; a field not sent keeps its value; ifUpdatedAt refuses a stale save; one log row per change; Inventory is never written). uploadScanPhoto gains an 'item' kind (Item card photo, _Warehouse/Items). ONE RESOLVER, _ibResolve: a pick, the Item ID unless it is suspect (a no-code or shared-code row whose name is not the line's), a unique real code, code + exact name, a no-code exact name only one row has; otherwise unresolved with candidates, never the first match. With FlowSettings itemStrictMatch on, createReceiving, receiveByScan, createInvoice, voidInvoice, the receiving reversal, _ensureInventoryStock (POs now keep the id their line resolved to), importInventory and _scanInvId all use it: a line with real doubt comes back in needsItem and nothing is written; the page asks and sends picks. An invoice never creates a row (a line that is no stock item moves no stock and costs 0); _applyInventory returns the id it moved. Off puts every caller back on the pre-A387 code path. FlowSettings: itemBook, itemStrictMatch, itemBookRoles, itemBookEditRoles, itemBookCostRoles.
 A385 THE SALES LISTS (193; it carries A384's 192 and A382's 191; A380 holds 190; A327 takes 194 or later). Neil, 30 Oct 2026: purchase requests and quotations organized for the reps, old requests out of the way, and fewer steps from a priced request to a sent quotation; "prepare also so that we can easily revert this back". getPricingRequests returns updatedAt (the newest of Updated At, Created At, Date and the dates of the quotations it became) and archived (no update for prArchiveDays, FlowSettings, default 30; 0 = off), and archiveDays; it still returns every request, so every history and lookup is untouched and only the work lists hide archived ones. updatePRSourcing (at a later stage) and setPricingRequestSalesperson now stamp Updated At (_prTouch). restorePricingRequest (owner, admin, director; secured) stamps Updated At to bring one back. createQuotationFromPR answers a retried call (its clientRef already made a quotation) with that quotation before the stage gate, which used to call it an error. suggestQuotationNo: the year's next sequence number. New FlowSettings defaults: prArchiveDays 30, salesListsOrganizer, quoteOneStep, quoteNoSuggest (on/off, read by the pages).
 A384 COLLECTION DETAILS (192; it carries A382's 191; A380 holds 190; A327 takes 193 or later). Neil, 29 Oct 2026: each client's collection details (what bank, address, contact person, contact number); accounting and admin edit them, the director reads them, and AR aging shows them read-only. New tabs CollectionBook (16 wide, CC-) and CollectionBookLog (8, CCL-), written only by saveCollectionDetails (accounting, admin; upserts on _cdKey, a new spelling joins Aliases; ifUpdatedAt refuses a save over someone else's; a field not sent keeps its value). getCollectionBook (accounting, admin, director; secured, never creates the tabs) returns the records, the log, the lists (Pays By = AR aging's Method words; Pays Into = our banks from _fieldPlaces) and the banks seen on each client's cheques in FieldCollections. _cdKey is _canonKey without the business-unit drop: fourteen Aboitiz Power units are fourteen clients here. Also: _cbContacts no longer stores the formula guard's apostrophe inside Contacts JSON ('+63 ...), and every reader (_cbParse) takes an old one off, so the 22 Client Book phones read right with no data rewritten.

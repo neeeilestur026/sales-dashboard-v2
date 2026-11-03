@@ -35,7 +35,7 @@ function page(jsFiles, htmlFile, session, opts) {
                 /* A280 — a page that BUILDS something needs these. They landed the moment the create
                    form started being built for a role that had never reached it, which is the point:
                    a stub that cannot append is a stub that can only test pages doing nothing. */
-                appendChild() {}, removeChild() {}, remove() {}, insertAdjacentHTML() {},
+                appendChild() {}, removeChild() {}, remove() {}, insertAdjacentHTML() {}, insertBefore() {}, firstChild: null,
                 closest: () => null, focus() {}, click() {}, children: [], rows: [], options: [],
                 dataset: {} };
   });

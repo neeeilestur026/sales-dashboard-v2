@@ -1,0 +1,91 @@
+/* bulletin-page.css — A390 · the bulletin board page (bulletin.html). Tokens only. The posts themselves are css/bulletin.css.
+   The apple-design skill: a large title and one primary action; a segmented control whose indicator slides to the choice;
+   a translucent sticky toolbar; the composer and "Seen by" as sheets (bottom sheets on phones, from apple.js); Undo
+   instead of a confirm. Reduced motion, reduced transparency and more contrast are honoured. */
+.bbp-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+.bbp-head h1 { margin: 0; font: 700 28px/1.1 var(--hx-text); letter-spacing: -.022em; color: var(--hx-ink); }
+.bbp-lede { margin: 5px 0 0; max-width: 70ch; font: 400 13.5px/1.45 var(--hx-text); color: var(--hx-ink-2); }
+.bbp-notice { padding: 10px 14px; margin: 0 0 14px; border-radius: var(--hx-r-sm); background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-line); color: var(--hx-ink); font: 500 13px/1.45 var(--hx-text); }
+.bbp-notice.bad { background: var(--hx-red-soft); border-color: var(--hx-red-line); color: var(--hx-red); }
+.bbp-tools { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 820px; margin: 0 0 12px; padding: 8px 0;
+  background: var(--hx-page); background: color-mix(in srgb, var(--hx-page) 82%, transparent); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+.bbp-seg { position: relative; display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--hx-inset); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.bbp-seg::-webkit-scrollbar { display: none; }
+.bbp-thumb.now { transition: none; }
+.bbp-thumb { position: absolute; top: 2px; bottom: 2px; left: 0; width: 0; border-radius: 7px; background: var(--hx-card); box-shadow: var(--hx-sh-1), 0 0 0 .5px var(--hx-hair);
+  transition: transform .32s cubic-bezier(.2, .8, .2, 1), width .32s cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
+.bbp-segb { position: relative; z-index: 1; flex: none; padding: 5px 14px; border: 0; border-radius: 7px; background: transparent; color: var(--hx-ink-2); font: 600 12.5px/1.3 var(--hx-text); cursor: pointer; }
+.bbp-segb[aria-selected="true"] { color: var(--hx-ink); }
+.bbp-segb .n { margin-left: 2px; color: var(--hx-ink-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.bbp-search { flex: 1 1 240px; display: flex; min-width: 0; }
+.bbp-search input, .bbp-in { width: 100%; box-sizing: border-box; padding: 8px 10px; font: 400 13px/1.35 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid);
+  border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.bbp-search input:focus, .bbp-in:focus { outline: none; border-color: var(--hx-cyan); box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+textarea.bbp-in { resize: vertical; min-height: 110px; }
+.bbp-list { display: flex; flex-direction: column; gap: 10px; max-width: 820px; }
+.bbp-empty { margin: 0; padding: 22px 12px; text-align: center; font: 400 13px/1.45 var(--hx-text); color: var(--hx-ink-3); }
+.bbp-aud { margin: -4px 0 4px 14px; font: 500 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+.bbp-acts { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }   /* a writer's tools on each post */
+.bb-it-foot > .bbp-acts { margin-left: auto; }   /* the tools sit at the right, beside "Got it" */
+.bb-it-foot > .bbp-acts + .bb-got, .bb-it-foot > .bbp-acts + .bb-seen { margin-left: 4px; }
+.bbp-link { padding: 0; border: 0; background: none; color: var(--hx-navy-text); font: 600 12.5px/1.4 var(--hx-text); cursor: pointer; }
+.bbp-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.bbp-flash { box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+
+/* the one-time import of the HR memos */
+.bbp-import { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; max-width: 820px; margin: 0 0 14px; padding: 14px 16px;
+  border: 1px solid var(--hx-navy-line); border-radius: var(--hx-r-md); background: var(--hx-navy-soft); }
+.bbp-import h2 { margin: 0 0 4px; font: 700 15px/1.3 var(--hx-text); color: var(--hx-ink); }
+.bbp-import p { margin: 0 0 6px; font: 400 13px/1.45 var(--hx-text); color: var(--hx-ink-2); max-width: 62ch; }
+.bbp-plan { margin: 0; padding-left: 18px; font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-2); }
+.bbp-plan span { color: var(--hx-ink-3); }
+
+/* the sheets */
+.bbp-modal h3 { margin: 0 0 6px; }
+.bbp-sub { margin: 0 0 12px; font: 400 12.5px/1.4 var(--hx-text); color: var(--hx-ink-3); }
+.bbp-form label { display: flex; flex-direction: column; gap: 5px; margin: 12px 0 0; font: 600 12.5px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+.bbp-count { align-self: flex-end; margin-top: -18px; font: 500 11px/1.2 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
+.bbp-field { margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.bbp-field legend { padding: 0; margin: 0 0 6px; font: 600 12.5px/1.3 var(--hx-text); color: var(--hx-ink-2); }
+.bbp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bbp-form .bbp-chip { display: inline-flex; flex-direction: row; margin: 0; cursor: pointer; }
+.bbp-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.bbp-chip span { padding: 6px 12px; border: 1px solid var(--hx-hair); border-radius: var(--hx-r-pill); background: var(--hx-card); color: var(--hx-ink-2); font: 600 12.5px/1.2 var(--hx-text);
+  transition: transform 100ms ease-out; }
+.bbp-chip input:checked + span { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
+.bbp-chip input:focus-visible + span { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+.bbp-chip:active span { transform: scale(.97); }
+.bbp-row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; }
+.bbp-form .bbp-switch { flex-direction: row; align-items: center; gap: 8px; }
+.bbp-switch input { width: 18px; height: 18px; accent-color: var(--hx-navy); }
+.bbp-file { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 14px 0 0; }
+.bbp-fname { font: 600 12.5px/1.3 var(--hx-text); color: var(--hx-ink); overflow-wrap: anywhere; }
+.bbp-form .bbp-pick { display: inline-flex; flex-direction: row; margin: 0; cursor: pointer; }
+.bbp-msg { min-height: 1.2em; margin: 12px 0 0; font: 500 12.5px/1.4 var(--hx-text); color: var(--hx-ink-2); }
+.bbp-msg.bad { color: var(--hx-red); }
+.bbp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bbp-cols h4 { margin: 0 0 6px; font: 700 13px/1.3 var(--hx-text); color: var(--hx-ink); }
+.bbp-people { margin: 0 0 8px; padding: 0; list-style: none; }
+.bbp-people li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--hx-hair-2); font: 400 13px/1.4 var(--hx-text); color: var(--hx-ink); }
+.bbp-people span { color: var(--hx-ink-3); font-size: 12px; }
+.bbp-role { margin: 8px 0 2px; font: 700 11.5px/1.3 var(--hx-text); color: var(--hx-ink-3); }
+
+#bbpNew[hidden] { display: none; }   /* .btn sets display, which would beat the attribute: readers never see it */
+.bbp-segb, .bbp-link, #bbpNew { transition: transform 100ms ease-out; }
+.bbp-segb:active, #bbpNew:active { transform: scale(.97); }
+.bbp-segb:focus-visible, .bbp-link:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .bbp-head h1 { font-size: 24px; }
+  .bbp-cols { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bbp-thumb { transition: none; }
+  .bbp-segb:active, #bbpNew:active, .bbp-chip:active span { transform: none; }
+}
+html[data-motion="off"] .bbp-thumb { transition: none; }
+@media (prefers-reduced-transparency: reduce) { .bbp-tools { background: var(--hx-page); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-contrast: more) {
+  .bbp-thumb { box-shadow: 0 0 0 1px var(--hx-ink-2); }
+  .bbp-chip span { border-color: var(--hx-ink-3); }
+}
+@media print { .bbp-tools, #bbpNew, .bbp-import { display: none; } }
