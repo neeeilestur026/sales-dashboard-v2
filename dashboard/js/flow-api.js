@@ -160,6 +160,8 @@ const FLOW_SECURED_ACTIONS = [
   'setQuotationResult',   // A382 — quotation status
   'getCollectionBook', 'saveCollectionDetails',   // A384 — collection details
   'getItemBook', 'getItemCard', 'getItemHistory', 'getItemPhotos', 'saveItemDetails',   // A387 — the Item Book
+  'getBulletin', 'getBulletinFile', 'saveBulletin', 'archiveBulletin', 'ackBulletin', 'previewBulletinMemos', 'importBulletinMemos',   // A390
+  'getShutdowns', 'saveShutdown', 'archiveShutdown',   // A391 — the shutdown calendar
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
   'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
   'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',
