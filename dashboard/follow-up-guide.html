@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Follow-up guide</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/follow-up-guide.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen fgp">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content fgp-main">
+    <!-- A393 — the follow-up guide (Neil, 4 Nov 2026): each rep's top 50 through the week. Quotations first, on day 3, 5,
+         7 and 14 after sending and then every week until won or lost; then ten clients a day, Monday to Friday, carried
+         over until touched. A guide only: it reads what the rep already records. The director and management pick a
+         rep (?user=) and read it without the buttons. js/follow-up-guide-card.js draws it (data-mode="page"). -->
+    <header class="fgp-head">
+      <h1>Follow-up guide</h1>
+      <p class="fgp-lede">Your top 50 through the week. Quotations come first, on day 3, 5, 7 and 14 after sending and then every week until they are won or lost. Then ten clients a day, Monday to Friday. It updates itself from your daily report, quotations, visits and Client Book.</p>
+    </header>
+    <section class="fgp-card" id="followUpGuide" data-mode="page">
+      <div class="fg-skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/follow-up-guide-model.js"></script>
+  <script src="js/follow-up-guide-card.js"></script>
+  <script src="js/follow-up-guide.js"></script>
+</body>
+</html>

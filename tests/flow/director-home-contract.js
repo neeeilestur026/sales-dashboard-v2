@@ -94,13 +94,13 @@ ok('the theme script is the FIRST child of <body> (no flash, and it is a src scr
    /<body class="dh">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 ok('director-pulse.js loads after director-approvals.js', /director-approvals\.js[\s\S]*director-pulse\.js/.test(HTML));
 eq('the exact script list (A305: the page script last, where its inline block was)', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,client-book-model.js,client-book-card.js,director-home-inline.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,auth.js,ledger-nav.js,flow-api.js,flow-docs.js,quotation-worklist.js,quotation-team-worklist.js,director-home.js,itinerary-week.js,itinerary-week-panel.js,director-approvals.js,director-pulse.js,client-book-model.js,client-book-card.js,follow-up-team-card.js,director-home-inline.js');
 /* A347/A348 — the Sales Daily Report and A351 — the accounting, lead gen and admin reports were private trials first in the
    column. A392 (Neil, 3 Nov 2026) took all four off the dashboard: the director reads everyone's on team-daily-reports.html
    (A366), each person keeps their own on my-daily-report.html (A363). The column now opens with the Client Book card. */
 const C_ = '\\s*(?:<!--(?:(?!-->)[\\s\\S])*-->\\s*)?';
-ok('A392: the column opens with the Client Book card, then the inbox', new RegExp('<div class="dh-col">\\s*<header class="dh-mast">(?:(?!<section)[\\s\\S])*?<\\/header>' + C_ +
-   '<section class="dh-glass dh-cbc" id="clientBook">[\\s\\S]*?<\\/section>' + C_ + '<section class="dh-glass dh-inbox" id="inbox"').test(HTML));
+ok('A392: the column opens with the Client Book card, then (A393) the follow-ups card, hidden until filled, then the inbox', new RegExp('<div class="dh-col">\\s*<header class="dh-mast">(?:(?!<section)[\\s\\S])*?<\\/header>' + C_ +
+   '<section class="dh-glass dh-cbc" id="clientBook">[\\s\\S]*?<\\/section>' + C_ + '<section class="dh-glass dh-fut" id="followUpTeam" style="display:none;"><\\/section>' + C_ + '<section class="dh-glass dh-inbox" id="inbox"').test(HTML));
 ok('  no daily report is left on the page (sections, rail links, mounts or engines)', !/id="(?:acctReport|lgReport|adminReport|proof|srHead|srBody)"|data-tr=|href="#(?:acctReport|lgReport|adminReport|proof)"/.test(HTML) &&
    !/(?:sales|team)-report(?:-model)?\.js/.test(HTML) && !/teamReport\(|salesReport\(|'acctReport'|'proof'/.test(fs.readFileSync(D + 'js/director-home-inline.js', 'utf8')));
 ok('  the rail starts at Needs you, and the page script watches what is left', /<nav class="dh-rail-nav"[^>]*>\s*<a href="#inbox">Needs you/.test(HTML) &&

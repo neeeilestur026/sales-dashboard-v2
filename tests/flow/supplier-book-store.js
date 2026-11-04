@@ -50,7 +50,7 @@ sec('1 · the version, an empty list, and who may read it');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 195', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 195);
+  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
   const g = call(c, 'getSupplierBook', ADMIN);
   ok('a read of an empty list answers empty and creates no tab', g.success && g.suppliers.length === 0 && g.prices.length === 0 && g.log.length === 0 &&
      !('SupplierBook' in store) && !('SupplierPrices' in store) && !('SupplierBookLog' in store), g);

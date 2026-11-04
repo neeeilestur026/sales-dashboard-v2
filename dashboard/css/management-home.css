@@ -297,3 +297,18 @@ body.mg .hx-tdr .hx-tdr-foot { display: flex; justify-content: flex-end; margin-
 @media (prefers-reduced-motion: reduce) {
   body.mg *, body.mg *::before, body.mg *::after { animation: none !important; transition: none !important; }
 }
+
+/* A393 — Follow-ups this week: one row per rep, opening their week (js/follow-up-team-card.js) */
+body.mg #followUpTeam .fut-list { list-style: none; margin: 0; padding: 0; }
+body.mg #followUpTeam .fut-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 10px 2px; border-bottom: 1px solid var(--hx-hair-2); color: inherit; text-decoration: none; flex-wrap: wrap; transition: transform .1s ease-out; }
+body.mg #followUpTeam li:last-child .fut-row { border-bottom: 0; }
+body.mg #followUpTeam .fut-row:active { transform: scale(.99); }
+body.mg #followUpTeam .fut-who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+body.mg #followUpTeam .fut-who b { font-weight: 600; color: var(--hx-ink); }
+body.mg #followUpTeam .fut-who span { font-size: 12.5px; color: var(--hx-ink-3); }
+body.mg #followUpTeam .fut-week { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 120px; }
+body.mg #followUpTeam .fut-n { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; color: var(--hx-ink); }
+body.mg #followUpTeam .fut-n small { font-weight: 500; font-size: 12px; color: var(--hx-ink-3); }
+body.mg #followUpTeam .fut-bar { display: block; width: 120px; height: 4px; border-radius: 999px; background: var(--hx-inset); overflow: hidden; }
+body.mg #followUpTeam .fut-bar i { display: block; height: 100%; background: var(--hx-ok); transform-origin: left center; }
+@media (prefers-reduced-motion: reduce) { body.mg #followUpTeam .fut-row:active { transform: none; } }

@@ -19,7 +19,7 @@ const CB_SECTORS = ['Oil and gas', 'Cement', 'Power', 'Aviation', 'Automotive', 
 function cbSectorGroup(sector) { const s = _cbS(sector); return !s ? '' : CB_SECTORS.indexOf(s) >= 0 ? s : 'Others'; }
 const CB_STALE_DAYS = 14, CB_EXPIRY_DAYS = 30;
 const CB_PR_DONE = { 'Quoted': 1, 'Partly Quoted': 1, 'Migrated': 1 };   // a PR in these states is no longer an open RFQ
-const CB_FOLLOW_DAYS = [3, 7, 14];                                       // the Sales Daily Report's follow-up rule
+const CB_FOLLOW_DAYS = [3, 5, 7, 14], CB_FOLLOW_THEN = 7;                // the Sales Daily Report's follow-up rule (A393: then every 7)
 
 function _cbS(v) { return String(v == null ? '' : v).trim(); }
 function _cbDate(v) { return typeof flowDate === 'function' ? flowDate(v) : _cbS(v).slice(0, 10); }
@@ -28,6 +28,14 @@ function _cbNum(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 function _cbAdd(day, n) { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function _cbDays(a, b) { return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000); }
 function _cbWeekend(day) { const w = new Date(day + 'T00:00:00Z').getUTCDay(); return w === 6 ? _cbAdd(day, 2) : w === 0 ? _cbAdd(day, 1) : day; }
+/** A393 — the follow-up step due on `day` (srFollowStep's rule with the defaults), or 0. */
+function cbFollowStep(sent, day) {
+  const steps = CB_FOLLOW_DAYS.slice();
+  for (let n = steps[steps.length - 1] + CB_FOLLOW_THEN; _cbAdd(sent, n) <= day; n += CB_FOLLOW_THEN) steps.push(n);
+  let hit = 0;
+  steps.forEach(n => { if (_cbWeekend(_cbAdd(sent, n)) === day) hit = n; });
+  return hit;
+}
 
 /** ₱186,400 below a million, ₱3.8M above. */
 function cbMoney(v) {
@@ -141,7 +149,7 @@ function cbRecords(ix, client) {
   const quotes = g.quotes.map(q => {
     let due = null;
     if (q.bucket === 'sent' && q.sent) {
-      const step = CB_FOLLOW_DAYS.find(n => _cbWeekend(_cbAdd(q.sent, n)) === ix.today);
+      const step = cbFollowStep(q.sent, ix.today);
       if (step) due = step;
     }
     return Object.assign({}, q, { followUpDue: due });
@@ -319,6 +327,6 @@ function cbDayLines(reports, client) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CB_ACCRED, CB_STEPS, CB_STATUS, CB_TIERS, CB_SECTORS, cbSectorGroup, cbIndex, cbNames, cbRecords, cbRecordsSay, cbOwnerSuggest, cbLogText, cbLogFor, cbFlags, cbAccredLast,
+  module.exports = { CB_ACCRED, CB_STEPS, CB_STATUS, CB_TIERS, CB_SECTORS, cbFollowStep, cbSectorGroup, cbIndex, cbNames, cbRecords, cbRecordsSay, cbOwnerSuggest, cbLogText, cbLogFor, cbFlags, cbAccredLast,
                      cbPrimary, cbFilter, cbSummary, cbCsv, cbDayLines, cbMoney, cbDay };
 }

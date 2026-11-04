@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       f.scrollIntoView({ block: 'center', behavior: 'smooth' });
       if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
     });
+    // A393 — from the follow-up guide: ?call=<quotation> or ?client=<Client Book no> opens the call form, filled in
+    let qno = '', cno = '';
+    try { const qp = new URLSearchParams(location.search || ''); qno = qp.get('call') || ''; cno = qp.get('client') || ''; } catch (e) { /* no link */ }
+    if ((qno || cno) && typeof srOpenCallFor === 'function') srOpenCallFor({ quotationNo: qno, clientNo: cno });
   } else {
     document.getElementById('myReport').hidden = false;
     await teamReport('myReport', kind, { own: true });

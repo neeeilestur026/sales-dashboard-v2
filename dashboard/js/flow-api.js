@@ -162,6 +162,7 @@ const FLOW_SECURED_ACTIONS = [
   'getItemBook', 'getItemCard', 'getItemHistory', 'getItemPhotos', 'saveItemDetails',   // A387 — the Item Book
   'getBulletin', 'getBulletinFile', 'saveBulletin', 'archiveBulletin', 'ackBulletin', 'previewBulletinMemos', 'importBulletinMemos',   // A390
   'getShutdowns', 'saveShutdown', 'archiveShutdown',   // A391 — the shutdown calendar
+  'getFollowUpGuide', 'setFollowUpPlan',   // A393 — the follow-up guide
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
   'submitQuotationApproval', 'submitTravelReplenishment', 'submitWeeklyItinerary', 'unlinkQuotationEmail', 'updateAPAging',
   'updateARAging', 'updateCommissionRequest', 'updateExpense', 'updateInventoryItem', 'updatePRSourcing',

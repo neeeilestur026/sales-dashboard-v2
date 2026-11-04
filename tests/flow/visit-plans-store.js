@@ -47,7 +47,7 @@ function setup() {
 sec('1 · the version, the roles, and a read of nothing');
 {
   const { c, store } = setup();
-  ok('getVersion = 195', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 195);
+  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
   const g = call(c, 'getVisitPlans', GERALD);
   ok('a read of no visits answers empty, creates no tab, and gives the lists', g.success && g.data.length === 0 && !('VisitPlans' in store) && !('VisitPlanLog' in store) &&
      g.lists.statuses.join() === 'Draft,Pending Director,Approved,Done,Rejected,Cancelled' && g.lists.locations.join() === 'Plant,Head office,Other' && g.lists.ahead === 92 && !!g.today, g);

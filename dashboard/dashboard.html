@@ -9,6 +9,7 @@
   <!-- A290 — the brand system (tokens, both themes, the deck, glass, buttons) then this page's own look. -->
   <link rel="stylesheet" href="css/payslip-card.css">
   <link rel="stylesheet" href="css/new-daily-report-card.css">
+  <link rel="stylesheet" href="css/follow-up-guide.css">   <!-- A393: the follow-up guide card -->
   <link rel="stylesheet" href="css/sales-home.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
@@ -82,6 +83,9 @@
           <div class="hx-head"><h2>Needs you</h2><span class="hx-meta">Quotations waiting on a reply, follow-ups due, requests in flight.</span></div>
           <div id="flowActionCenter"></div>
         </section>
+
+        <!-- A393: today's follow-ups from the rep's top 50 (js/follow-up-guide-card.js); hidden until it can be read -->
+        <section class="hx-glass" id="followUpGuide" style="display:none;"></section>
 
         <!-- A277: leads the lead-gen user handed to this rep. Id-driven (js/leads-for-you.js); hides itself when empty. -->
         <section class="hx-glass" id="leadsForYou" style="display:none;"></section>
@@ -200,6 +204,8 @@
   <script src="js/my-clients-card.js"></script>     <!-- A358: My clients -->
   <script src="js/shutdown-calendar-model.js"></script>   <!-- A391: the dates for the Coming shutdowns card -->
   <script src="js/shutdowns-card.js"></script>       <!-- A391: Coming shutdowns -->
+  <script src="js/follow-up-guide-model.js"></script>   <!-- A393: the follow-up guide, drawn -->
+  <script src="js/follow-up-guide-card.js"></script>    <!-- A393: Today's follow-ups -->
   <script src="js/auth.js"></script>
   <script src="js/ledger-nav.js"></script>
   <script src="js/dashboard.js"></script>

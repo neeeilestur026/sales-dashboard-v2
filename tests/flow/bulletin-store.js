@@ -25,7 +25,7 @@ const post = (c, p, actor, more) => call(c, 'saveBulletin', Object.assign({ titl
 sec('1 · the version, an empty board, and who may read it');
 {
   const store = {}, c = load(GS, store);
-  ok('getVersion = 195', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 195);
+  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
   [KIM, MARIA, LARRY, NEIL, ANA, JIEZ, MK, LG, WH].forEach(a => {
     const r = call(c, 'getBulletin', a);
     ok(a.actorRole + ' reads the board', r.success && r.items.length === 0, r);
