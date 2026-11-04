@@ -57,7 +57,8 @@ function world(settings) {
     ],
     QuotationEmails: [], ClientBookLinks: [], SalesCalls: [], ClientVisits: []
   };
-  if (settings) store.FlowSettings = Object.keys(settings).map(k => ({ 'Key': k, 'Value': settings[k] }));
+  const st = Object.assign({ followUpStart: 'off' }, settings || {});   // A395: these sections test the guide itself, not its start day
+  store.FlowSettings = Object.keys(st).map(k => ({ 'Key': k, 'Value': st[k] }));
   const c = load(GS, store);
   c._now = () => new Date(NOW.getTime());
   return { c, store };
@@ -68,7 +69,7 @@ const set = (c, owner, items, actor) => call(c, 'setFollowUpPlan', Object.assign
 sec('1 · the version and who may open it');
 {
   const { c, store } = world();
-  ok('getVersion = 197', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 197);
+  ok('getVersion = 198', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 198);
   [GER, NEIL, LARRY].forEach(a => ok(a.actorRole + ' opens it', call(c, 'getFollowUpGuide', a).success));
   ['hr', 'admin', 'accounting', 'warehouse', 'marketing', 'leadgen'].forEach(r => ok(r + ' is refused', !call(c, 'getFollowUpGuide', who(r, 'X', r + '1')).success));
   ok('the read is secured', !call(c, 'getFollowUpGuide', Object.assign({ flowSecret: '' }, GER)).success);
@@ -233,13 +234,42 @@ sec('9 · A394: faster, and a long list spread over the week');
   set(one, 'Gerald Lucena', plan());
   ok('ten clients at one a day still fill the week: two a day', call(one, 'getFollowUpGuide', GER).perDay === 2);
   const big = Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Client ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' }));
-  const w = load(GS, { ClientBook: big, FlowSettings: [] });
+  const w = load(GS, { ClientBook: big, FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }] });
   w._now = () => new Date(NOW.getTime());
   const r = set(w, 'Kimberlyn Blones', big.map((b, i) => ({ rank: i + 1, clientNo: b['Client No'] })));
   const g = call(w, 'getFollowUpGuide', KIM);
   ok('Kimberlyn\'s 74: all in her plan, 15 a day, ranks 61–74 on Friday', r.success && g.planSize === 74 && g.live === 74 && g.perDay === 15 &&
      g.days.map(d => d.clients.length).join() === '15,15,15,15,14' && g.days[4].clients[0].rank === 61 && g.days[4].clients[13].rank === 74, g.days.map(d => d.clients.length));
   ok('  and her week counts all 74', g.summary.weekTotal === 74);
+}
+
+sec('10 · A395: the guide counts from its start day (Monday 9 Nov 2026)');
+{
+  const { c, store } = world();
+  store.FlowSettings = [];   // the default start day
+  ok('the default start day is Monday 9 Nov', c._fugCfg().start === '2026-11-09');
+  set(c, 'Gerald Lucena', plan());
+  let read = 0;
+  const real = c._fugData;
+  c._fugData = function () { read++; return real.apply(this, arguments); };
+  const g = call(c, 'getFollowUpGuide', GER);
+  ok('before it (Wed 4 Nov): not started, when it starts, the plan\'s size, nothing counted or read', g.success && g.notStarted === true && g.startsOn === '2026-11-09' && g.live === 10 &&
+     g.planSize === 10 && g.days.length === 0 && g.summary.todayTotal === 0 && read === 0, g);
+  const a = call(c, 'getFollowUpGuide', Object.assign({ all: true }, NEIL));
+  ok('  the director\'s list says the same for each rep', a.success && a.startsOn === '2026-11-09' && a.people.length === 1 && a.people[0].notStarted && a.people[0].live === 10);
+  c._fugData = real;
+  c._now = () => D(11, 9, 10);   // the first Monday
+  store.ProofReports[0]['Updated At'] = D(11, 6, 17);
+  JSON.parse(store.ProofReports[0]['Report JSON']);
+  store.ClientBookLog.push({ 'Log No': 'L9', 'Client No': 'CB-2', 'Kind': 'status', 'By': 'Gerald Lucena', 'At': D(11, 6, 15) });   // Friday before
+  const m = call(c, 'getFollowUpGuide', GER);
+  ok('on the start day it counts: Monday holds ranks 1–10 (the quoted ones followed by their quotations)', m.success && !m.notStarted && m.days[0].today && m.days[0].clients.length && m.days[0].clients.every(x => x.rank <= 10 && !x.quoted), m.days[0].clients.map(x => x.rank));
+  ok('  a touch from the Friday before does not count', m.days[0].clients.find(x => x.rank === 2).status === 'open');
+  ok('  no quotation follow-up from before is carried in', m.days[0].carryQuotes.length === 0 && ![].concat(...m.days.map(d => d.quotes)).some(x => x.date < '2026-11-09'), m.days[0].carryQuotes);
+  ok('  the quotations still come up on their own days from Monday on (Q3 day 14 today)', m.days[0].quotes.some(x => x.quotationNo === 'Q3' && x.step === 14));
+  const offc = world({ followUpStart: 'off' }).c;
+  set(offc, 'Gerald Lucena', plan());
+  ok('followUpStart off: no start day', !call(offc, 'getFollowUpGuide', GER).notStarted);
 }
 
 console.log('\n' + (FAIL ? FAIL + ' of ' + N + ' FAILED' : 'all ' + N + ' passed'));

@@ -23,7 +23,7 @@ function guide(user, actor) {
   const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
   const cos = ['Alpha Power <b>Corp</b>', 'Bravo Cement', 'Charlie Mining', 'Delta Steel', 'Echo Shipyard', 'Foxtrot Hydro'];
   const store = {
-    FlowSettings: [{ 'Key': 'followUpPerDay', 'Value': 2 }],
+    FlowSettings: [{ 'Key': 'followUpPerDay', 'Value': 2 }, { 'Key': 'followUpStart', 'Value': 'off' }],
     ClientBook: cos.map((co, i) => ({ 'Client No': 'CB-' + (i + 1), 'Company': co, 'Owner': 'Gerald Lucena', 'Archived At': '' })),
     Quotations: [{ 'Quotation No': 'Q1', 'Customer': 'Charlie Mining', 'Status': 'Sent', 'Total': 245000, 'Salesperson': 'Gerald Lucena', 'Sent At': Dt(10, 28), 'Created At': Dt(9, 1) }],
     ClientBookLog: [{ 'Client No': 'CB-1', 'Kind': 'status', 'By': 'Gerald Lucena', 'At': Dt(11, 2, 9) }],
@@ -139,7 +139,7 @@ function guide(user, actor) {
   const all = guide('', { actorRole: 'management', actorName: 'Larry Estur', actorUsername: 'mgmt' });
   const allReply = (() => {
     const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
-    const st = { ClientBook: [{ 'Client No': 'CB-1', 'Company': 'Alpha', 'Owner': 'Gerald Lucena', 'Archived At': '' }, { 'Client No': 'CB-9', 'Company': 'Kilo', 'Owner': 'Kimberlyn Blones', 'Archived At': '' }] };
+    const st = { ClientBook: [{ 'Client No': 'CB-1', 'Company': 'Alpha', 'Owner': 'Gerald Lucena', 'Archived At': '' }, { 'Client No': 'CB-9', 'Company': 'Kilo', 'Owner': 'Kimberlyn Blones', 'Archived At': '' }], FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }] };
     const c = load(GS, st); c._now = () => Dt(11, 4);
     call(c, 'setFollowUpPlan', { owner: 'Gerald Lucena', items: [{ rank: 1, clientNo: 'CB-1' }], actorRole: 'director', actorName: 'Neil Estur' });
     call(c, 'setFollowUpPlan', { owner: 'Kimberlyn Blones', items: [{ rank: 1, clientNo: 'CB-9' }], actorRole: 'director', actorName: 'Neil Estur' });
@@ -169,6 +169,27 @@ function guide(user, actor) {
   t1.run('getSession = function () { return __session; };');
   await t1.boot();
   ok('  and never for a rep', t1.calls.length === 0);
+
+  sec('4b · A395: before the start day');
+  const soonG = (() => {
+    const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
+    const st = { ClientBook: Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Co ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' })) };
+    const c = load(GS, st); c._now = () => Dt(11, 4);
+    call(c, 'setFollowUpPlan', { owner: 'Kimberlyn Blones', items: st.ClientBook.map((b, i) => ({ rank: i + 1, clientNo: b['Client No'] })), actorRole: 'director', actorName: 'Neil Estur' });
+    return { rep: call(c, 'getFollowUpGuide', { actorRole: 'sales', actorName: 'Kimberlyn Blones', actorUsername: 'sales1' }), all: call(c, 'getFollowUpGuide', { all: true, actorRole: 'director', actorName: 'Neil Estur' }) };
+  })();
+  ok('the backend says it starts Monday 9 Nov, with her 74 at 15 a day', soonG.rep.notStarted && soonG.rep.startsOn === '2026-11-09' && soonG.rep.planSize === 74 && soonG.rep.perDay === 15, soonG.rep);
+  const sc = card('sales', soonG.rep);
+  await sc.boot();
+  const sh = sc.els.followUpGuide.innerHTML;
+  ok('the rep\'s card: "Your follow-up guide", starts Monday, 9 November, what it will do; no week strip, nothing counted', sc.els.followUpGuide.style.display === '' &&
+     /<h3>Your follow-up guide<\/h3>/.test(sh) && /Starts Monday, 9 November/.test(sh) && /your top 74 clients, 15 a day/.test(sh) && !/fg-week|fg-count/.test(sh), sh);
+  const st0 = page(['js/follow-up-team-card.js'], 'director-home.html', who('director', 'Neil Estur'));
+  st0.ctx.__answer = soonG.all;
+  st0.run('postFlow = function () { return Promise.resolve(__answer); }; getSession = function () { return __session; };');
+  await st0.boot();
+  ok('the director\'s card: each rep, their list size, and when it starts', /Kimberlyn Blones<\/b><span>Top 74, 15 a day<\/span>/.test(st0.els.followUpTeam.innerHTML) &&
+     /Starts Monday, 9 November/.test(st0.els.followUpTeam.innerHTML) && /starts counting Monday, 9 November/.test(st0.els.followUpTeam.innerHTML), st0.els.followUpTeam.innerHTML.slice(0, 400));
 
   sec('5 · the daily report\'s Log call, the styles');
   const sr = read('js/sales-report.js'), mdr = read('js/my-daily-report.js');

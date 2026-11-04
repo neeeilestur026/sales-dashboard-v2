@@ -6,17 +6,26 @@
 (function () {
   const CARD = 'followUpTeam';
   const esc = (v) => (typeof flowEsc === 'function' ? flowEsc(v) : String(v == null ? '' : v));
+  // A395 — 'Monday, 9 November' (the homes do not load the guide's model, so the label is made here)
+  const startLabel = (ymd) => {
+    const s = String(ymd || ''), d = new Date(s + 'T00:00:00Z');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(d.getTime())) return s;
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' +
+      ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][d.getUTCMonth()];
+  };
 
   function render(el, people) {
     const b = document.body, dh = !!(b && b.classList && b.classList.contains('dh')), h = dh ? 'dh' : 'hx';
     const row = (p) => {
       const s = p.summary || {}, share = s.weekTotal ? s.weekDone / s.weekTotal : 0;
+      if (p.notStarted) return '<li><a class="fut-row" href="follow-up-guide.html?user=' + encodeURIComponent(p.user) + '"><span class="fut-who"><b>' + esc(p.user) + '</b>' +
+        '<span>Top ' + p.planSize + ', ' + p.perDay + ' a day</span></span><span class="fut-soon">Starts ' + esc(startLabel(p.startsOn)) + '</span></a></li>';   // A395
       return '<li><a class="fut-row" href="follow-up-guide.html?user=' + encodeURIComponent(p.user) + '">' +
         '<span class="fut-who"><b>' + esc(p.user) + '</b><span>Today ' + s.todayDone + ' of ' + s.todayTotal + (s.quotesDue ? ' · ' + s.quotesDue + ' quotation follow-up' + (s.quotesDue === 1 ? '' : 's') + ' due' : '') + '</span></span>' +
         '<span class="fut-week"><span class="fut-n">' + s.weekDone + '<small> of ' + s.weekTotal + '</small></span><span class="fut-bar" aria-hidden="true"><i style="transform: scaleX(' + share.toFixed(3) + ')"></i></span></span></a></li>';
     };
     el.style.display = '';
-    el.innerHTML = '<div class="' + h + '-head"><h2>Follow-ups this week</h2><span class="' + h + '-meta">Each rep\'s top 50: clients followed up this week, and today\'s list.</span></div>' +
+    el.innerHTML = '<div class="' + h + '-head"><h2>Follow-ups this week</h2><span class="' + h + '-meta">' + (people.every(p => p.notStarted) ? 'Each rep\'s ranked clients. The guide starts counting ' + esc(startLabel(people[0].startsOn)) + '.' : 'Each rep\'s top clients: followed up this week, and today\'s list.') + '</span></div>' +
       '<ul class="fut-list">' + people.map(row).join('') + '</ul>';
   }
 

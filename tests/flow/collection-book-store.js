@@ -33,7 +33,7 @@ sec('1 · the version, an empty book, and who may read it');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 197', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 197);
+  ok('getVersion = 198', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 198);
   const g = call(c, 'getCollectionBook', ACCT);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.records.length === 0 && g.log.length === 0 &&
      !('CollectionBook' in store) && !('CollectionBookLog' in store), g);
