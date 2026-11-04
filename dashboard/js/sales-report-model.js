@@ -24,7 +24,8 @@ const SR_TARGETS = {
   srWithin48: 0.9, srWithin48Red: 0.8,
   srOpenQuotes: 4500000, srOpenQuotesRed: 3000000
 };
-const SR_FOLLOW_DAYS = [3, 7, 14];                 // after the sent date; a weekend due date moves to Monday
+const SR_FOLLOW_DAYS = [3, 5, 7, 14];              // A393 — after the sent date, then every SR_FOLLOW_THEN days until won or lost;
+const SR_FOLLOW_THEN = 7;                          // a weekend due date moves to Monday (FlowAPI's follow-up guide uses the same)
 const SR_LINE_TYPES = ['Call', 'Performance call', 'Quote result', 'Sales order', 'Visit', 'Other task'];   // A371 — Other task (Neil, 26 Oct: "add other tasks")
 const SR_CALL_RESULTS = ['Reached', 'No answer', 'Booked', 'Call back'];
 const SR_VISIT_RESULTS = ['RFQ promised', 'RFQ on site', 'Need later', 'No need'];
@@ -90,6 +91,22 @@ function srWeekDays(day) {
 }
 /** A due date that falls on a Saturday or Sunday moves to the Monday after. */
 function srShiftWeekend(day) { const w = srDow(day); return w === 'Sat' ? srAddDays(day, 2) : w === 'Sun' ? srAddDays(day, 1) : day; }
+/** A393 — the follow-up rule: FlowSettings followUpCadence / followUpThen over the defaults (as FlowAPI's _fugCfg reads them). */
+function srFollowRule(settings) {
+  const s = settings || {}, seen = {}, blank = (v) => v === undefined || v === null || v === '';
+  const days = String(blank(s.followUpCadence) ? SR_FOLLOW_DAYS.join(',') : s.followUpCadence).split(',').map(x => parseInt(x, 10))
+    .filter(x => { if (!(x > 0 && x < 400) || seen[x]) return false; seen[x] = 1; return true; }).sort((a, b) => a - b);
+  const then = blank(s.followUpThen) ? SR_FOLLOW_THEN : parseInt(s.followUpThen, 10);
+  return { days: days.length ? days : SR_FOLLOW_DAYS.slice(), then: then >= 0 && then < 100 ? then : SR_FOLLOW_THEN };
+}
+/** The follow-up step due on `day` for a quotation sent on `sent` (when two steps meet on a Monday, the later), or 0. */
+function srFollowStep(sent, day, rule) {
+  const r = rule || srFollowRule(), steps = r.days.slice();
+  if (r.then > 0) for (let n = steps[steps.length - 1] + r.then; srAddDays(sent, n) <= day; n += r.then) steps.push(n);
+  let hit = 0;
+  steps.forEach(n => { if (srShiftWeekend(srAddDays(sent, n)) === day) hit = n; });
+  return hit;
+}
 
 /** ₱186,400 below a million, ₱3.8M / ₱1.25M above. */
 function srMoney(v) {
@@ -105,7 +122,7 @@ function srIndex(raw) {
   const r = raw || {};
   const ix = {
     today: _srS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)),
-    settings: r.settings || {}, cfg: srCfg(r.settings),
+    settings: r.settings || {}, cfg: srCfg(r.settings), follow: srFollowRule(r.settings),   // A393 — the follow-up days
     quotations: (r.quotations || []).filter(q => q && !_srDemo(q.quotationNo)),
     sos: (r.salesOrders || []).filter(s => s && !_srDemo(s.soNo)),
     activity: r.activity || [], calls: r.calls || [], visits: r.visits || [], itins: r.itineraries || [],
@@ -232,7 +249,7 @@ function srOpenQuotes(ix, me, day) {
   });
 }
 
-/** Follow-ups due on `day`: day 3, 7 and 14 after the sent date, a weekend moved to Monday, while still Sent.
+/** Follow-ups due on `day`: day 3, 5, 7 and 14 after the sent date, then every 7 (A393), a weekend moved to Monday, while still Sent.
  *  Done when a Call line linked to that quotation is logged that day, or a follow-up email is linked to it that day. */
 function srFollowUps(ix, me, day, report) {
   const lines = _srLive(report).filter(_srOn(day));
@@ -240,7 +257,7 @@ function srFollowUps(ix, me, day, report) {
   srOpenQuotes(ix, me, day).forEach(q => {
     const sent = _srDate(q.sentAt);
     if (!sent) return;
-    const step = SR_FOLLOW_DAYS.find(n => srShiftWeekend(srAddDays(sent, n)) === day);
+    const step = srFollowStep(sent, day, ix.follow);
     if (!step) return;
     const no = _srS(q.quotationNo);
     const call = lines.find(l => l.type === 'Call' && l.linkType === 'quotation' && l.linkId === no);
@@ -629,7 +646,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
+  module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, SR_FOLLOW_THEN, srFollowRule, srFollowStep, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, SR_LINK_KINDS, srLinkItems, srLinkPick, srLinkFind, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays };

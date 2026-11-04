@@ -790,6 +790,22 @@ function _srPrefillCall(qno) {
   if (f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
   if (f.elements.person.focus) f.elements.person.focus();
 }
+/* A393 — the follow-up guide's "Log call": the call form filled in for a quotation (linked to it, as the follow-ups list
+   does) or for a Client Book client (its company, which links the client). Returns whether it opened. */
+function srOpenCallFor(o) {
+  const f = _srId('srCallForm');
+  if (!f || SR_UI.ro || !SR_UI.ix || !o) return false;
+  const qno = String(o.quotationNo || '').trim(), cno = String(o.clientNo || '').trim();
+  if (qno && SR_UI.ix.qByNo[qno]) { _srPrefillCall(qno); return true; }
+  const c = cno ? (SR_UI.ix.book.clients || []).find(x => String(x.clientNo) === cno) : null;
+  if (!c) return false;
+  f.elements.company.value = c.company || '';
+  _srRefreshLinkSelect();
+  _srCallLookup(f, 'company');
+  if (f.scrollIntoView) f.scrollIntoView({ block: 'center' });
+  if (f.elements.person.focus) f.elements.person.focus();
+  return true;
+}
 function _srLogCall(f) {
   const company = f.elements.company.value.trim();
   if (!company) { f.elements.company.focus(); return; }

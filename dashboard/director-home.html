@@ -87,6 +87,9 @@
           <div class="cbc-body" id="cbcBody"><div class="dh-empty">Reading the Client Book…</div></div>
         </section>
 
+        <!-- A393 — each rep's follow-up week (js/follow-up-team-card.js); hidden until it can be read -->
+        <section class="dh-glass dh-fut" id="followUpTeam" style="display:none;"></section>
+
         <!-- The one inbox. Three loaders write into their own containers; this section only PLACES
              them (A146 action center, A190 approvals queue, the purchase-order strip) and counts. -->
         <section class="dh-glass dh-inbox" id="inbox" data-filter="all">
@@ -433,6 +436,7 @@
   <script src="js/director-pulse.js"></script>       <!-- A288: the Pulse band -->
   <script src="js/client-book-model.js"></script>   <!-- A350: the Client Book's counts -->
   <script src="js/client-book-card.js"></script>    <!-- A350: its card -->
+  <script src="js/follow-up-team-card.js"></script>  <!-- A393: Follow-ups this week -->
   <script src="js/director-home-inline.js"></script>
 </body>
 </html>

@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 195;   // A390 · A391 — the bulletin board on every home, and the sales shutdown calendar. History: see CHANGELOG.
+var FLOW_VERSION = 196;   // A393 — the follow-up guide: each rep's top 50 through the week, quoted clients first. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -626,7 +626,9 @@ var SCHEMA = {
   // A391 — client plant shutdowns (clock ids SH-); Start / End are yyyy-MM-dd text, read back through _dateStr
   Shutdowns: ['Shutdown No', 'Company', 'Client Key', 'Client No', 'Site', 'Site Kind', 'Start', 'End', 'Scope', 'Offer', 'Opportunity', 'Contact', 'Status',
               'Follow Up By', 'Notes', 'Client Ref', 'Created By', 'Created By User', 'Created At', 'Updated By', 'Updated At', 'Archived By', 'Archived At', 'Archive Reason'],
-  ShutdownLog: ['Log No', 'Shutdown No', 'Kind', 'From', 'To', 'Note', 'By', 'At']
+  ShutdownLog: ['Log No', 'Shutdown No', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
+  // A393 — each rep's ranked follow-up list (one row per client; set only by setFollowUpPlan, the director)
+  FollowUpPlan: ['Owner', 'Rank', 'Client No', 'Company', 'Next Step', 'Source', 'Set By', 'Set At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -876,6 +878,7 @@ var _SECURED = {
   getItemBook: 1, getItemCard: 1, getItemHistory: 1, getItemPhotos: 1, saveItemDetails: 1,   // A387 — the Item Book: reads are secured (costs by role)
   getBulletin: 1, getBulletinFile: 1, saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, previewBulletinMemos: 1, importBulletinMemos: 1,   // A390
   getShutdowns: 1, saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar (reads secured: names and plans)
+  getFollowUpGuide: 1, setFollowUpPlan: 1,   // A393 — the follow-up guide (the read is secured: clients and quotations by rep)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
   submitProofReport: 1,   // A348
@@ -2140,6 +2143,273 @@ function archiveShutdown(p) {
            message: restore ? 'Back on the calendar.' : 'Archived.' };
 }
 /* ═══ end A390 · A391 ════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A393 · the follow-up guide ═════════════════════════════════════════════════════════════════
+ * Neil, 4 Nov 2026: each rep's top 50 clients, followed up through the week. A GUIDE only: worked out from what the
+ * reps already record, never a form of its own. Quoted clients first:
+ *  · every open quotation of a plan client is followed up on day 3, 5, 7 and 14 after it was sent, then every 7 days
+ *    (FlowSettings followUpCadence / followUpThen), until its rep marks it won or it is closed lost. A day on a weekend
+ *    moves to the Monday; a checkpoint not followed up stays due ("since Tue") until the next one takes over;
+ *  · then the ranked clients with no open quotation: ranks 1–10 on Monday, 11–20 on Tuesday … 41–50 on Friday
+ *    (followUpPerDay). One still untouched carries over to the next day; every Monday starts again.
+ * A touch is anything the rep already records about the client: a daily-report line (linked to the client, one of its
+ * quotations or PRs, or naming the company), a report visit, a quotation follow-up or result, a follow-up email, a
+ * visit marked done, a new PR or quotation, a Client Book change by the rep, the old calls and visits. The plan
+ * (FollowUpPlan) is set by the director only, from the reps' top-50 lists; everything else here only reads. */
+var _FUG_ROLES = ['sales', 'director', 'management'], _FUG_MAX = 60, _FUG_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+function _fugCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  var blank = function (v) { return v === undefined || v === null || v === ''; };
+  var per = parseInt(d.followUpPerDay, 10), then = blank(d.followUpThen) ? 7 : parseInt(d.followUpThen, 10), seen = {};
+  var cad = String(blank(d.followUpCadence) ? '3,5,7,14' : d.followUpCadence).split(',').map(function (x) { return parseInt(x, 10); })
+    .filter(function (x) { if (!(x > 0 && x < 400) || seen[x]) return false; seen[x] = 1; return true; }).sort(function (a, b) { return a - b; });
+  return { on: _bbSwitch(d.followUpGuide), roles: _bbList(d.followUpGuideRoles, _FUG_ROLES), perDay: per >= 1 && per <= 20 ? per : 10,
+           cadence: cad.length ? cad : [3, 5, 7, 14], then: then >= 0 && then < 100 ? then : 7 };
+}
+function _fugDenied(p, cfg) {
+  if (!cfg.on) return 'The follow-up guide is switched off (FlowSettings followUpGuide).';
+  if (cfg.roles.indexOf(_ibRole(p)) < 0) return 'The follow-up guide is open to ' + cfg.roles.join(', ') + '.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to read the guide under.';
+  return '';
+}
+/** A weekend day moves to the Monday after (the daily report's rule). */
+function _fugShift(ymd) { var w = _lgDow(ymd); return w === 'Sat' ? _lgAddDays(ymd, 2) : w === 'Sun' ? _lgAddDays(ymd, 1) : ymd; }
+/** The checkpoints of a quotation sent on `sent`, up to `until`, oldest first: [{date, step}]. Two steps that land on the
+ *  same Monday are one checkpoint (the later step). */
+function _fugCheckpoints(sent, until, cfg) {
+  var steps = cfg.cadence.slice(), byDate = {}, out = [];
+  if (cfg.then > 0) for (var n = steps[steps.length - 1] + cfg.then; _lgAddDays(sent, n) <= until; n += cfg.then) steps.push(n);
+  steps.forEach(function (s) { var d = _fugShift(_lgAddDays(sent, s)); if (d <= until) byDate[d] = s; });
+  Object.keys(byDate).sort().forEach(function (d) { out.push({ date: d, step: byDate[d] }); });
+  return out;
+}
+/** A cell as a Date (a sheet Date, or an ISO string), or null. */
+function _fugAt(v) { if (v && typeof v.getTime === 'function') return v; var d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d : null; }
+function _fugNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+/** Every tab the guide needs, each read once (an "all" read shares them between the reps). */
+function _fugData() {
+  var m = { prs: {}, quotes: {}, links: {}, prRows: [], qRows: [], hasSO: {} };
+  _sbRows('PricingRequests').forEach(function (r) {
+    var no = String(r['PR No'] || '').trim();
+    if (!no) return;
+    m.prs[no] = { owners: [r['Salesperson'], r['Requested By']], clientNo: String(r['Client Book No'] || '').trim() };
+    m.prRows.push(r);
+  });
+  _sbRows('Quotations').forEach(function (r) {
+    var no = String(r['Quotation No'] || '').trim();
+    if (!no) return;
+    m.quotes[no] = { owners: [_quoOwner(r), r['Created By']], prNo: String(r['PR No'] || '').trim() };
+    m.qRows.push(r);
+  });
+  _sbRows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
+  _sbRows('SalesOrders').forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q) m.hasSO[q] = true; });
+  m.book = _sbRows('ClientBook');
+  m.plan = _sbRows('FollowUpPlan');
+  m.reports = _sbRows('ProofReports');
+  m.emails = _sbRows('QuotationEmails');
+  m.visits = _sbRows('VisitPlans');
+  m.cbLog = _sbRows('ClientBookLog');
+  m.calls = _sbRows('SalesCalls');
+  m.oldVisits = _sbRows('ClientVisits');
+  return m;
+}
+/** One rep's guide for the week holding `today` (yyyy-MM-dd, Manila). */
+function _fugGuide(m, who, cfg, today) {
+  var me = function (v) { return _cbSame(v, who); };
+  var monday = _lgMonday(today), friday = _lgAddDays(monday, 4), dow = _lgDow(today), weekend = dow === 'Sat' || dow === 'Sun';
+  var horizon = _lgAddDays(weekend ? _lgAddDays(monday, 7) : friday, 31), since = _lgAddDays(monday, -60);
+  // the rep's live book: the plan's clients, and the names a touch may be matched by
+  var live = {}, full = {}, keyNo = {}, keyN = {};
+  m.book.forEach(function (r) {
+    if (!me(r['Owner']) || r['Archived At']) return;
+    var no = String(r['Client No']), co = String(r['Company'] || '');
+    live[no] = r; full[_fugNorm(co)] = no;
+    var k = _canonKey(co); if (k) { keyN[k] = (keyN[k] || 0) + 1; keyNo[k] = no; }
+  });
+  var byName = function (name) { var f = _fugNorm(name); if (!f) return ''; if (full[f]) return full[f]; var k = _canonKey(name); return k && keyN[k] === 1 ? keyNo[k] : ''; };
+  var planRows = m.plan.filter(function (r) { return me(r['Owner']); }).sort(function (a, b) { return _num(a['Rank']) - _num(b['Rank']); });
+  var plan = [], inPlan = {}, notLive = [];
+  planRows.forEach(function (r) {
+    var no = String(r['Client No'] || '').trim(), c = live[no];
+    if (!c) { notLive.push({ rank: _num(r['Rank']), clientNo: no, company: String(r['Company'] || '') }); return; }
+    inPlan[no] = true;
+    plan.push({ rank: _num(r['Rank']), clientNo: no, company: String(c['Company'] || ''), sector: String(c['Sector'] || ''),
+                nextStep: String(c['Next Step'] || '').trim() || String(r['Next Step'] || '').trim() });
+  });
+  var rankOf = {}; plan.forEach(function (c) { rankOf[c.clientNo] = c; });
+  // which client a quotation or PR belongs to: its link row, else its PR's, else the PR column, else the same name —
+  // except a record taken off a client (a blank link row), which is nobody's
+  var quoteClient = function (no, customer) {
+    var l = _cbLinkOf(m, 'quotation', no); if (l) return l;
+    var q = m.quotes[no], off = !!m.links['quotation:' + no] || !!(q && q.prNo && m.links['pr:' + q.prNo]);
+    return off ? '' : byName(customer);
+  };
+  var prClient = function (no, customer) { var l = _cbLinkOf(m, 'pr', no); return l || (m.links['pr:' + no] ? '' : byName(customer)); };
+  // the touches, by client and by quotation
+  var byClient = {}, byQuote = {};
+  var touch = function (clientNo, quoteNo, day, kind, at) {
+    if (!day || day < since || day > today) return;
+    var t = { day: day, kind: kind, time: at && typeof at.getTime === 'function' && !isNaN(at.getTime()) ? _lgHHmm(at) : '' };
+    if (quoteNo) (byQuote[quoteNo] = byQuote[quoteNo] || []).push(t);
+    if (clientNo && inPlan[clientNo]) (byClient[clientNo] = byClient[clientNo] || []).push(t);
+  };
+  var openQuotes = [], quoteRows = {};
+  m.qRows.forEach(function (r) {
+    if (!me(_quoOwner(r))) return;
+    var no = String(r['Quotation No']).trim(), cno = quoteClient(no, r['Customer']);
+    if (!inPlan[cno]) return;
+    quoteRows[no] = cno;
+    touch(cno, no, _lgDayOf(r['Created At'] || r['Date']), 'Quotation made', r['Created At']);
+    var lf = _lgDayOf(r['Last Follow Up']);
+    if (lf) touch(cno, no, lf, 'Follow-up' + (r['Follow Up Via'] ? ' · ' + String(r['Follow Up Via']).toLowerCase() : ''), null);
+    if (r['Result At']) touch(cno, no, _lgDayOf(r['Result At']), 'Quotation updated', _fugAt(r['Result At']));
+    var st = String(r['Status'] || '').trim(), sent = _lgDayOf(r['Sent At']);
+    if (st === 'Sent' && String(r['Result'] || '') !== 'Won' && !m.hasSO[no] && sent) openQuotes.push({ row: r, no: no, clientNo: cno, sent: sent });
+  });
+  var lineKind = { 'Call': 'Call', 'Performance call': 'Call', 'Quote result': 'Quote result', 'Sales order': 'Sales order', 'Visit': 'Visit', 'Other task': 'Task' };
+  var vpClient = {};
+  m.visits.forEach(function (r) { vpClient[String(r['Visit Plan No'] || '').trim()] = String(r['Client No'] || '').trim(); });
+  m.reports.forEach(function (r) {
+    if (!me(r['User']) || _powKind(r['Kind']) !== 'sales') return;
+    var up = _lgDayOf(r['Updated At']) || _lgDayOf(r['Date']);
+    if (up && up < since) return;
+    var rep = {}; try { rep = JSON.parse(String(r['Report JSON'] || '{}')) || {}; } catch (e) { rep = {}; }
+    (rep.lines || []).forEach(function (l) {
+      if (!l || l.voidedAt) return;
+      var at = new Date(l.loggedAt), day = _lgDayOf(l.loggedAt), kind = lineKind[l.type] || 'Report line', id = String(l.linkId || '').trim();
+      if (l.linkType === 'client' && id) touch(id, '', day, kind, at);
+      else if (l.linkType === 'quotation' && id) touch(quoteRows[id] || quoteClient(id, l.company), id, day, kind, at);
+      else if (l.linkType === 'pr' && id) touch(prClient(id, l.company), '', day, kind, at);
+      else touch(byName(l.company), '', day, kind, at);
+    });
+    (rep.visits || []).forEach(function (v) {
+      if (!v) return;
+      var item = String(v.planItem || '').trim();
+      touch((item && vpClient[item]) || byName(v.company), '', _lgDayOf(v.loggedAt), 'Visit', new Date(v.loggedAt));
+    });
+  });
+  m.emails.forEach(function (r) {
+    var no = String(r['Quotation No'] || '').trim(), st = String(r['Status'] || 'Active').trim();
+    if (!quoteRows[no] || String(r['Kind'] || '') === 'Initial' || (st && st !== 'Active')) return;
+    var at = _fugAt(r['Sent At']);
+    touch(quoteRows[no], no, _lgDayOf(r['Sent At']), 'Email follow-up', at);
+  });
+  m.visits.forEach(function (r) {
+    if (!me(r['User']) || String(r['Status']) !== 'Done') return;
+    touch(String(r['Client No'] || '').trim(), '', _lgDayOf(r['Done At'] || r['Date']), 'Visit done', _fugAt(r['Done At']));
+  });
+  m.prRows.forEach(function (r) {
+    if (!me(r['Salesperson'] || r['Requested By'])) return;
+    touch(prClient(String(r['PR No']).trim(), r['Customer']), '', _lgDayOf(r['Created At'] || r['Date']), 'New PR', _fugAt(r['Created At']));
+  });
+  m.cbLog.forEach(function (r) {
+    if (!me(r['By'])) return;
+    touch(String(r['Client No'] || '').trim(), '', _lgDayOf(r['At']), 'Client updated', _fugAt(r['At']));
+  });
+  m.calls.forEach(function (r) { if (me(r['User'])) touch(byName(r['Company']), '', _lgDayOf(r['Date']), 'Call', _fugAt(r['Created At'])); });
+  m.oldVisits.forEach(function (r) { if (me(r['User'])) touch(byName(r['Company']), '', _lgDayOf(r['Date']), 'Visit', _fugAt(r['Created At'])); });
+  var sortT = function (a, b) { return a.day.localeCompare(b.day) || String(a.time).localeCompare(String(b.time)); };
+  Object.keys(byClient).forEach(function (k) { byClient[k].sort(sortT); });
+  Object.keys(byQuote).forEach(function (k) { byQuote[k].sort(sortT); });
+  var firstFrom = function (list, from, before) {
+    for (var i = 0; i < (list || []).length; i++) if (list[i].day >= from && (!before || list[i].day < before)) return list[i];
+    return null;
+  };
+  // the quotation checkpoints: done (a touch from the checkpoint until the next), missed (the next has come), open, planned
+  var quoted = {}, checks = [];
+  openQuotes.forEach(function (o) {
+    quoted[o.clientNo] = true;
+    var cps = _fugCheckpoints(o.sent, horizon, cfg), c = rankOf[o.clientNo], all = (byQuote[o.no] || []).concat(byClient[o.clientNo] || []).sort(sortT);
+    cps.forEach(function (cp, i) {
+      var next = cps[i + 1] ? cps[i + 1].date : '', by = cp.date <= today ? firstFrom(all, cp.date, next) : null;
+      var status = cp.date > today ? 'planned' : by ? 'done' : next && next <= today ? 'missed' : 'open';
+      checks.push({ quotationNo: o.no, clientNo: o.clientNo, company: c.company, rank: c.rank, value: _num(o.row['Total']), sent: o.sent, step: cp.step,
+                    date: cp.date, next: next, status: status, by: by, lastFollowUp: _lgDayOf(o.row['Last Follow Up']), result: String(o.row['Result'] || '') });
+    });
+  });
+  // the ranked clients with no open quotation, one day each by rank
+  var clients = plan.map(function (c) {
+    var by = firstFrom(byClient[c.clientNo], monday, '');
+    return { rank: c.rank, clientNo: c.clientNo, company: c.company, sector: c.sector, nextStep: c.nextStep, quoted: !!quoted[c.clientNo],
+             bucket: Math.min(4, Math.floor((c.rank - 1) / cfg.perDay)), done: by };
+  });
+  var ranked = clients.filter(function (c) { return !c.quoted; });
+  var stateOf = function (c, d) { return c.done ? 'done' : d > today ? 'planned' : 'open'; };
+  var days = _FUG_DOW.map(function (w, i) {
+    var d = _lgAddDays(monday, i), isToday = d === today;
+    var q = checks.filter(function (x) { return x.date === d; });
+    var cl = ranked.filter(function (c) { return c.bucket === i; }).map(function (c) { return Object.assign({ status: stateOf(c, d) }, c); });
+    var out = { date: d, dow: w, today: isToday, past: d < today, quotes: q, clients: cl, carryQuotes: [], carryClients: [] };
+    if (isToday) {
+      out.carryQuotes = checks.filter(function (x) { return x.date < today && x.status === 'open'; });
+      out.carryClients = ranked.filter(function (c) { return c.bucket < i && !c.done; }).map(function (c) { return Object.assign({ status: 'open', since: _lgAddDays(monday, c.bucket) }, c); });
+    }
+    var list = out.quotes.concat(out.carryQuotes, out.clients, out.carryClients);
+    out.total = list.length; out.done = list.filter(function (x) { return x.status === 'done'; }).length;
+    return out;
+  });
+  var next = null;
+  if (weekend) {
+    var nm = _lgAddDays(monday, 7);
+    next = { date: nm, dow: 'Mon', quotes: checks.filter(function (x) { return x.date === nm; }),
+             clients: ranked.filter(function (c) { return c.bucket === 0; }).map(function (c) { return Object.assign({}, c, { done: null, status: 'planned' }); }) };
+  }
+  var td = days.filter(function (d) { return d.today; })[0];
+  var weekDone = clients.filter(function (c) { return !!c.done; }).length;
+  return { user: who, today: today, monday: monday, friday: friday, weekend: weekend, perDay: cfg.perDay, cadence: cfg.cadence, then: cfg.then,
+           planSize: planRows.length, live: plan.length, notLive: notLive, days: days, next: next, clients: clients,
+           summary: { todayDone: td ? td.done : 0, todayTotal: td ? td.total : 0, weekDone: weekDone, weekTotal: plan.length,
+                      quotesDue: checks.filter(function (x) { return x.status === 'open'; }).length, quoted: Object.keys(quoted).length } };
+}
+/** getFollowUpGuide({user?, all?}) — a rep's week: their own, always (a rep's `user` is ignored). The director and
+ *  management may name a rep (`user`), or ask `all` for every rep with a plan, as summaries. */
+function getFollowUpGuide(p) {
+  p = p || {};
+  var cfg = _fugCfg(), no = _fugDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var over = _powReadsAll(p), today = _lgDay(_now()), m = _fugData();
+  var owners = [], seen = {};
+  m.plan.forEach(function (r) { var o = String(r['Owner'] || '').trim(), k = o.toLowerCase(); if (o && !seen[k]) { seen[k] = 1; owners.push(o); } });
+  owners.sort();
+  if (over && (p.all === true || String(p.all) === 'true')) {
+    return { success: true, today: today, people: owners.map(function (o) { var g = _fugGuide(m, o, cfg, today); return { user: o, live: g.live, summary: g.summary }; }) };
+  }
+  var who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+  var g = _fugGuide(m, who, cfg, today);
+  g.success = true; g.readOnly = !_cbSame(who, p.actorName); g.people = over ? owners : [];
+  return g;
+}
+/** setFollowUpPlan({owner, items:[{rank, clientNo, nextStep}], source}) — the director sets one rep's whole ranked list.
+ *  Every client must be a live client of that rep; ranks run 1..N with none twice; the rep's old plan is replaced. */
+function setFollowUpPlan(p) {
+  p = p || {};
+  if (_ibRole(p) !== 'director') return { success: false, message: 'Only the director sets a follow-up plan.' };
+  var owner = _webCell(p.owner).slice(0, 120), items = p.items;
+  if (typeof items === 'string') { try { items = JSON.parse(items); } catch (e) { items = null; } }
+  if (!owner) return { success: false, message: 'Say whose plan this is.' };
+  if (!Array.isArray(items) || !items.length) return { success: false, message: 'The plan has no clients.' };
+  if (items.length > _FUG_MAX) return { success: false, message: 'A plan holds at most ' + _FUG_MAX + ' clients.' };
+  var live = {};
+  _sbRows('ClientBook').forEach(function (r) { if (_cbSame(r['Owner'], owner) && !r['Archived At']) live[String(r['Client No'])] = r; });
+  var ranks = {}, nos = {}, rows = [], now = _now(), by = String(p.actorName || '').trim(), source = _webCell(p.source).slice(0, 120);
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {}, rank = parseInt(it.rank, 10), cno = String(it.clientNo || '').trim(), c = live[cno];
+    if (!(rank >= 1 && rank <= items.length) || ranks[rank]) return { success: false, message: 'Ranks run 1 to ' + items.length + ', each once (rank ' + it.rank + ').' };
+    if (!c) return { success: false, message: 'Client ' + (cno || '(blank)') + ' is not a live client of ' + owner + '.' };
+    if (nos[cno]) return { success: false, message: String(c['Company']) + ' is in the plan twice.' };
+    ranks[rank] = nos[cno] = true;
+    rows.push([owner, rank, cno, String(c['Company'] || ''), _webCell(it.nextStep).slice(0, 190), source, by, now]);
+  }
+  rows.sort(function (a, b) { return a[1] - b[1]; });
+  var keep = _sbRows('FollowUpPlan').filter(function (r) { return !_cbSame(r['Owner'], owner); })
+    .map(function (r) { return SCHEMA.FollowUpPlan.map(function (h) { return r[h] === undefined || r[h] === null ? '' : r[h]; }); });
+  var sh = _sheet('FollowUpPlan'), W = SCHEMA.FollowUpPlan.length, all = keep.concat(rows), last = sh.getLastRow();
+  sh.getRange(2, 1, all.length, W).setValues(all);
+  for (var r = last; r > all.length + 1; r--) sh.deleteRow(r);   // a shorter plan than before: drop the rows left over
+  return { success: true, owner: owner, count: rows.length, refNo: owner, message: 'Follow-up plan set for ' + owner + ': ' + rows.length + ' clients.' };
+}
+/* ═══ end A393 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
@@ -13727,7 +13997,10 @@ var _FLOW_SETTING_DEFAULTS = {
      A391 — the shutdown calendar: who opens it, who may change any entry, the bell's look-ahead and the sales card's window. */
   bulletin: 'on', bulletinHome: 'on', bulletinRoles: 'sales,admin,accounting,management,director,hr,marketing,leadgen,warehouse',
   bulletinWriteRoles: 'hr,admin,director,management',
-  shutdowns: 'on', shutdownRoles: 'sales,director,management', shutdownEditAllRoles: 'director,management', shutdownRemindDays: 7, shutdownCardDays: 30
+  shutdowns: 'on', shutdownRoles: 'sales,director,management', shutdownEditAllRoles: 'director,management', shutdownRemindDays: 7, shutdownCardDays: 30,
+  /* A393 — the follow-up guide: who opens it, clients per weekday, and the quotation follow-up days (after sending; then
+     every followUpThen days until won or lost — 0 stops after the last). The daily report's due follow-ups use the same. */
+  followUpGuide: 'on', followUpGuideRoles: 'sales,director,management', followUpPerDay: 10, followUpCadence: '3,5,7,14', followUpThen: 7
 };
 function getFlowSettings() {
   var out = {};
@@ -16588,6 +16861,7 @@ var _MODULE_MAP = {
   correctCollection: ['Collection', 'Corrected'],
   backfillItemIds: ['Inventory', 'Item IDs Assigned'],
   saveBulletin: ['Bulletin board', 'Saved'], archiveBulletin: ['Bulletin board', 'Archived'], importBulletinMemos: ['Bulletin board', 'Memos imported'],   // A390
+  setFollowUpPlan: ['Follow-up guide', 'Plan set'],   // A393
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -21980,6 +22254,7 @@ var HANDLERS = {
   getBulletin: getBulletin, getBulletinFile: getBulletinFile, saveBulletin: saveBulletin, archiveBulletin: archiveBulletin, ackBulletin: ackBulletin,   // A390
   previewBulletinMemos: previewBulletinMemos, importBulletinMemos: importBulletinMemos,
   getShutdowns: getShutdowns, saveShutdown: saveShutdown, archiveShutdown: archiveShutdown,   // A391
+  getFollowUpGuide: getFollowUpGuide, setFollowUpPlan: setFollowUpPlan,   // A393
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -22098,6 +22373,7 @@ var MUTATIONS = {
   saveItemDetails: 1,   // A387 — one item card's details, and its log rows
   saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, importBulletinMemos: 1,   // A390 — the bulletin board
   saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar
+  setFollowUpPlan: 1,   // A393 — the director sets a rep's ranked follow-up list
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -22126,6 +22402,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A393 THE FOLLOW-UP GUIDE (196; it carries 195; A327 takes 197 or later). Neil, 4 Nov 2026: each rep's top-50 clients through the week, a GUIDE worked out from what the reps already record. New tab FollowUpPlan (Owner, Rank, Client No, Company, Next Step, Source, Set By, Set At), set only by the director (setFollowUpPlan: live clients of that rep, ranks 1..N once, at most 60). getFollowUpGuide (secured read; a rep their own, the director and management any rep or `all` as summaries): every open quotation (Sent, not marked Won, no sales order) of a plan client on day 3, 5, 7, 14 after sending, then every 7 (FlowSettings followUpCadence / followUpThen; a weekend day moves to Monday; a checkpoint is done by a touch before the next one, missed once the next has come, else open and carried), then the ranked clients with no open quotation, ranks 1-10 Monday ... 41-50 Friday (followUpPerDay 10), an untouched one carried to the next day until Friday. Touches: daily-report lines (linked to the client, its quotation or PR, or by company name; voided lines left out) and report visits, quotation Last Follow Up / Result At / creation, follow-up emails, visits marked done, new PRs, the rep's own Client Book changes, the old SalesCalls / ClientVisits. Switches followUpGuide, followUpGuideRoles. No ClientBook column, no Script Property.
 A390 THE BULLETIN BOARD + A391 THE SHUTDOWN CALENDAR (195; it carries A387's 194; A388/A389 are set aside and renumber when they resume; A327 takes 196 or later). Neil, 2 Nov 2026: announcements on every user's dashboard, written by HR, admin, the director and management (any of them edits any post), to everyone or chosen roles, with pin (at most 3), show-until, "Got it" (BulletinAcks, one row per person; writers see who has and has not) and one attachment (a PRIVATE Drive file under _Internal/Announcements, kept off the unsecured Documents register, served by getBulletinFile after an audience check; an allow-list of types, never SVG or HTML). New tabs Bulletin (23), BulletinAcks (5), BulletinLog (8). getBulletin (board / history / manage, countOnly for the bell), saveBulletin, archiveBulletin (Undo = restore), ackBulletin, previewBulletinMemos / importBulletinMemos (the active HR memos brought over once, by Source Ref; the Code.gs Memos sheet untouched). A391: client plant shutdowns; sales, the director and management add them, every rep sees all, only the creator (by username), the director and management change them. Tabs Shutdowns (24), ShutdownLog (8). getShutdowns (upcomingDays, countOnly all / mine), saveShutdown (a twin — same client and site, overlapping dates — is refused with the existing entry), archiveShutdown. Ids come from the clock and a retry is caught by a Client Ref column: no Script Properties. FlowSettings: bulletin, bulletinHome, bulletinRoles, bulletinWriteRoles, shutdowns, shutdownRoles, shutdownEditAllRoles, shutdownRemindDays, shutdownCardDays.
 A387 THE ITEM BOOK (194; A380 holds 190; A327 takes 197 or later, after A388 195 and A389 196). Neil, 1 Nov 2026: one card per product, open to every role that works with items, with its specs, photos, stock and every line it ever appeared on; costs only for management and the director. ItemDetails grows from 9 to 14 columns (Specs JSON, Notes, Hidden Photos, Updated By, Updated At; createItemByScan writes it through _ibPut in SCHEMA order) and a new append-only ItemBookLog tab. Secured reads getItemBook, getItemCard, getItemHistory (sell / buy / move) and getItemPhotos; saveItemDetails (admin and the director; a field not sent keeps its value; ifUpdatedAt refuses a stale save; one log row per change; Inventory is never written). uploadScanPhoto gains an 'item' kind (Item card photo, _Warehouse/Items). ONE RESOLVER, _ibResolve: a pick, the Item ID unless it is suspect (a no-code or shared-code row whose name is not the line's), a unique real code, code + exact name, a no-code exact name only one row has; otherwise unresolved with candidates, never the first match. With FlowSettings itemStrictMatch on, createReceiving, receiveByScan, createInvoice, voidInvoice, the receiving reversal, _ensureInventoryStock (POs now keep the id their line resolved to), importInventory and _scanInvId all use it: a line with real doubt comes back in needsItem and nothing is written; the page asks and sends picks. An invoice never creates a row (a line that is no stock item moves no stock and costs 0); _applyInventory returns the id it moved. Off puts every caller back on the pre-A387 code path. FlowSettings: itemBook, itemStrictMatch, itemBookRoles, itemBookEditRoles, itemBookCostRoles.
 A385 THE SALES LISTS (193; it carries A384's 192 and A382's 191; A380 holds 190; A327 takes 194 or later). Neil, 30 Oct 2026: purchase requests and quotations organized for the reps, old requests out of the way, and fewer steps from a priced request to a sent quotation; "prepare also so that we can easily revert this back". getPricingRequests returns updatedAt (the newest of Updated At, Created At, Date and the dates of the quotations it became) and archived (no update for prArchiveDays, FlowSettings, default 30; 0 = off), and archiveDays; it still returns every request, so every history and lookup is untouched and only the work lists hide archived ones. updatePRSourcing (at a later stage) and setPricingRequestSalesperson now stamp Updated At (_prTouch). restorePricingRequest (owner, admin, director; secured) stamps Updated At to bring one back. createQuotationFromPR answers a retried call (its clientRef already made a quotation) with that quotation before the stage gate, which used to call it an error. suggestQuotationNo: the year's next sequence number. New FlowSettings defaults: prArchiveDays 30, salesListsOrganizer, quoteOneStep, quoteNoSuggest (on/off, read by the pages).

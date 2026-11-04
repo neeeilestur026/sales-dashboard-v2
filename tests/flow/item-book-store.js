@@ -80,7 +80,7 @@ const costKeysIn = (o, out) => { out = out || []; if (Array.isArray(o)) o.forEac
 sec('1 · the version, and who may open the book');
 {
   const c = load(GS, store());
-  ok('getVersion = 195', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 195);
+  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
   [SALES, ADMIN, ACCT, MGMT, NEIL, WH].forEach(who => ok(who.actorRole + ' opens it', call(c, 'getItemBook', who).success));
   const h = call(c, 'getItemBook', HR);
   ok('hr is refused, and told who may', !h.success && /open to sales, admin, accounting, management, director, warehouse/.test(h.message), h);
