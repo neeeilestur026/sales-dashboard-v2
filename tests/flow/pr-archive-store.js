@@ -45,7 +45,7 @@ sec('1 · the version, and what getPricingRequests now says about each request')
 {
   const st = store({ Quotations: [{ 'Quotation No': 'Q-QUOTED', 'Date': ago(2), 'Created At': ago(2), 'Customer': 'Philcement Corporation', 'Status': 'Sent', 'PR No': 'PR-QUOTED' }] });
   const c = load(GS, st);
-  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
+  ok('getVersion = 197', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 197);
   const r = call(c, 'getPricingRequests', KIM), m = byNo(r);
   ok('every request still comes back (history and lookups are untouched)', r.success && Object.keys(m).length === 7 && r.archiveDays === 30, Object.keys(m));
   ok('no update for 60 days: archived', m['PR-OLD'].archived === true && /T/.test(m['PR-OLD'].updatedAt), m['PR-OLD']);

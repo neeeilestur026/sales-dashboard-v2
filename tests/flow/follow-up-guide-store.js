@@ -68,7 +68,7 @@ const set = (c, owner, items, actor) => call(c, 'setFollowUpPlan', Object.assign
 sec('1 · the version and who may open it');
 {
   const { c, store } = world();
-  ok('getVersion = 196', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 196);
+  ok('getVersion = 197', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 197);
   [GER, NEIL, LARRY].forEach(a => ok(a.actorRole + ' opens it', call(c, 'getFollowUpGuide', a).success));
   ['hr', 'admin', 'accounting', 'warehouse', 'marketing', 'leadgen'].forEach(r => ok(r + ' is refused', !call(c, 'getFollowUpGuide', who(r, 'X', r + '1')).success));
   ok('the read is secured', !call(c, 'getFollowUpGuide', Object.assign({ flowSecret: '' }, GER)).success);
@@ -93,7 +93,7 @@ sec('2 · setting a plan (the director only)');
   ok('a rank twice is refused', /each once/.test(set(c, 'Gerald Lucena', [{ rank: 1, clientNo: 'CB-1' }, { rank: 1, clientNo: 'CB-2' }]).message));
   ok('a gap in the ranks is refused', !set(c, 'Gerald Lucena', [{ rank: 1, clientNo: 'CB-1' }, { rank: 3, clientNo: 'CB-2' }]).success);
   ok('a client twice is refused', /twice/.test(set(c, 'Gerald Lucena', [{ rank: 1, clientNo: 'CB-1' }, { rank: 2, clientNo: 'CB-1' }]).message));
-  ok('more than 60 is refused', /at most 60/.test(set(c, 'Gerald Lucena', Array.from({ length: 61 }, (_, i) => ({ rank: i + 1, clientNo: 'CB-1' }))).message));
+  ok('A394: more than 150 is refused (Kimberlyn\'s 74 fit)', /at most 150/.test(set(c, 'Gerald Lucena', Array.from({ length: 151 }, (_, i) => ({ rank: i + 1, clientNo: 'CB-1' }))).message));
   ok('the refusals changed nothing', store.FollowUpPlan.length === 10);
   set(c, 'Kimberlyn Blones', [{ rank: 1, clientNo: 'CB-91' }]);
   const s = set(c, 'Gerald Lucena', plan(4));
@@ -209,6 +209,37 @@ sec('8 · one rule everywhere: the guide, the daily report and the Client Book a
   ok('  and the Client Book flag says the same', typeof CBM.cbFollowStep === 'function' && cbBad.length === 0, cbBad.slice(0, 5));
   const r2 = SR.srFollowRule({ followUpCadence: '3,7,14', followUpThen: 0 }), c2 = world({ followUpCadence: '3,7,14', followUpThen: 0 }).c, cfg2 = c2._fugCfg();
   ok('  with FlowSettings changed, both read it the same way', JSON.stringify([r2.days, r2.then]) === JSON.stringify([cfg2.cadence, cfg2.then]));
+}
+
+sec('9 · A394: faster, and a long list spread over the week');
+{
+  const { c, store } = world();
+  const q = c._fugCols('Quotations', ['Quotation No', 'Total', 'Sent At']);
+  ok('only the columns asked for are read (no PDF or layout JSON)', q.length === 7 && Object.keys(q[0]).sort().join() === 'Quotation No,Sent At,Total,rowIndex' && q[0]['Quotation No'] === 'Q1', Object.keys(q[0]));
+  ok('  a missing tab is an empty list', c._fugCols('NoSuchTab', ['X']).length === 0 && c._fugCols('FollowUpPlan', ['Owner']).length === 0);
+  const reps = c._fugReports(['Gerald Lucena'], '2026-10-12');
+  ok('the daily reports: the rep\'s own, with their JSON', reps.length === 1 && /"type":"Call"/.test(reps[0]['Report JSON']));
+  ok('  another rep\'s, or older than three weeks, are not read', c._fugReports(['Kimberlyn Blones'], '2026-10-12').length === 0 && c._fugReports(['Gerald Lucena'], '2026-11-20').length === 0);
+  ok('touches count from three weeks before this Monday', c._fugSince('2026-11-04') === '2026-10-12');
+  let read = 0;
+  const real = c._fugData;
+  c._fugData = function () { read++; return real.apply(this, arguments); };
+  set(c, 'Gerald Lucena', plan());
+  call(c, 'getFollowUpGuide', KIM);
+  ok('a rep with no plan reads nothing but the plan', read === 0);
+  call(c, 'getFollowUpGuide', GER);
+  ok('  a rep with one reads the rest once', read === 1);
+  const one = world({ followUpPerDay: 1 }).c;
+  set(one, 'Gerald Lucena', plan());
+  ok('ten clients at one a day still fill the week: two a day', call(one, 'getFollowUpGuide', GER).perDay === 2);
+  const big = Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Client ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' }));
+  const w = load(GS, { ClientBook: big, FlowSettings: [] });
+  w._now = () => new Date(NOW.getTime());
+  const r = set(w, 'Kimberlyn Blones', big.map((b, i) => ({ rank: i + 1, clientNo: b['Client No'] })));
+  const g = call(w, 'getFollowUpGuide', KIM);
+  ok('Kimberlyn\'s 74: all in her plan, 15 a day, ranks 61–74 on Friday', r.success && g.planSize === 74 && g.live === 74 && g.perDay === 15 &&
+     g.days.map(d => d.clients.length).join() === '15,15,15,15,14' && g.days[4].clients[0].rank === 61 && g.days[4].clients[13].rank === 74, g.days.map(d => d.clients.length));
+  ok('  and her week counts all 74', g.summary.weekTotal === 74);
 }
 
 console.log('\n' + (FAIL ? FAIL + ' of ' + N + ' FAILED' : 'all ' + N + ' passed'));

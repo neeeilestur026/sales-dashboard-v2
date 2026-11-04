@@ -61,6 +61,7 @@
 .fg .fg-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; margin-top: 12px; font: 500 12.5px/1.4 var(--hx-text); color: var(--hx-ink-3); }
 .fg .fg-foot a { color: var(--hx-navy-text); font-weight: 600; text-decoration: none; }
 .fg .fg-foot a:hover { text-decoration: underline; }
+.fg .fg-sync { color: var(--hx-ink-2); font-weight: 600; }   /* drawn from this browser's last copy while the fresh read runs */
 /* a row that became done since the last read lands softly (a cross-fade, never a slide) */
 .fg.fg-fresh .fg-row.done { animation: fg-land .24s ease-out both; }
 @keyframes fg-land { from { opacity: .35; } to { opacity: 1; } }

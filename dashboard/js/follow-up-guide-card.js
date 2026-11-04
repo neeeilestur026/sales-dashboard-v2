@@ -7,7 +7,14 @@
  * so it slides from where it is (the A390 segmented-control pattern). */
 (function () {
   const CARD = 'followUpGuide', EVERY = 3 * 60 * 1000;
-  const S = { g: null, day: '', user: '', page: false, seen: {}, timer: 0, busy: false };
+  const S = { g: null, day: '', user: '', page: false, seen: {}, timer: 0, busy: false, stale: false, key: '' };
+  /* A394 — the last guide this browser saw is drawn at once ("Updating…"), then replaced by the fresh read: the read takes
+     a few seconds, the card should not. Only today's copy is used; a per-viewer convenience, so every access may fail. */
+  const today = () => (typeof flowToday === 'function' ? flowToday() : '');
+  function fromCache() {
+    try { const c = JSON.parse(localStorage.getItem(S.key) || 'null'); return c && c.success && Array.isArray(c.days) && c.today === today() ? c : null; } catch (e) { return null; }
+  }
+  function toCache(r) { try { if (r && r.success && (r.live || S.page)) localStorage.setItem(S.key, JSON.stringify(r)); else localStorage.removeItem(S.key); } catch (e) { /* storage full or blocked: fine */ } }
   const qs = (k) => { try { return new URLSearchParams(location.search || '').get(k) || ''; } catch (e) { return ''; } };
   const keyOf = (x) => x.quotationNo ? x.quotationNo + '@' + x.date : 'c' + x.clientNo;
 
@@ -67,7 +74,7 @@
       '<div class="fg-bar" aria-hidden="true"><i style="transform: scaleX(' + p.share.toFixed(3) + ')"></i></div>' +
       '<div class="fg-week" role="tablist" aria-label="This week"></div>' +
       '<div class="fg-body">' + bodyHtml() + '</div>' +
-      '<div class="fg-foot"><span>This week: ' + sm.weekDone + ' of ' + sm.weekTotal + ' clients followed up' + (sm.quotesDue ? ' · ' + sm.quotesDue + ' quotation follow-up' + (sm.quotesDue === 1 ? '' : 's') + ' due' : '') + '</span>' +
+      '<div class="fg-foot"><span>' + (S.stale ? '<span class="fg-sync">Updating…</span> · ' : '') + 'This week: ' + sm.weekDone + ' of ' + sm.weekTotal + ' clients followed up' + (sm.quotesDue ? ' · ' + sm.quotesDue + ' quotation follow-up' + (sm.quotesDue === 1 ? '' : 's') + ' due' : '') + '</span>' +
       (S.page ? '' : '<a href="follow-up-guide.html">See the week</a>') + '</div>' + (S.page ? tableHtml() : '');
     const seg = el.querySelector('.fg-week');
     if (seg) stripDraw(seg);
@@ -83,12 +90,18 @@
     S.busy = true;
     try {
       const r = await postFlow('getFollowUpGuide', S.user ? { user: S.user } : {});
-      if (!r || !r.success || (!S.page && !r.live)) { if (!S.page) el.style.display = 'none'; else if (r && !r.success) el.innerHTML = '<p class="fg-empty">' + fugEsc(/unknown action|not a secured action/i.test(String(r.message)) ? 'The follow-up guide opens with the next FlowAPI update (version 196).' : r.message) + '</p>'; return; }
+      if (r && r.success && !S.page && !r.live) { toCache(r); S.g = null; el.style.display = 'none'; return; }   // no plan (any more)
+      if (!r || !r.success) {
+        if (S.g) { S.stale = false; draw(el); return; }   // a failed refresh keeps what is on screen
+        if (!S.page) el.style.display = 'none';
+        else el.innerHTML = '<p class="fg-empty">' + fugEsc(r && /unknown action|not a secured action/i.test(String(r.message)) ? 'The follow-up guide opens with the next FlowAPI update (version 196).' : (r && r.message) || 'The guide could not be read. Reload the page to try again.') + '</p>';
+        return;
+      }
       const keep = S.g && S.g.user === r.user && (r.days || []).some(d => d.date === S.day);
-      S.g = r;
+      S.g = r; S.stale = false; toCache(r);
       if (!keep) S.day = fugDefaultDay(r);
       draw(el);
-    } catch (e) { if (!S.page) el.style.display = 'none'; }
+    } catch (e) { if (S.g) { S.stale = false; draw(el); } else if (!S.page) el.style.display = 'none'; }
     finally { S.busy = false; }
   }
 
@@ -133,7 +146,10 @@
     if (!S.page && session.role !== 'sales') return;
     if (S.page && session.role !== 'sales' && !over) return;
     S.user = S.page && over ? qs('user') : '';
+    S.key = 'hx_fug1:' + (session.username || session.name) + ':' + (S.user || 'me');
     wire(el);
+    const c = fromCache();
+    if (c && (S.page || c.live)) { S.g = c; S.day = fugDefaultDay(c); S.stale = true; draw(el); }
     load(el);
   });
 })();
