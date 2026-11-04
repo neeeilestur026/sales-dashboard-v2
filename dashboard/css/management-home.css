@@ -311,4 +311,5 @@ body.mg #followUpTeam .fut-n { font-weight: 700; font-size: 18px; font-variant-n
 body.mg #followUpTeam .fut-n small { font-weight: 500; font-size: 12px; color: var(--hx-ink-3); }
 body.mg #followUpTeam .fut-bar { display: block; width: 120px; height: 4px; border-radius: 999px; background: var(--hx-inset); overflow: hidden; }
 body.mg #followUpTeam .fut-bar i { display: block; height: 100%; background: var(--hx-ok); transform-origin: left center; }
+body.mg #followUpTeam .fut-soon { font-size: 12.5px; font-weight: 600; color: var(--hx-ink-2); white-space: nowrap; }   /* A395 — before the start day */
 @media (prefers-reduced-motion: reduce) { body.mg #followUpTeam .fut-row:active { transform: none; } }

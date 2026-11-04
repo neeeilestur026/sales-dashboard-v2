@@ -55,6 +55,7 @@
 .fg .fg-btn.quiet { background: var(--hx-inset); color: var(--hx-ink); }
 .fg .fg-btn:active { transform: scale(.97); }
 .fg .fg-btn:focus-visible { outline: 2px solid var(--hx-navy-text); outline-offset: 2px; }
+.fg .fg-soon { max-width: 64ch; margin: 10px 0 0; font: 400 13.5px/1.55 var(--hx-text); color: var(--hx-ink-2); }   /* A395 — before the start day */
 .fg .fg-empty { margin: 14px 0 0; font: 400 13px/1.5 var(--hx-text); color: var(--hx-ink-3); }
 .fg .fg-more { margin: 6px 0 0; font: 500 12.5px/1.4 var(--hx-text); }
 .fg .fg-more a { color: var(--hx-navy-text); text-decoration: none; font-weight: 600; }

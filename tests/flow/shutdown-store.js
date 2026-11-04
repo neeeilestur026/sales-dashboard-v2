@@ -24,7 +24,7 @@ const add = (c, p, actor) => call(c, 'saveShutdown', Object.assign({ company: 'P
 sec('1 · the version, an empty calendar, and who may open it');
 {
   const store = {}, c = load(GS, store);
-  ok('getVersion = 197', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 197);
+  ok('getVersion = 198', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 198);
   [KIM, NEIL, LARRY].forEach(a => ok(a.actorRole + ' opens it', call(c, 'getShutdowns', a).success));
   ['hr', 'admin', 'accounting', 'warehouse', 'marketing', 'leadgen'].forEach(r => ok(r + ' is refused', !call(c, 'getShutdowns', who(r, 'X', r + '1')).success));
   ok('a read creates no tab', !('Shutdowns' in store));

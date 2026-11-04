@@ -58,7 +58,19 @@
       g.notLive.map(x => fugEsc(x.company)).join(', ') + '.</p>' : '') + '</section>';
   }
 
+  function drawSoon(el) {
+    const g = S.g, own = !g.readOnly;
+    const picker = S.page && g.people && g.people.length ? '<label class="fg-pick"><span>Rep</span><select id="fgUser">' +
+      g.people.map(u => '<option' + (u === g.user ? ' selected' : '') + '>' + fugEsc(u) + '</option>').join('') + '</select></label>' : '';
+    el.style.display = '';
+    el.classList.add('fg');
+    el.innerHTML = '<div class="fg-head"><div class="fg-ttl"><h3>' + fugEsc(own ? 'Your follow-up guide' : g.user + '\'s follow-up guide') + '</h3>' +
+      '<span class="fg-sub">Starts ' + fugEsc(fugStartLabel(g.startsOn)) + '</span></div>' + picker + '</div>' +
+      '<p class="fg-soon">' + fugEsc(fugSoonText(g, own)) + '</p>';
+  }
+
   function draw(el) {
+    if (S.g && S.g.notStarted) { drawSoon(el); return; }   // A395 — before the start day
     const g = S.g, own = !g.readOnly, sm = g.summary || {}, week = g.weekend && !S.day;
     const p = week ? { done: sm.weekDone, total: sm.weekTotal, share: sm.weekTotal ? sm.weekDone / sm.weekTotal : 0 } : fugProgress(g, S.day);
     const sel = (g.days || []).filter(d => d.date === S.day)[0];
@@ -97,7 +109,7 @@
         else el.innerHTML = '<p class="fg-empty">' + fugEsc(r && /unknown action|not a secured action/i.test(String(r.message)) ? 'The follow-up guide opens with the next FlowAPI update (version 196).' : (r && r.message) || 'The guide could not be read. Reload the page to try again.') + '</p>';
         return;
       }
-      const keep = S.g && S.g.user === r.user && (r.days || []).some(d => d.date === S.day);
+      const keep = S.g && S.g.user === r.user && !r.notStarted && (r.days || []).some(d => d.date === S.day);
       S.g = r; S.stale = false; toCache(r);
       if (!keep) S.day = fugDefaultDay(r);
       draw(el);

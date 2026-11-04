@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 197;   // A394 — the follow-up guide reads only the columns it needs; a long plan spreads over the week. History: see CHANGELOG.
+var FLOW_VERSION = 198;   // A395 — the follow-up guide counts from its start day (Monday 9 Nov 2026). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -2167,7 +2167,7 @@ function _fugCfg() {
   var cad = String(blank(d.followUpCadence) ? '3,5,7,14' : d.followUpCadence).split(',').map(function (x) { return parseInt(x, 10); })
     .filter(function (x) { if (!(x > 0 && x < 400) || seen[x]) return false; seen[x] = 1; return true; }).sort(function (a, b) { return a - b; });
   return { on: _bbSwitch(d.followUpGuide), roles: _bbList(d.followUpGuideRoles, _FUG_ROLES), perDay: per >= 1 && per <= 20 ? per : 10,
-           cadence: cad.length ? cad : [3, 5, 7, 14], then: then >= 0 && then < 100 ? then : 7 };
+           cadence: cad.length ? cad : [3, 5, 7, 14], then: then >= 0 && then < 100 ? then : 7, start: _lgDayOf(d.followUpStart) };
 }
 function _fugDenied(p, cfg) {
   if (!cfg.on) return 'The follow-up guide is switched off (FlowSettings followUpGuide).';
@@ -2258,6 +2258,7 @@ function _fugGuide(m, who, cfg, today) {
   var me = function (v) { return _cbSame(v, who); };
   var monday = _lgMonday(today), friday = _lgAddDays(monday, 4), dow = _lgDow(today), weekend = dow === 'Sat' || dow === 'Sun';
   var horizon = _lgAddDays(weekend ? _lgAddDays(monday, 7) : friday, 31), since = m.since || _fugSince(today);
+  if (cfg.start && since < cfg.start) since = cfg.start;   // A395 — nothing before the start day counts
   // the rep's live book: the plan's clients, and the names a touch may be matched by
   var live = {}, full = {}, keyNo = {}, keyN = {};
   m.book.forEach(function (r) {
@@ -2361,7 +2362,7 @@ function _fugGuide(m, who, cfg, today) {
   var quoted = {}, checks = [];
   openQuotes.forEach(function (o) {
     quoted[o.clientNo] = true;
-    var cps = _fugCheckpoints(o.sent, horizon, cfg), c = rankOf[o.clientNo], all = (byQuote[o.no] || []).concat(byClient[o.clientNo] || []).sort(sortT);
+    var cps = _fugCheckpoints(o.sent, horizon, cfg).filter(function (cp) { return !cfg.start || cp.date >= cfg.start; }), c = rankOf[o.clientNo], all = (byQuote[o.no] || []).concat(byClient[o.clientNo] || []).sort(sortT);
     cps.forEach(function (cp, i) {
       var next = cps[i + 1] ? cps[i + 1].date : '', by = cp.date <= today ? firstFrom(all, cp.date, next) : null;
       var status = cp.date > today ? 'planned' : by ? 'done' : next && next <= today ? 'missed' : 'open';
@@ -2413,6 +2414,15 @@ function getFollowUpGuide(p) {
   var owners = [], seen = {};
   plan.forEach(function (r) { var o = String(r['Owner'] || '').trim(), k = o.toLowerCase(); if (o && !seen[k]) { seen[k] = 1; owners.push(o); } });
   owners.sort();
+  // A395 — before the start day: who has a plan and how big, and when it starts; nothing is counted yet
+  if (cfg.start && today < cfg.start) {
+    var sizeOf = function (o) { return plan.filter(function (r) { return _cbSame(r['Owner'], o); }).length; };
+    var soon = function (o) { var n = sizeOf(o); return { user: o, live: n, planSize: n, notStarted: true, startsOn: cfg.start, perDay: Math.max(cfg.perDay, Math.ceil(n / 5)),
+      summary: { todayDone: 0, todayTotal: 0, weekDone: 0, weekTotal: n, quotesDue: 0, quoted: 0 } }; };
+    if (over && (p.all === true || String(p.all) === 'true')) return { success: true, today: today, startsOn: cfg.start, people: owners.map(soon) };
+    var whoSoon = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+    return Object.assign(soon(whoSoon), { success: true, today: today, days: [], readOnly: !_cbSame(whoSoon, p.actorName), people: over ? owners : [] });
+  }
   if (over && (p.all === true || String(p.all) === 'true')) {
     var ma = owners.length ? _fugData(owners, since) : _fugEmpty(plan, since);
     return { success: true, today: today, people: owners.map(function (o) { var g = _fugGuide(ma, o, cfg, today); return { user: o, live: g.live, summary: g.summary }; }) };
@@ -14044,7 +14054,10 @@ var _FLOW_SETTING_DEFAULTS = {
   shutdowns: 'on', shutdownRoles: 'sales,director,management', shutdownEditAllRoles: 'director,management', shutdownRemindDays: 7, shutdownCardDays: 30,
   /* A393 — the follow-up guide: who opens it, clients per weekday, and the quotation follow-up days (after sending; then
      every followUpThen days until won or lost — 0 stops after the last). The daily report's due follow-ups use the same. */
-  followUpGuide: 'on', followUpGuideRoles: 'sales,director,management', followUpPerDay: 10, followUpCadence: '3,5,7,14', followUpThen: 7
+  followUpGuide: 'on', followUpGuideRoles: 'sales,director,management', followUpPerDay: 10, followUpCadence: '3,5,7,14', followUpThen: 7,
+  /* A395 — Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". Before this day the guide only
+     says when it starts; from it, nothing earlier counts (no touch, no quotation follow-up from before). 'off' = no start day. */
+  followUpStart: '2026-11-09'
 };
 function getFlowSettings() {
   var out = {};
@@ -22446,6 +22459,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A395 THE FOLLOW-UP GUIDE STARTS ON A DAY (198; it carries 197, never pasted; A327 takes 199 or later). Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". FlowSettings followUpStart (default 2026-11-09; 'off' = none): before it getFollowUpGuide answers notStarted + startsOn with each plan's size (the cards say when it starts, nothing is counted); from it, touches before the start day and quotation checkpoints dated before it are left out, so the first Monday starts clean.
 A394 THE FOLLOW-UP GUIDE, FASTER AND LONGER (197; it carries 196; A327 takes 198 or later). Neil, 4 Nov 2026: "the follow up guide takes too long to load" and "include all the 74 clients on her plan". getFollowUpGuide read whole rows of every tab (~12 s live): it now reads the plan first (a rep with none reads nothing else), then only the columns it uses (_fugCols: runs of neighbouring columns, so Quotations' PDF / Layout JSON, the PR item JSON and the Client Book contacts are never read), the daily reports' JSON only for the reps' rows of the last three weeks (_fugReports, one block), touches from three weeks before this Monday (_fugSince, was 60 days). A plan holds up to 150 clients (was 60); a list longer than five days of followUpPerDay is spread evenly (Kimberlyn's 74: 15 a day, ranks 61-74 on Friday), and the reply's perDay says how many. No new tab, column or Script Property.
 A393 THE FOLLOW-UP GUIDE (196; it carries 195; A327 takes 197 or later). Neil, 4 Nov 2026: each rep's top-50 clients through the week, a GUIDE worked out from what the reps already record. New tab FollowUpPlan (Owner, Rank, Client No, Company, Next Step, Source, Set By, Set At), set only by the director (setFollowUpPlan: live clients of that rep, ranks 1..N once, at most 60). getFollowUpGuide (secured read; a rep their own, the director and management any rep or `all` as summaries): every open quotation (Sent, not marked Won, no sales order) of a plan client on day 3, 5, 7, 14 after sending, then every 7 (FlowSettings followUpCadence / followUpThen; a weekend day moves to Monday; a checkpoint is done by a touch before the next one, missed once the next has come, else open and carried), then the ranked clients with no open quotation, ranks 1-10 Monday ... 41-50 Friday (followUpPerDay 10), an untouched one carried to the next day until Friday. Touches: daily-report lines (linked to the client, its quotation or PR, or by company name; voided lines left out) and report visits, quotation Last Follow Up / Result At / creation, follow-up emails, visits marked done, new PRs, the rep's own Client Book changes, the old SalesCalls / ClientVisits. Switches followUpGuide, followUpGuideRoles. No ClientBook column, no Script Property.
 A390 THE BULLETIN BOARD + A391 THE SHUTDOWN CALENDAR (195; it carries A387's 194; A388/A389 are set aside and renumber when they resume; A327 takes 196 or later). Neil, 2 Nov 2026: announcements on every user's dashboard, written by HR, admin, the director and management (any of them edits any post), to everyone or chosen roles, with pin (at most 3), show-until, "Got it" (BulletinAcks, one row per person; writers see who has and has not) and one attachment (a PRIVATE Drive file under _Internal/Announcements, kept off the unsecured Documents register, served by getBulletinFile after an audience check; an allow-list of types, never SVG or HTML). New tabs Bulletin (23), BulletinAcks (5), BulletinLog (8). getBulletin (board / history / manage, countOnly for the bell), saveBulletin, archiveBulletin (Undo = restore), ackBulletin, previewBulletinMemos / importBulletinMemos (the active HR memos brought over once, by Source Ref; the Code.gs Memos sheet untouched). A391: client plant shutdowns; sales, the director and management add them, every rep sees all, only the creator (by username), the director and management change them. Tabs Shutdowns (24), ShutdownLog (8). getShutdowns (upcomingDays, countOnly all / mine), saveShutdown (a twin — same client and site, overlapping dates — is refused with the existing entry), archiveShutdown. Ids come from the clock and a retry is caught by a Client Ref column: no Script Properties. FlowSettings: bulletin, bulletinHome, bulletinRoles, bulletinWriteRoles, shutdowns, shutdownRoles, shutdownEditAllRoles, shutdownRemindDays, shutdownCardDays.

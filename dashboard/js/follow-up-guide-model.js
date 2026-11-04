@@ -9,6 +9,18 @@ const FUG_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 
 
 function fugEsc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function _fugDow(ymd) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(ymd + 'T00:00:00Z').getUTCDay()]; }
+/** 'Monday, 9 November' — when the guide starts (A395). */
+function fugStartLabel(ymd) {
+  const s = String(ymd || ''), long = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? FUG_DOW_LONG[_fugDow(s)] + ', ' + (+s.slice(8, 10)) + ' ' + long[+s.slice(5, 7) - 1] : '';
+}
+/** A395 — before the start day: what the guide will do, in the rep's words (own) or about the rep. */
+function fugSoonText(g, own) {
+  const n = g.planSize || 0, per = g.perDay || 10;
+  return (own ? 'From then you will see who to follow up each day: your quotations first, ' : 'From then it shows who they follow up each day: their quotations first, ') +
+    'on day 3, 5, 7 and 14 after sending and then every week, then ' + (own ? 'your' : 'their') + ' top ' + n + ' clients, ' + per + ' a day. ' +
+    'It counts what ' + (own ? 'you log' : 'they log') + ' in the daily report, quotations, visits and the Client Book.';
+}
 /** 'Wed 4 Nov' */
 function fugDayLabel(ymd) { const s = String(ymd || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? _fugDow(s) + ' ' + (+s.slice(8, 10)) + ' ' + FUG_MON[+s.slice(5, 7) - 1] : ''; }
 /** '4 Nov' */
@@ -117,5 +129,5 @@ function fugProgress(g, date) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fugEsc, fugDayLabel, fugShort, fugMoney, fugHow, fugRanks, fugDefaultDay, fugGroups, fugLeft, fugLine, fugRowHtml, fugGroupsHtml, fugStripHtml, fugSubtitle, fugProgress };
+  module.exports = { fugEsc, fugStartLabel, fugSoonText, fugDayLabel, fugShort, fugMoney, fugHow, fugRanks, fugDefaultDay, fugGroups, fugLeft, fugLine, fugRowHtml, fugGroupsHtml, fugStripHtml, fugSubtitle, fugProgress };
 }
