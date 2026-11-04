@@ -20,13 +20,21 @@
       '<ul class="fut-list">' + people.map(row).join('') + '</ul>';
   }
 
-  async function load(el) {
+  /* A394 — the last list this browser saw is drawn at once, then the fresh read replaces it (only today's copy). */
+  let KEY = '';
+  const today = () => (typeof flowToday === 'function' ? flowToday() : '');
+  function fromCache() { try { const c = JSON.parse(localStorage.getItem(KEY) || 'null'); return c && Array.isArray(c.people) && c.today === today() ? c.people : null; } catch (e) { return null; } }
+  function toCache(people) { try { localStorage.setItem(KEY, JSON.stringify({ today: today(), people })); } catch (e) { /* fine */ } }
+
+  async function load(el, shown) {
     try {
       const r = await postFlow('getFollowUpGuide', { all: true });
-      const people = (r && r.success && r.people || []).filter(p => p.live > 0);
+      if (!r || !r.success) { if (!shown) el.style.display = 'none'; return; }   // a failed refresh keeps what is on screen
+      const people = (r.people || []).filter(p => p.live > 0);
+      toCache(people);
       if (!people.length) { el.style.display = 'none'; return; }
       render(el, people);
-    } catch (e) { el.style.display = 'none'; }
+    } catch (e) { if (!shown) el.style.display = 'none'; }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -34,6 +42,9 @@
     if (!el || typeof postFlow !== 'function' || typeof getSession !== 'function') return;
     const s = getSession();
     if (!s || (s.role !== 'director' && s.role !== 'management')) return;
-    load(el);
+    KEY = 'hx_fut1:' + (s.username || s.name);
+    const cached = fromCache();
+    if (cached && cached.length) render(el, cached);
+    load(el, !!(cached && cached.length));
   });
 })();

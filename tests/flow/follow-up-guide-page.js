@@ -92,6 +92,30 @@ function guide(user, actor) {
      /<section class="hx-glass" id="inbox">[\s\S]*?<\/section>\s*<!--[^>]*-->\s*<section class="hx-glass" id="followUpGuide" style="display:none;"><\/section>/.test(read('dashboard.html')) &&
      /css\/follow-up-guide\.css/.test(read('dashboard.html')) && /js\/shutdowns-card\.js[\s\S]*js\/follow-up-guide-model\.js[\s\S]*js\/follow-up-guide-card\.js[\s\S]*js\/auth\.js/.test(read('dashboard.html')));
 
+  sec('2b · A394: drawn at once from this browser\'s last copy');
+  const cached = (answer, copy) => {
+    const p = card('sales', answer);
+    p.run('flowToday = function () { return "2026-11-04"; };');
+    p.ctx.__copy = copy;
+    p.run('localStorage = { getItem: function (k) { return /^hx_fug1:/.test(k) ? (__copy ? JSON.stringify(__copy) : null) : JSON.stringify(__session); }, setItem: function (k, v) { __saved = [k, v]; }, removeItem: function () {} }; __saved = null;');
+    return p;
+  };
+  const slow = cached(null, G);
+  slow.run('postFlow = function () { return new Promise(function () {}); };');
+  await slow.boot();
+  ok('today\'s copy is drawn before the read answers, marked "Updating…"', slow.els.followUpGuide.style.display === '' && /<b>0<\/b> of 5 done/.test(slow.els.followUpGuide.innerHTML) &&
+     /<span class="fg-sync">Updating…<\/span>/.test(slow.els.followUpGuide.innerHTML), slow.els.followUpGuide.innerHTML.slice(0, 200));
+  const fresh = cached(G, G);
+  await fresh.boot(); await new Promise(r => setImmediate(r));
+  ok('  the fresh read replaces it (no "Updating…") and is kept for next time', !/fg-sync/.test(fresh.els.followUpGuide.innerHTML) && fresh.ctx.__saved && /^hx_fug1:sales1:me$/.test(fresh.ctx.__saved[0]), fresh.ctx.__saved && fresh.ctx.__saved[0]);
+  const failed = cached({ success: false, message: 'Read timed out' }, G);
+  await failed.boot(); await new Promise(r => setImmediate(r));
+  ok('  a failed refresh keeps what is on screen', failed.els.followUpGuide.style.display === '' && /Today&#39;s follow-ups/.test(failed.els.followUpGuide.innerHTML) && !/fg-sync/.test(failed.els.followUpGuide.innerHTML));
+  const old2 = cached(null, Object.assign({}, G, { today: '2026-11-03' }));
+  old2.run('postFlow = function () { return new Promise(function () {}); };');
+  await old2.boot();
+  ok('  yesterday\'s copy is not used', old2.els.followUpGuide.style.display === 'none');
+
   sec('3 · the week page');
   const GD = guide('Gerald Lucena', { actorRole: 'director', actorName: 'Neil Estur', actorUsername: 'neil' });
   const pg = card('director', GD, 'follow-up-guide.html', '?user=Gerald%20Lucena');
@@ -131,6 +155,12 @@ function guide(user, actor) {
     ok(file + ': one read for all, one row per rep opening their week', JSON.stringify(t.paramsFor('getFollowUpGuide')) === '{"all":true}' && t.els.followUpTeam.style.display === '' &&
        /href="follow-up-guide\.html\?user=Gerald%20Lucena"/.test(th) && /href="follow-up-guide\.html\?user=Kimberlyn%20Blones"/.test(th) && /Follow-ups this week/.test(th), th.slice(0, 300));
   }
+  const tc = page(['js/follow-up-team-card.js'], 'director-home.html', who('director', 'Neil Estur'));
+  tc.ctx.__copy = { today: '2026-11-04', people: allReply.people };
+  tc.run('flowToday = function () { return "2026-11-04"; }; getSession = function () { return __session; }; postFlow = function () { return new Promise(function () {}); };' +
+         'localStorage = { getItem: function (k) { return /^hx_fut1:/.test(k) ? JSON.stringify(__copy) : JSON.stringify(__session); }, setItem: function () {}, removeItem: function () {} };');
+  await tc.boot();
+  ok('A394: the director\'s card is drawn at once from this browser\'s last copy', tc.els.followUpTeam.style.display === '' && /Gerald Lucena/.test(tc.els.followUpTeam.innerHTML));
   const t0 = page(['js/follow-up-team-card.js'], 'director-home.html', who('director', 'Neil Estur'));
   t0.run('postFlow = function () { return Promise.resolve({ success: false, message: "Unknown action: getFollowUpGuide" }); }; getSession = function () { return __session; };');
   await t0.boot();
