@@ -382,6 +382,17 @@ function requireShutdownAccess() {
   return session;
 }
 
+/* A396 — the client information hub (client-hub.html): management, admin, the director and HR read every client's details
+   and keep the accreditation dates and files (FlowSettings clientHubRoles / clientHubEditRoles); the server decides who sees
+   the Collection details (management, admin, the director), not this list. */
+const FLOW_CLIENT_HUB_ROLES = ['management', 'admin', 'director', 'hr'];
+function requireClientHubAccess() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (!FLOW_CLIENT_HUB_ROLES.includes(session.role)) { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+
 /* A393 — the follow-up guide (follow-up-guide.html): a rep's own week; the director and management read any rep's
    (FlowSettings followUpGuideRoles). */
 const FLOW_FOLLOW_UP_ROLES = ['sales', 'director', 'management'];
@@ -739,7 +750,7 @@ function renderNavbar(activePage) {
         Lead Gen
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status' || activePage === 'collection-details' || activePage === 'bulletin') ? 'active' : ''}">
+        <button class="nav-dropdown-btn ${((activePage || '').indexOf('flow') === 0 || activePage === 'product-finder' || activePage === 'website-requests' || activePage === 'supplier-list' || activePage === 'quotation-status' || activePage === 'collection-details' || activePage === 'bulletin' || activePage === 'client-hub') ? 'active' : ''}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           Process Flow
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -763,6 +774,7 @@ function renderNavbar(activePage) {
             <a href="admin-import-quotation.html" class="${activePage === 'admin-import-quotation' ? 'active' : ''}">Import Quotation</a>
             <a href="flow-sales-orders.html" class="${activePage === 'flow-sales-orders' ? 'active' : ''}">Sales Orders</a>
             <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
+            <a href="client-hub.html" class="${activePage === 'client-hub' ? 'active' : ''}">Client Hub</a>   <!-- A396 -->
             <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
           </div>
           <div class="dd-group">
@@ -926,7 +938,7 @@ function renderNavbar(activePage) {
        requireAdmin for why. All of these open read-only for management. */
     const mFlowPages = ['flow-home', 'flow-accounting', 'flow-sales-orders', 'flow-receiving',
                         'flow-invoices', 'flow-collections', 'flow-expenses', 'flow-ledger',
-                        'flow-suppliers', 'flow-clients', 'flow-shipments', 'flow-travel', 'flow-guide'];
+                        'flow-suppliers', 'flow-clients', 'flow-shipments', 'flow-travel', 'flow-guide', 'client-hub'];   // A396
     const mApprActive = mApprPages.includes(activePage) ? 'active' : '';
     const mFinActive = mFinPages.includes(activePage) ? 'active' : '';
     const mFlowActive = mFlowPages.includes(activePage) ? 'active' : '';
@@ -1000,6 +1012,7 @@ function renderNavbar(activePage) {
           <a href="payroll-books.html" class="${activePage === 'payroll-books' ? 'active' : ''}">Payroll in the Books</a>
           <a href="flow-suppliers.html" class="${activePage === 'flow-suppliers' ? 'active' : ''}">Suppliers</a>
           <a href="flow-clients.html" class="${activePage === 'flow-clients' ? 'active' : ''}">Clients</a>
+          <a href="client-hub.html" class="${activePage === 'client-hub' ? 'active' : ''}">Client Hub</a>   <!-- A396 -->
           <a href="flow-shipments.html" class="${activePage === 'flow-shipments' ? 'active' : ''}">Shipments</a>
           <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
           <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
@@ -1063,6 +1076,10 @@ function renderNavbar(activePage) {
       <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         Client Book
+      </a>
+      <a href="client-hub.html" class="${activePage === 'client-hub' ? 'active' : ''}">   <!-- A396 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg>
+        Client Hub
       </a>
       <div class="nav-dropdown">
         <button class="nav-dropdown-btn ${dirQuoteActive ? 'active' : ''}">
@@ -1271,6 +1288,10 @@ function renderNavbar(activePage) {
       <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">   <!-- A390 -->
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Bulletin Board
+      </a>
+      <a href="client-hub.html" class="${activePage === 'client-hub' ? 'active' : ''}">   <!-- A396 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg>
+        Client Hub
       </a>
       <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>

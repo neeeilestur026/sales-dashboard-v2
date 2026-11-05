@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 198;   // A395 — the follow-up guide counts from its start day (Monday 9 Nov 2026). History: see CHANGELOG.
+var FLOW_VERSION = 199;   // A396 — the client information hub, with accreditation and its files. History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -628,7 +628,13 @@ var SCHEMA = {
               'Follow Up By', 'Notes', 'Client Ref', 'Created By', 'Created By User', 'Created At', 'Updated By', 'Updated At', 'Archived By', 'Archived At', 'Archive Reason'],
   ShutdownLog: ['Log No', 'Shutdown No', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
   // A393 — each rep's ranked follow-up list (one row per client; set only by setFollowUpPlan, the director)
-  FollowUpPlan: ['Owner', 'Rank', 'Client No', 'Company', 'Next Step', 'Source', 'Set By', 'Set At']
+  FollowUpPlan: ['Owner', 'Rank', 'Client No', 'Company', 'Next Step', 'Source', 'Set By', 'Set At'],
+  // A396 — the client information hub's own accreditation record (one row per client, keyed by _cdKey), its requirement files
+  // (private Drive files, one row each, per accreditation year) and its log. Clock ids CA- / CAF- / CAL-; no Script Properties.
+  ClientAccred: ['Key', 'Company', 'Year', 'Accredited Since', 'Expires', 'Note', 'Client Ref', 'Created By', 'Created At', 'Updated By', 'Updated At'],
+  ClientAccredFiles: ['File No', 'Key', 'Company', 'Year', 'Requirement', 'File ID', 'File Name', 'File Type', 'File Size', 'Note', 'Client Ref',
+                      'Uploaded By', 'Uploaded At', 'Archived By', 'Archived At'],
+  ClientAccredLog: ['Log No', 'Key', 'Kind', 'From', 'To', 'Note', 'By', 'At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -878,6 +884,7 @@ var _SECURED = {
   getItemBook: 1, getItemCard: 1, getItemHistory: 1, getItemPhotos: 1, saveItemDetails: 1,   // A387 — the Item Book: reads are secured (costs by role)
   getBulletin: 1, getBulletinFile: 1, saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, previewBulletinMemos: 1, importBulletinMemos: 1,   // A390
   getShutdowns: 1, saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar (reads secured: names and plans)
+  getClientHub: 1, getClientHubFile: 1, saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client information hub (reads secured: clients' details, files)
   getFollowUpGuide: 1, setFollowUpPlan: 1,   // A393 — the follow-up guide (the read is secured: clients and quotations by rep)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
@@ -2464,6 +2471,270 @@ function setFollowUpPlan(p) {
   return { success: true, owner: owner, count: rows.length, refNo: owner, message: 'Follow-up plan set for ' + owner + ': ' + rows.length + ' clients.' };
 }
 /* ═══ end A393 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A396 · the client information hub ═════════════════════════════════════════════════════════
+ * Neil, 5 Nov 2026: one place with every detail of every client — information only, no quotation status and no POs —
+ * for management, admin, the director and HR, with each client's accreditation: the reps' own label (the two sales
+ * dashboards' Client Books), when it started, when it expires (usually a year), and the requirement files, kept per
+ * year so that re-applying is easy. One card per client at _cdKey (business units stay apart, as on Collection details),
+ * built from the Client master, the live Client Book rows, Collection details (management, admin and the director only:
+ * left out of HR's reply, not just hidden) and lead gen's accreditation tracker. The hub's own record is the dates and the
+ * files; the reps keep the label. Files are private Drive files (no sharing), read back through an audience-checked
+ * action, never the Documents register (public links, unsecured read, a Script Property counter). Clock ids. */
+var _CH_ROLES = ['management', 'admin', 'director', 'hr'], _CH_COLLECT = ['management', 'admin', 'director'];
+var _CH_REQUIREMENTS = ['Their accreditation / vendor form', 'Company profile', 'SEC or DTI registration', 'Business permit', 'BIR 2303',
+                        'Financial statement / ITR', 'Certificates (ISO, safety)', 'Their accreditation certificate', 'Other'];
+var _CH_STATES = ['Accredited', 'Renew soon', 'Expired', 'On process', 'Not accredited', 'No label'];
+function _chCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  var n = parseInt(d.clientAccredRenewDays, 10);
+  var req = String(d.clientAccredRequirements == null ? '' : d.clientAccredRequirements).split(';').map(function (x) { return _webCell(x).slice(0, 60); }).filter(Boolean);
+  return { on: _bbSwitch(d.clientHub), roles: _bbList(d.clientHubRoles, _CH_ROLES), edit: _bbList(d.clientHubEditRoles, _CH_ROLES),
+           collect: _bbList(d.clientHubCollectionRoles, _CH_COLLECT), renew: n > 0 && n < 400 ? n : 60, requirements: req.length ? req : _CH_REQUIREMENTS.slice() };
+}
+function _chDenied(p, cfg, edit) {
+  if (!cfg.on) return 'The client information hub is switched off (FlowSettings clientHub).';
+  var r = _ibRole(p);
+  if (cfg.roles.indexOf(r) < 0) return 'The client information hub is open to ' + cfg.roles.join(', ') + '.';
+  if (edit && cfg.edit.indexOf(r) < 0) return 'Only ' + cfg.edit.join(', ') + ' can change accreditation details.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save this under.';
+  return '';
+}
+function _chPut(name, row, obj) {
+  var vals = SCHEMA[name].map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet(name).getRange(row.rowIndex, 1, 1, vals.length).setValues([vals]);
+  else _append(name, vals);
+}
+function _chLog(key, kind, from, to, note, by) {
+  _append('ClientAccredLog', [_bbId('CAL'), key, kind, _webCell(from).slice(0, 190), _webCell(to).slice(0, 190), _webCell(note, true).slice(0, 500), by || '', _now()]);
+}
+/** A phone's last ten digits (enough to see that "0917 123 4567" and "+63 917 123 4567" are one number). */
+function _chDigits(s) { var d = String(s || '').replace(/\D/g, ''); return d.length >= 7 ? d.slice(-10) : ''; }
+/** One list of people from every source: the same email, phone or name is one person, with every source it came from. */
+function _chPeople(list) {
+  var out = [];
+  var nm = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); };
+  list.forEach(function (x) {
+    var emails = (x.emails || []).map(function (e) { return String(e).trim(); }).filter(Boolean);
+    var phones = (x.phones || []).map(function (e) { return String(e).trim(); }).filter(Boolean);
+    var name = String(x.name || '').trim();
+    if (!name && !emails.length && !phones.length) return;
+    var hit = out.filter(function (o) {
+      return emails.some(function (e) { return o.emails.some(function (f) { return f.toLowerCase() === e.toLowerCase(); }); }) ||
+             phones.some(function (ph) { var d = _chDigits(ph); return d && o.phones.some(function (q) { return _chDigits(q) === d; }); }) ||
+             (nm(name) && nm(o.name) === nm(name));
+    })[0];
+    if (!hit) { hit = { name: name, position: String(x.position || '').trim(), emails: [], phones: [], primary: false, sources: [] }; out.push(hit); }
+    if (!hit.name && name) hit.name = name;
+    if (!hit.position && x.position) hit.position = String(x.position).trim();
+    emails.forEach(function (e) { if (!hit.emails.some(function (f) { return f.toLowerCase() === e.toLowerCase(); })) hit.emails.push(e); });
+    phones.forEach(function (ph) { var d = _chDigits(ph); if (!hit.phones.some(function (q) { return (d && _chDigits(q) === d) || q === ph; })) hit.phones.push(ph); });
+    if (x.primary) hit.primary = true;
+    if (hit.sources.indexOf(x.source) < 0) hit.sources.push(x.source);
+  });
+  return out.sort(function (a, b) { return (b.primary - a.primary) || a.name.localeCompare(b.name); });
+}
+function _chFileOut(r) {
+  return { fileNo: String(r['File No']), year: String(r['Year'] || ''), requirement: String(r['Requirement'] || ''), fileName: String(r['File Name'] || ''),
+           fileType: String(r['File Type'] || ''), fileSize: _num(r['File Size']), note: String(r['Note'] || ''), uploadedBy: String(r['Uploaded By'] || ''),
+           uploadedAt: _webIso(r['Uploaded At']), archived: !!r['Archived At'] };
+}
+/** Every client's card. `collect` adds the Collection details block (and its contacts); without it, nothing of it is read. */
+function _chCards(cfg, collect, today) {
+  var cards = {}, order = [];
+  var card = function (name, make) {
+    var k = _cdKey(name), nm = String(name == null ? '' : name).trim();
+    if (!k || (!cards[k] && !make)) return cards[k] || null;
+    if (!cards[k]) { cards[k] = { key: k, master: '', names: [], sector: '', tier: '', stage: '', owners: [], addresses: [], notes: [], raw: [], billing: null, labels: [], lead: [], record: null, files: [] }; order.push(k); }
+    if (nm && cards[k].names.indexOf(nm) < 0) cards[k].names.push(nm);
+    return cards[k];
+  };
+  var addr = function (c, kind, text) { var t = String(text || '').trim(); if (t && !c.addresses.some(function (a) { return a.text.toLowerCase() === t.toLowerCase(); })) c.addresses.push({ kind: kind, text: t }); };
+  var split = function (s, re) { return String(s || '').split(re).map(function (x) { return x.trim(); }).filter(Boolean); };
+  _fugCols('Clients', SCHEMA.Clients).forEach(function (r) {
+    var c = card(r['Customer'], true);
+    if (!c) return;
+    if (!c.master) c.master = String(r['Customer']).trim();
+    addr(c, 'Client master', r['Address']);
+    if (!c.billing) c.billing = { terms: String(r['Payment Terms'] || ''), vatType: _sgVatType(r['Default VAT Type']), zeroRatingRef: String(r['Zero Rating Ref'] || ''),
+                                  ewtRate: String(r['EWT Rate'] == null ? '' : r['EWT Rate']), tin: String(r['TIN'] || '') };
+    if (!c.stage && r['Stage']) c.stage = String(r['Stage']);
+    if (String(r['Notes'] || '').trim()) c.notes.push({ source: 'Client master', text: String(r['Notes']).trim() });
+    c.raw.push({ name: r['Contact Person'], position: r['Designation'], emails: split(r['Email'], /[\s,;\/]+/).filter(function (e) { return e.indexOf('@') > 0; }),
+                 phones: split(r['Phone'], /[,;\/]+/), source: 'Client master' });
+  });
+  _fugCols('ClientBook', ['Company', 'Owner', 'Accreditation', 'Accreditation Step', 'Accreditation Note', 'Accredited Until', 'Accreditation Updated At',
+                          'Contacts JSON', 'Notes', 'Archived At', 'Tier', 'Sector', 'Site Address', 'Head Office Address']).forEach(function (r) {
+    if (r['Archived At']) return;
+    var c = card(r['Company'], true);
+    if (!c) return;
+    var owner = String(r['Owner'] || '').trim(), first = owner.split(' ')[0] || owner;
+    if (owner && c.owners.indexOf(owner) < 0) c.owners.push(owner);
+    if (!c.sector && r['Sector']) c.sector = String(r['Sector']);
+    if (!c.tier && r['Tier']) c.tier = String(r['Tier']);
+    addr(c, 'Site', r['Site Address']); addr(c, 'Head office', r['Head Office Address']);
+    if (String(r['Notes'] || '').trim()) c.notes.push({ source: 'Client Book · ' + first, text: String(r['Notes']).trim() });
+    _cbParse(r['Contacts JSON']).forEach(function (x) { c.raw.push(Object.assign({}, x, { source: 'Client Book · ' + first })); });
+    c.labels.push({ owner: owner, value: String(r['Accreditation'] || 'Not accredited'), step: String(r['Accreditation Step'] || ''), note: String(r['Accreditation Note'] || ''),
+                    until: _lgDayOf(r['Accredited Until']), updatedAt: _webIso(r['Accreditation Updated At']) });
+  });
+  if (collect) _sbRows('CollectionBook').forEach(function (r) {
+    var c = card(r['Client'], true);
+    if (!c) return;
+    var o = _cdOut(r);
+    c.collection = { paysBy: o.paysBy, theirBank: o.theirBank, bankNote: o.bankNote, paysInto: o.paysInto, address: o.address, whenToCollect: o.whenToCollect,
+                     notes: o.notes, updatedBy: o.updatedBy, updatedAt: o.updatedAt };
+    o.contacts.forEach(function (x) { c.raw.push(Object.assign({}, x, { source: 'Collection details' })); });
+  });
+  _fugCols('LgAccred', ['Company', 'Status', 'Submitted', 'Approved', 'Expiry', 'Notes', 'Deleted On']).forEach(function (r) {
+    if (r['Deleted On']) return;
+    var c = card(r['Company'], false);
+    if (c) c.lead.push({ status: String(r['Status'] || ''), submitted: _lgDayOf(r['Submitted']), approved: _lgDayOf(r['Approved']), expiry: _lgDayOf(r['Expiry']), notes: String(r['Notes'] || '') });
+  });
+  _sbRows('ClientAccred').forEach(function (r) { var c = card(r['Company'], true) || cards[String(r['Key'])]; if (c) c.record = r; });
+  _sbRows('ClientAccredFiles').forEach(function (r) { if (r['Archived At']) return; var c = cards[String(r['Key'])] || card(r['Company'], true); if (c) c.files.push(_chFileOut(r)); });
+  var req = cfg.requirements.filter(function (x) { return x !== 'Other'; });
+  return order.map(function (k) {
+    var c = cards[k], rec = c.record;
+    var labels = c.labels.slice().sort(function (a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)); });
+    var status = labels.length ? labels[0].value : '';
+    var acc = labels.filter(function (l) { return l.value === 'Accredited' && l.until; }).sort(function (a, b) { return b.until.localeCompare(a.until); })[0];
+    var since = rec ? _lgDayOf(rec['Accredited Since']) : '', expires = (rec && _lgDayOf(rec['Expires'])) || (acc ? acc.until : '');
+    var year = String((rec && rec['Year']) || (since ? since.slice(0, 4) : today.slice(0, 4)));
+    var left = expires ? _lgDaysBetween(today, expires) : null;
+    var state = status === 'Accredited' ? (expires && expires < today ? 'Expired' : expires && left <= cfg.renew ? 'Renew soon' : 'Accredited')
+      : status === 'On process' ? 'On process' : status === 'Not accredited' ? 'Not accredited' : 'No label';
+    var have = {}; c.files.forEach(function (f) { if (f.year === year) have[f.requirement] = true; });
+    var out = { key: k, company: c.master || c.names[0], names: c.names, sector: c.sector, tier: c.tier, stage: c.stage, owners: c.owners, addresses: c.addresses,
+                notes: c.notes, people: _chPeople(c.raw), billing: c.billing,
+                accred: { status: status, state: state, labels: labels, mismatch: labels.some(function (l) { return l.value !== status; }), since: since, expires: expires,
+                          daysLeft: left, year: year, note: rec ? String(rec['Note'] || '') : '', updatedBy: rec ? String(rec['Updated By'] || '') : '',
+                          updatedAt: rec ? _webIso(rec['Updated At']) : '', lead: c.lead, files: c.files,
+                          missing: req.filter(function (x) { return !have[x]; }).length } };
+    if (collect) out.collection = c.collection || null;
+    return out;
+  }).sort(function (a, b) { return a.company.toLowerCase().localeCompare(b.company.toLowerCase()); });
+}
+/** getClientHub() — every client's card, for the hub's roles; the Collection details block only for clientHubCollectionRoles. */
+function getClientHub(p) {
+  p = p || {};
+  var cfg = _chCfg(), no = _chDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var role = _ibRole(p), collect = cfg.collect.indexOf(role) >= 0, today = _lgDay(_now());
+  return { success: true, today: today, cards: _chCards(cfg, collect, today), renewDays: cfg.renew,
+           lists: { requirements: cfg.requirements, states: _CH_STATES }, may: { edit: cfg.edit.indexOf(role) >= 0, collection: collect } };
+}
+/** saveClientAccred({company, since?, expires?, year?, note?, ifUpdatedAt?, clientRef?}) — the hub's own accreditation dates for one
+ *  client. Expires defaults to a year after since; a field not sent keeps its value ('' clears it). The reps' label is not touched. */
+function saveClientAccred(p) {
+  p = p || {};
+  var cfg = _chCfg(), no = _chDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var company = _webCell(p.company).slice(0, 160), key = _cdKey(p.key || company);
+  if (!key) return { success: false, message: 'Say which client.' };
+  var rows = _sbRows('ClientAccred'), row = rows.filter(function (r) { return String(r['Key']) === key; })[0];
+  var by = String(p.actorName).trim(), today = _lgDay(_now()), has = function (k) { return Object.prototype.hasOwnProperty.call(p, k); };
+  if (!row && p.clientRef && rows.some(function (r) { return String(r['Client Ref']) === String(p.clientRef); })) return { success: true, duplicate: true, message: 'Already saved.' };
+  if (row && has('ifUpdatedAt') && String(p.ifUpdatedAt || '') !== _webIso(row['Updated At']))
+    return { success: false, stale: true, message: (row['Updated By'] || 'Someone') + ' changed this client\'s accreditation just now. Open it again to see the change.' };
+  var obj = {};
+  SCHEMA.ClientAccred.forEach(function (h) { obj[h] = row ? row[h] : ''; });
+  var day = function (v) { var s = String(v == null ? '' : v).trim(); return s === '' ? '' : (_cbDate(s) || null); };
+  if (has('since')) { var s = day(p.since); if (s === null) return { success: false, message: 'Accredited since must be a date.' }; obj['Accredited Since'] = s; }
+  if (has('expires')) { var x = day(p.expires); if (x === null) return { success: false, message: 'The expiry must be a date.' }; obj['Expires'] = x; }
+  if (has('since') && !has('expires')) obj['Expires'] = '';   // a new start, no expiry sent: a year from the new start (below)
+  var since = _lgDayOf(obj['Accredited Since']), exp = _lgDayOf(obj['Expires']);
+  if (since && (since < _lgAddMonths(today, -60) || since > _lgAddMonths(today, 12))) return { success: false, message: 'Accredited since should be within the last five years.' };
+  if (since && !exp) exp = obj['Expires'] = _lgAddMonths(since, 12);   // usually a year
+  if (exp && since && exp < since) return { success: false, message: 'The accreditation cannot expire before it starts.' };
+  if (exp && since && exp > _lgAddMonths(since, 36)) return { success: false, message: 'An accreditation runs three years at most.' };
+  if (has('year') || !obj['Year']) {
+    var y = parseInt(has('year') && String(p.year).trim() ? p.year : (since ? since.slice(0, 4) : today.slice(0, 4)), 10), cy = parseInt(today.slice(0, 4), 10);
+    if (!(y >= 2020 && y <= cy + 2)) return { success: false, message: 'The accreditation year should be between 2020 and ' + (cy + 2) + '.' };
+    obj['Year'] = y;
+  }
+  if (has('note')) obj['Note'] = _webCell(p.note, true).slice(0, 500);
+  obj['Key'] = key; obj['Company'] = company || (row ? row['Company'] : '') || key;
+  var label = { 'Accredited Since': 'since', 'Expires': 'expires', 'Year': 'year', 'Note': 'note' };
+  var changed = row ? Object.keys(label).filter(function (k) { return String(_lgDayOf(row[k]) || row[k] || '') !== String(_lgDayOf(obj[k]) || obj[k] || ''); }) : Object.keys(label).filter(function (k) { return String(obj[k] || ''); });
+  if (row && !changed.length) return { success: true, unchanged: true, refNo: obj['Company'], updatedAt: _webIso(row['Updated At']), message: 'Nothing changed.' };
+  if (!row) { obj['Client Ref'] = _webCell(p.clientRef).slice(0, 60); obj['Created By'] = by; obj['Created At'] = _now(); }
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _chPut('ClientAccred', row, obj);
+  changed.forEach(function (k) { _chLog(key, label[k], row ? String(_lgDayOf(row[k]) || row[k] || '') : '', String(_lgDayOf(obj[k]) || obj[k] || ''), '', by); });
+  return { success: true, refNo: obj['Company'], key: key, updatedAt: _webIso(obj['Updated At']), since: _lgDayOf(obj['Accredited Since']), expires: _lgDayOf(obj['Expires']),
+           year: String(obj['Year']), message: 'Accreditation saved for ' + obj['Company'] + '.' };
+}
+/** saveClientAccredFile({company, year, requirement, fileBase64 + fileName + mimeType | reuseFileNo, note?, clientRef?}) — one
+ *  requirement file for one accreditation year: a private Drive file, or last year's file listed again (no second copy). */
+function saveClientAccredFile(p) {
+  p = p || {};
+  var cfg = _chCfg(), no = _chDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var company = _webCell(p.company).slice(0, 160), key = _cdKey(p.key || company), by = String(p.actorName).trim();
+  if (!key) return { success: false, message: 'Say which client.' };
+  var req = _webCell(p.requirement).slice(0, 60);
+  if (cfg.requirements.indexOf(req) < 0) return { success: false, message: 'Pick one of the requirements: ' + cfg.requirements.join('; ') + '.' };
+  var cy = parseInt(_lgDay(_now()).slice(0, 4), 10), year = parseInt(p.year, 10);
+  if (!(year >= 2020 && year <= cy + 2)) return { success: false, message: 'The accreditation year should be between 2020 and ' + (cy + 2) + '.' };
+  var rows = _sbRows('ClientAccredFiles');
+  if (p.clientRef) { var dup = rows.filter(function (r) { return String(r['Client Ref']) === String(p.clientRef); })[0]; if (dup) return { success: true, duplicate: true, file: _chFileOut(dup), message: 'Already added.' }; }
+  var obj = {};
+  SCHEMA.ClientAccredFiles.forEach(function (h) { obj[h] = ''; });
+  if (p.reuseFileNo) {
+    var src = rows.filter(function (r) { return String(r['File No']) === String(p.reuseFileNo) && String(r['Key']) === key; })[0];
+    if (!src) return { success: false, message: 'That file is not one of this client\'s.' };
+    ['File ID', 'File Name', 'File Type', 'File Size'].forEach(function (h) { obj[h] = src[h]; });
+  } else {
+    var mime = String(p.mimeType || '').toLowerCase(), b64 = String(p.fileBase64 || '').replace(/^data:[^,]*,/, '');
+    if (!b64) return { success: false, message: 'Choose a file.' };
+    if (!_BB_MIME[mime]) return { success: false, message: 'Add a picture (JPEG, PNG, WebP, GIF), a PDF, a Word, Excel or PowerPoint file, or a text file.' };
+    if (b64.length > _BB_B64_MAX) return { success: false, message: 'The file is too large: keep it under 10 MB.' };
+    var fname = _webCell(p.fileName || 'file').replace(/[\\/:*?"|]/g, '-').slice(0, 120) || 'file';
+    var folder = null;
+    try { folder = _ensurePath(['_Internal', 'Client accreditation', company || key, String(year)]); } catch (e) { folder = null; }
+    var file = (folder || _flowFolder()).createFile(Utilities.newBlob(Utilities.base64Decode(b64), mime, fname));   // private: no setSharing
+    obj['File ID'] = String(file.getId()); obj['File Name'] = fname; obj['File Type'] = mime; obj['File Size'] = Math.round(b64.length * 3 / 4);
+  }
+  Object.assign(obj, { 'File No': _bbId('CAF'), 'Key': key, 'Company': company || key, 'Year': year, 'Requirement': req, 'Note': _webCell(p.note).slice(0, 190),
+                       'Client Ref': _webCell(p.clientRef).slice(0, 60), 'Uploaded By': by, 'Uploaded At': _now() });
+  _chPut('ClientAccredFiles', null, obj);
+  _chLog(key, 'file', '', obj['File Name'], req + ' · ' + year + (p.reuseFileNo ? ' (from an earlier year)' : ''), by);
+  return { success: true, refNo: obj['Company'], file: _chFileOut(obj), message: (p.reuseFileNo ? 'Listed for ' : 'Added to ') + year + ': ' + obj['File Name'] + '.' };
+}
+/** archiveClientAccredFile({fileNo, restore?}) — takes a file off the checklist (kept in Drive), or puts it back (the Undo). */
+function archiveClientAccredFile(p) {
+  p = p || {};
+  var cfg = _chCfg(), no = _chDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var row = _sbRows('ClientAccredFiles').filter(function (r) { return String(r['File No']) === String(p.fileNo || ''); })[0];
+  if (!row) return { success: false, message: 'That file was not found.' };
+  var restore = p.restore === true || String(p.restore) === 'true', by = String(p.actorName).trim();
+  if (restore === !row['Archived At']) return { success: false, message: restore ? 'That file is not archived.' : 'That file is archived already.' };
+  var obj = {};
+  SCHEMA.ClientAccredFiles.forEach(function (h) { obj[h] = row[h]; });
+  obj['Archived By'] = restore ? '' : by; obj['Archived At'] = restore ? '' : _now();
+  _chPut('ClientAccredFiles', row, obj);
+  _chLog(String(row['Key']), restore ? 'file restored' : 'file archived', '', String(row['File Name'] || ''), String(row['Requirement'] || '') + ' · ' + row['Year'], by);
+  return { success: true, refNo: String(row['Company'] || ''), file: _chFileOut(obj), message: restore ? 'Back on the checklist.' : 'Archived.' };
+}
+/** getClientHubFile({fileNo, size?}) — one requirement file, for the hub's roles: base64 (an image's thumbnail with size 'thumb'). */
+function getClientHubFile(p) {
+  p = p || {};
+  var cfg = _chCfg(), no = _chDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var r = _sbRows('ClientAccredFiles').filter(function (x) { return String(x['File No']) === String(p.fileNo || ''); })[0];
+  if (!r || r['Archived At']) return { success: false, message: 'That file is not on the checklist.' };
+  var type = String(r['File Type'] || '');
+  if (!_BB_MIME[type]) return { success: false, message: 'That file cannot be shown.' };
+  try {
+    var f = DriveApp.getFileById(String(r['File ID'])), thumb = String(p.size || '') === 'thumb' && _BB_MIME[type] === 'image';
+    var blob = thumb ? (f.getThumbnail() || f.getBlob()) : f.getBlob();
+    return { success: true, mimeType: thumb ? (blob.getContentType() || type) : type, fileName: String(r['File Name'] || 'file'), base64: Utilities.base64Encode(blob.getBytes()) };
+  } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
+}
+/* ═══ end A396 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
@@ -14057,7 +14328,12 @@ var _FLOW_SETTING_DEFAULTS = {
   followUpGuide: 'on', followUpGuideRoles: 'sales,director,management', followUpPerDay: 10, followUpCadence: '3,5,7,14', followUpThen: 7,
   /* A395 — Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". Before this day the guide only
      says when it starts; from it, nothing earlier counts (no touch, no quotation follow-up from before). 'off' = no start day. */
-  followUpStart: '2026-11-09'
+  followUpStart: '2026-11-09',
+  /* A396 — the client information hub: who opens it, who keeps the accreditation dates and files, who sees Collection details,
+     how many days before expiry it says Renew soon, and the requirement checklist (separated by ';'). */
+  clientHub: 'on', clientHubRoles: 'management,admin,director,hr', clientHubEditRoles: 'management,admin,director,hr',
+  clientHubCollectionRoles: 'management,admin,director', clientAccredRenewDays: 60,
+  clientAccredRequirements: 'Their accreditation / vendor form; Company profile; SEC or DTI registration; Business permit; BIR 2303; Financial statement / ITR; Certificates (ISO, safety); Their accreditation certificate; Other'
 };
 function getFlowSettings() {
   var out = {};
@@ -16919,6 +17195,7 @@ var _MODULE_MAP = {
   backfillItemIds: ['Inventory', 'Item IDs Assigned'],
   saveBulletin: ['Bulletin board', 'Saved'], archiveBulletin: ['Bulletin board', 'Archived'], importBulletinMemos: ['Bulletin board', 'Memos imported'],   // A390
   setFollowUpPlan: ['Follow-up guide', 'Plan set'],   // A393
+  saveClientAccred: ['Client hub', 'Accreditation saved'], saveClientAccredFile: ['Client hub', 'File added'], archiveClientAccredFile: ['Client hub', 'File archived'],   // A396
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -22312,6 +22589,8 @@ var HANDLERS = {
   previewBulletinMemos: previewBulletinMemos, importBulletinMemos: importBulletinMemos,
   getShutdowns: getShutdowns, saveShutdown: saveShutdown, archiveShutdown: archiveShutdown,   // A391
   getFollowUpGuide: getFollowUpGuide, setFollowUpPlan: setFollowUpPlan,   // A393
+  getClientHub: getClientHub, getClientHubFile: getClientHubFile, saveClientAccred: saveClientAccred, saveClientAccredFile: saveClientAccredFile,
+  archiveClientAccredFile: archiveClientAccredFile,   // A396
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -22431,6 +22710,7 @@ var MUTATIONS = {
   saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, importBulletinMemos: 1,   // A390 — the bulletin board
   saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar
   setFollowUpPlan: 1,   // A393 — the director sets a rep's ranked follow-up list
+  saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client hub's accreditation dates and files
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -22459,6 +22739,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A396 THE CLIENT INFORMATION HUB (199; it carries 197 and 198, never pasted; A327 takes 200 or later). Neil, 5 Nov 2026: every detail of every client in one place, information only (no quotation status, no POs), for management, admin, the director and HR, with each client's accreditation and its requirement files. getClientHub (secured read): one card per _cdKey from the Client master, the live Client Book rows (owners, sector, tier, addresses, contacts, each rep's accreditation label), Collection details (only for clientHubCollectionRoles: management, admin, director; left out of HR's reply) and lead gen's LgAccred; contacts merged by email, phone or name with their sources. New tabs ClientAccred (since, expires = since + 1 year by default, year, note), ClientAccredFiles (one private Drive file per row under _Internal/Client accreditation/<Company>/<Year>, never shared, never in Documents; or last year's file listed again) and ClientAccredLog. saveClientAccred / saveClientAccredFile / archiveClientAccredFile for clientHubEditRoles (the four); getClientHubFile reads a file back. State: Accredited / Renew soon (clientAccredRenewDays 60) / Expired / On process / Not accredited / No label, from the latest rep label. The checklist is FlowSettings clientAccredRequirements. No Script Property.
 A395 THE FOLLOW-UP GUIDE STARTS ON A DAY (198; it carries 197, never pasted; A327 takes 199 or later). Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". FlowSettings followUpStart (default 2026-11-09; 'off' = none): before it getFollowUpGuide answers notStarted + startsOn with each plan's size (the cards say when it starts, nothing is counted); from it, touches before the start day and quotation checkpoints dated before it are left out, so the first Monday starts clean.
 A394 THE FOLLOW-UP GUIDE, FASTER AND LONGER (197; it carries 196; A327 takes 198 or later). Neil, 4 Nov 2026: "the follow up guide takes too long to load" and "include all the 74 clients on her plan". getFollowUpGuide read whole rows of every tab (~12 s live): it now reads the plan first (a rep with none reads nothing else), then only the columns it uses (_fugCols: runs of neighbouring columns, so Quotations' PDF / Layout JSON, the PR item JSON and the Client Book contacts are never read), the daily reports' JSON only for the reps' rows of the last three weeks (_fugReports, one block), touches from three weeks before this Monday (_fugSince, was 60 days). A plan holds up to 150 clients (was 60); a list longer than five days of followUpPerDay is spread evenly (Kimberlyn's 74: 15 a day, ranks 61-74 on Friday), and the reply's perDay says how many. No new tab, column or Script Property.
 A393 THE FOLLOW-UP GUIDE (196; it carries 195; A327 takes 197 or later). Neil, 4 Nov 2026: each rep's top-50 clients through the week, a GUIDE worked out from what the reps already record. New tab FollowUpPlan (Owner, Rank, Client No, Company, Next Step, Source, Set By, Set At), set only by the director (setFollowUpPlan: live clients of that rep, ranks 1..N once, at most 60). getFollowUpGuide (secured read; a rep their own, the director and management any rep or `all` as summaries): every open quotation (Sent, not marked Won, no sales order) of a plan client on day 3, 5, 7, 14 after sending, then every 7 (FlowSettings followUpCadence / followUpThen; a weekend day moves to Monday; a checkpoint is done by a touch before the next one, missed once the next has come, else open and carried), then the ranked clients with no open quotation, ranks 1-10 Monday ... 41-50 Friday (followUpPerDay 10), an untouched one carried to the next day until Friday. Touches: daily-report lines (linked to the client, its quotation or PR, or by company name; voided lines left out) and report visits, quotation Last Follow Up / Result At / creation, follow-up emails, visits marked done, new PRs, the rep's own Client Book changes, the old SalesCalls / ClientVisits. Switches followUpGuide, followUpGuideRoles. No ClientBook column, no Script Property.

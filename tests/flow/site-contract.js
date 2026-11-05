@@ -73,7 +73,7 @@ const PASSED = ['index.html', 'change-password.html', 'email-setup.html', 'leave
   'quotation-status.html',   // A382
   'collection-details.html',   // A384 (A385: clients.html left the list — it is a redirect stub now)
   'item-book.html',   // A387 — the Item Book
-  'bulletin.html', 'shutdown-calendar.html', 'follow-up-guide.html'];   // A390 — the bulletin board · A391 — the shutdown calendar
+  'bulletin.html', 'shutdown-calendar.html', 'follow-up-guide.html', 'client-hub.html'];   // A390 — the bulletin board · A391 — the shutdown calendar
 
 /* ── 1 · every page ───────────────────────────────────────────────────────────────────────────── */
 sec('1 · every page (' + PAGES.length + ')');

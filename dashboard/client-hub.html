@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client hub</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/client-hub.css">
+  <link rel="stylesheet" href="css/ledger.css">
+  <link rel="stylesheet" href="css/apple.css">
+</head>
+<body class="flow-screen">
+  <script src="js/theme.js"></script>
+  <header class="navbar" id="navbar"></header>
+  <main class="main-content ch-main">
+    <!-- A396 — the client information hub (Neil, 5 Nov 2026): every detail of every client in one place, information only,
+         for management, admin, the director and HR, with each client's accreditation: the reps' label, since, expiry and
+         the requirement files per year. js/client-hub.js draws it from FlowAPI 199's getClientHub. -->
+    <header class="ch-head">
+      <div class="ch-titles">
+        <h1>Client hub</h1>
+        <p class="ch-lede">Every client's details in one place, and where each one stands with its accreditation.</p>
+        <p class="ch-progress" id="chProgress" aria-live="polite"></p>
+      </div>
+      <div class="ch-actions">
+        <button type="button" class="btn btn-secondary" id="chExport">Export CSV</button>
+      </div>
+    </header>
+    <div id="chNotice"></div>
+    <div class="ch-bar">
+      <div class="ch-filters" id="chFilters" role="search"></div>
+      <div class="ch-chips" id="chChips" role="group" aria-label="Show"></div>
+    </div>
+    <div class="ch-split" id="chSplit">
+      <section class="ch-listcol" aria-label="Clients">
+        <p class="ch-count" id="chFoot" aria-live="polite"></p>
+        <div class="ch-list" id="chTable" role="list"></div>
+      </section>
+      <section class="ch-pane" id="chPane" aria-label="The client"></section>
+    </div>
+  </main>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>
+  <script src="js/client-hub-model.js"></script>
+  <script src="js/client-hub.js"></script>
+</body>
+</html>
