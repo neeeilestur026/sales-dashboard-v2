@@ -667,6 +667,7 @@ SECURED_ACTIONS = [
     "getBulletin", "getBulletinFile", "saveBulletin", "archiveBulletin", "ackBulletin", "previewBulletinMemos", "importBulletinMemos",   # A390
     "getShutdowns", "saveShutdown", "archiveShutdown",   # A391 — the shutdown calendar
     "getFollowUpGuide", "setFollowUpPlan",   # A393 — the follow-up guide
+    "getClientHub", "getClientHubFile", "saveClientAccred", "saveClientAccredFile", "archiveClientAccredFile",   # A396 — the client information hub
     "submitCommissionRequest", "submitDailyReport", "submitForPricing", "submitPOApproval", "submitPaymentRequest",
     "submitQuotationApproval", "submitTravelReplenishment", "submitWeeklyItinerary", "unlinkQuotationEmail", "updateAPAging",
     "updateARAging", "updateCommissionRequest", "updateExpense", "updateInventoryItem", "updatePRSourcing",

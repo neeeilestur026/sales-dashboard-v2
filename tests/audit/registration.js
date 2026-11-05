@@ -164,6 +164,8 @@ const EXCEPTIONS = {
     previewBulletinMemos:          'A390 — a secured READ (what the HR memo import would do; nothing is written)',
     getShutdowns:                  'A391 — a secured READ (the shutdown calendar)',
     getFollowUpGuide:              'A393 — a secured READ (the follow-up guide)',
+    getClientHub:                  'A396 — a secured READ (the client information hub)',
+    getClientHubFile:              'A396 — a secured READ (an accreditation file)',
     collectWebsiteRequestsNow:     'A338 — fetches from the website first, then takes its own short tryLock to file; holding the 20 s mutation lock across a network call would stall every user action',
     peGetTables:                   'A340 — a secured READ (the director\'s pricing tables)',
     peListRecords:                 'A340 — a secured READ (the director\'s priced quotations)',

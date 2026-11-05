@@ -41,7 +41,7 @@ const LEDGER_NAV = {
   admin: [
     ['Home', 'home', 'admin.html'],
     ['Sell', 'cart', [['website-requests.html', 'Website requests'], ['product-finder.html', 'Product finder'], ['flow-pricing-request.html', 'Purchase requests'], ['purchase-request-tracker.html', 'PR tracker'], ['flow-quotations.html', 'Quotations'], ['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['admin-import-quotation.html', 'Import quotation'], ['flow-sales-orders.html', 'Sales orders'], ['flow-lifecycle.html', 'SO lifecycle']]],
-    ['Clients', 'users', [['flow-clients.html', 'Client master'], ['client-tracker.html', 'Client tracker'], ['admin-targets.html', 'Sales targets'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
+    ['Clients', 'users', [['client-hub.html', 'Client hub'], ['flow-clients.html', 'Client master'], ['client-tracker.html', 'Client tracker'], ['admin-targets.html', 'Sales targets'], ['marketing-home.html', 'Marketing'], ['leadgen-home.html', 'Lead gen']]],
     ['Buy & pay', 'card', [['supplier-list.html', 'Supplier list'], ['flow-purchase-orders.html', 'Purchase orders'], ['flow-payment-requests.html', 'Payment requests'], ['payment-requests.html', 'Sales payment requests'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-other-payables.html', 'Other payables'], ['flow-suppliers.html', 'Suppliers']]],   // A374 — the supplier list first
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['item-book.html', 'Items'], ['flow-shipments.html', 'Shipments'], ['scan.html', 'Scanner']]],
     ['Collect', 'inbox', [['flow-invoices.html', 'Invoices'], ['flow-ar-aging.html', 'AR aging'], ['flow-collections.html', 'Collections'], ['collection-details.html', 'Collection details'], ['month-check.html', 'Month check']]],
@@ -54,6 +54,7 @@ const LEDGER_NAV = {
     ['Home', 'home', 'director-home.html'],
     ['Pricing', 'tag', 'director-pricing-engine.html'],   // A340 — the standalone pricing engine
     ['Client Book', 'book', 'director-client-book.html'],   // A350 — the Client Book trial
+    ['Client hub', 'users', 'client-hub.html'],   // A396 — every client's details and accreditation
     ['Quotes', 'file', [['website-requests.html', 'Website requests'], ['flow-quotations.html', 'All quotations'], ['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-tracker.html', 'Client tracker'], ['flow-purchase-orders.html', 'Purchase orders'], ['product-finder.html', 'Product finder']]],
     ['Payables', 'card', [['supplier-list.html', 'Supplier list'], ['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-payments.html', 'Payment register'], ['director-expenses.html', 'Expenses'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Commissions for payroll'], ['commission-rates.html', 'Commission rates']]],
     ['Reports', 'chart', [['director-sales-orders.html', 'Sales orders'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['month-check.html', 'Month check']]],
@@ -72,7 +73,7 @@ const LEDGER_NAV = {
   management: [
     ['Home', 'home', 'management-home.html'],
     ['Approvals', 'check', [['flow-quotations.html', 'Quotation approvals'], ['flow-purchase-orders.html', 'PO approvals'], ['flow-payment-requests.html', 'Payment requests'], ['flow-other-payables.html', 'Other payables'], ['flow-pricing-request.html', 'Pricing requests'], ['purchase-request-tracker.html', 'PR tracker'], ['management-leave.html', 'Leave approvals']]],
-    ['Sell', 'cart', [['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-tracker.html', 'Client tracker'], ['flow-sales-orders.html', 'Sales orders, operations'], ['management-sales-orders.html', 'Sales orders, all'], ['flow-lifecycle.html', 'SO lifecycle'], ['flow-clients.html', 'Client master'], ['shutdown-calendar.html', 'Shutdown calendar']]],   // A391
+    ['Sell', 'cart', [['quotation-board.html', 'Quotation board'], ['quotation-status.html', 'Quotation status'], ['client-hub.html', 'Client hub'], ['client-tracker.html', 'Client tracker'], ['flow-sales-orders.html', 'Sales orders, operations'], ['management-sales-orders.html', 'Sales orders, all'], ['flow-lifecycle.html', 'SO lifecycle'], ['flow-clients.html', 'Client master'], ['shutdown-calendar.html', 'Shutdown calendar']]],   // A391
     ['Money', 'trend', [['flow-invoices.html', 'Invoices'], ['flow-collections.html', 'Collections'], ['flow-ar-aging.html', 'AR aging'], ['month-check.html', 'Month check'], ['flow-ap-aging.html', 'AP aging'], ['ap-aging-monthly.html', 'Monthly AP aging'], ['flow-payments.html', 'Payment register'], ['flow-travel.html', 'Travel allowance'], ['commission-payout-report.html', 'Sales commissions']]],
     ['Books', 'book', [['flow-accounting.html', 'Accounting'], ['flow-expenses.html', 'Expenses'], ['flow-ledger.html', 'General ledger'], ['books.html', 'Books'], ['payroll-books.html', 'Payroll in the books'], ['accounting-summary.html', 'Accounting summary'], ['balance-sheet.html', 'Balance sheet']]],
     ['Stock', 'box', [['flow-receiving.html', 'Materials receiving'], ['flow-inventory.html', 'Inventory'], ['item-book.html', 'Items'], ['flow-shipments.html', 'Shipments'], ['flow-suppliers.html', 'Suppliers']]],
@@ -103,6 +104,7 @@ const LEDGER_NAV = {
     ['Leave', 'cal', 'hr-leave.html'],
     ['Work', 'bag', [['hr-tasks.html', 'Tasks'], ['hr-daily-report.html', 'Daily report'], ['bulletin.html', 'Bulletin board']]],   // A390 — the board replaced HR Memos
     ['Content', 'pen', [['hr-campaigns.html', 'Campaigns'], ['hr-content-calendar.html', 'Content calendar']]],
+    ['Clients', 'users', 'client-hub.html'],   // A396 — the client information hub
     ['Reports', 'chart', [['team-performance.html', 'Team performance'], ['hr-analytics.html', 'Analytics'], ['payroll-books.html', 'Contribution tables']]]
   ]
 };
