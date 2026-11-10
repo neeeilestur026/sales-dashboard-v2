@@ -26,7 +26,7 @@ const PORTAL = JSON.stringify({ followDue: '3', openQuotes: '₱3.8M' });
 sec('1 · the version');
 {
   const c = load(GS, {});
-  ok('getVersion = 199', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 199);
+  ok('getVersion = 200', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 200);
 }
 
 sec('2 · the director saves and reads back');
@@ -69,10 +69,16 @@ sec('3 · A363: each person their own report; the director reads them all');
      !acctSales.success && /Your daily report is the accounting one/.test(acctSales.message), [acct, acctSales]);
   const all = call(c, 'getProofReports', NEIL), one = call(c, 'getProofReports', Object.assign({ user: 'gerald lucena' }, NEIL));
   ok('the director reads every report of a kind, and can narrow it to one person', all.data.length === 2 && one.data.length === 1 && one.data[0].user === 'Gerald Lucena', [all.data.length, one.data.length]);
-  ['hr', 'marketing', ''].forEach(role => {
+  ['marketing', ''].forEach(role => {
     const g = call(c, 'getProofReports', { actorName: 'X', actorRole: role }), w = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, { actorName: 'X', actorRole: role }));
     ok('  ' + (role || 'no role') + ' has no report: no read, no save', !g.success && !g.data && !w.success);
   });
+  {   // A397 — HR reads every person's report, like management, and still has none of its own to save
+    const HRA = { actorName: 'Hana R', actorRole: 'hr' }, hr = call(c, 'getProofReports', HRA), hrAll = call(c, 'getProofReports', Object.assign({ kind: 'all' }, HRA));
+    const hrW = call(c, 'saveProofReport', Object.assign({ date: '2026-10-20', reportJson: REPORT }, HRA));
+    ok('A397: HR reads every sales report, and every kind at once', hr.success && hr.data.length === 2 && hrAll.success && hrAll.data.length === 3, [hr.data && hr.data.length, hrAll.data && hrAll.data.length]);
+    ok('  but cannot save one (HR has no report of its own)', !hrW.success);
+  }
   const MG = { actorName: 'Mara Manager', actorRole: 'management' };
   const mgSales = call(c, 'getProofReports', MG), mgAcct = call(c, 'getProofReports', Object.assign({ kind: 'accounting' }, MG));
   const mgAll = call(c, 'getProofReports', Object.assign({ kind: 'all' }, MG)), mgOne = call(c, 'getProofReports', Object.assign({ kind: 'all', user: 'rojan leo francisco' }, MG));

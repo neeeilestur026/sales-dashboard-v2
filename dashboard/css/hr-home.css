@@ -106,3 +106,12 @@ body.hr .hx-facts dd.hr-tick, body.hr .hx-slab .v.hr-tick { animation: hrFade .5
 @media (prefers-reduced-motion: reduce) {
   body.hr *, body.hr *::before, body.hr *::after { animation: none !important; transition: none !important; }
 }
+
+/* A397 — the new daily reports card (js/team-daily-reports-card.js), as on the management home: one line per team, then the way in */
+body.hr .hx-tdr .hx-tdr-teams { list-style: none; margin: 0; padding: 0; }
+body.hr .hx-tdr .hx-tdr-teams li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--hx-hair-2); font: 400 13px/1.4 var(--hx-text); color: var(--hx-ink-2); }
+body.hr .hx-tdr .hx-tdr-teams li:last-child { border-bottom: 0; }
+body.hr .hx-tdr .hx-tdr-teams b { font-weight: 600; color: var(--hx-ink); }
+body.hr .hx-tdr .hx-tdr-teams .ok { color: var(--hx-ok); font-weight: 600; }
+body.hr .hx-tdr .hx-tdr-teams .due { color: var(--hx-warn); font-weight: 600; }
+body.hr .hx-tdr .hx-tdr-foot { display: flex; justify-content: flex-end; margin-top: 10px; }

@@ -172,6 +172,9 @@
           </div>
         </section>
 
+        <!-- A397: where each team's new daily report stands today, and the way in (js/team-daily-reports-card.js) -->
+        <section class="hx-glass hx-tdr" id="teamDailyReports" style="display:none;"></section>
+
         <!-- A264: the daily reports, the same ids the management home uses so js/management-flow.js
              and js/report-render.js drive it here unchanged. -->
         <section class="hx-glass" id="newsec-daily-reports">
@@ -224,5 +227,7 @@
   <script src="js/team-performance.js"></script>
   <script src="js/management-flow.js"></script>
   <script src="js/hr-home-page.js"></script>   <!-- A294: the page's own glue — date, the rail, the load moment -->
+  <script src="js/team-daily-reports-model.js"></script>   <!-- A397: the new daily reports, as on the management home -->
+  <script src="js/team-daily-reports-card.js"></script>
 </body>
 </html>

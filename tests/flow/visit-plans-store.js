@@ -47,14 +47,15 @@ function setup() {
 sec('1 · the version, the roles, and a read of nothing');
 {
   const { c, store } = setup();
-  ok('getVersion = 199', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 199);
+  ok('getVersion = 200', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 200);
   const g = call(c, 'getVisitPlans', GERALD);
   ok('a read of no visits answers empty, creates no tab, and gives the lists', g.success && g.data.length === 0 && !('VisitPlans' in store) && !('VisitPlanLog' in store) &&
      g.lists.statuses.join() === 'Draft,Pending Director,Approved,Done,Rejected,Cancelled' && g.lists.locations.join() === 'Plant,Head office,Other' && g.lists.ahead === 92 && !!g.today, g);
-  ['admin', 'leadgen', 'hr', ''].forEach(role => {
+  ['admin', 'leadgen', ''].forEach(role => {
     const r = call(c, 'getVisitPlans', { actorName: 'X', actorRole: role });
-    ok('  ' + (role || 'no role') + ' is refused', !r.success && /sales, the director, accounting and management/.test(r.message), r);
+    ok('  ' + (role || 'no role') + ' is refused', !r.success && /sales, the director, accounting, management and HR/.test(r.message), r);
   });
+  ok('  A397: HR reads them (so a rep\'s daily report shows HR the visits it planned)', call(c, 'getVisitPlans', { actorName: 'Hana R', actorRole: 'hr' }).success);
   ok('  and a read with no name is refused', !call(c, 'getVisitPlans', { actorRole: 'sales' }).success);
   const sec1 = call(c, 'getVisitPlans', Object.assign({ flowSecret: '' }, GERALD));
   ok('  every action is secured: no secret, no read', !sec1.success, sec1);

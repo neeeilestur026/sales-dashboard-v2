@@ -105,7 +105,7 @@ const LEDGER_NAV = {
     ['Work', 'bag', [['hr-tasks.html', 'Tasks'], ['hr-daily-report.html', 'Daily report'], ['bulletin.html', 'Bulletin board']]],   // A390 — the board replaced HR Memos
     ['Content', 'pen', [['hr-campaigns.html', 'Campaigns'], ['hr-content-calendar.html', 'Content calendar']]],
     ['Clients', 'users', 'client-hub.html'],   // A396 — the client information hub
-    ['Reports', 'chart', [['team-performance.html', 'Team performance'], ['hr-analytics.html', 'Analytics'], ['payroll-books.html', 'Contribution tables']]]
+    ['Reports', 'chart', [['team-daily-reports.html', 'New daily reports'], ['team-performance.html', 'Team performance'], ['hr-analytics.html', 'Analytics'], ['payroll-books.html', 'Contribution tables']]]
   ]
 };
 

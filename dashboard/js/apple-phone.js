@@ -93,7 +93,7 @@
     'accounting-home': [['#modules', 'Process flow modules', 'sliders'], ['#revenue', 'Revenue this year', 'trend'], ['#recent', 'Recent shipments', 'box'], ['#profit', 'Revenue and net profit', 'chart'], ['#shipments', 'Shipment monitoring', 'box']],
     'management-home': [['#pulse', 'Income statement', 'chart'], ['#teamDailyReports', 'New daily reports', 'clip'], ['#team', 'Daily reports', 'users'], ['#operations', 'Operations', 'box'], ['#hr', 'HR', 'users']],
     'director-home': [['#clientBook', 'Client Book', 'book'], ['#pulse', 'Pulse', 'trend'], ['#team', 'Team', 'users'], ['#payroll', 'Payroll workspace', 'card']],
-    'hr-home': [['#hrmods', 'HR modules', 'users'], ['#mkmods', 'Marketing modules', 'pen'], ['#newsec-daily-reports', 'Daily reports', 'clip']],
+    'hr-home': [['#hrmods', 'HR modules', 'users'], ['#mkmods', 'Marketing modules', 'pen'], ['#teamDailyReports', 'New daily reports', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'clip']],
     'marketing-home': [['#trackers', 'Trackers', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'users']],
     'leadgen-home': [['#trackers', 'Trackers', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'users']],
     dashboard: [['#today', 'Your tools', 'tool'], ['.sl-pair', 'Target and overdue follow-ups', 'trend']]

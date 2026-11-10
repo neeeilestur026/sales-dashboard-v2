@@ -1,4 +1,4 @@
-/* team-daily-reports-card.js — A366 · the "New daily reports" card on the management home.
+/* team-daily-reports-card.js — A366 · the "New daily reports" card on the management home (A397: and the HR home).
  * ID-DRIVEN like new-daily-report-card.js: does nothing unless #teamDailyReports is on the page. Two reads (the roster,
  * and every new daily report of today — FlowAPI 185 lets management read them all) say where each team stands: how many
  * submitted their 4:30 report, saved one, or have not started; after 4:30 the ones not in show in the warning colour.
@@ -44,7 +44,7 @@
     const el = document.getElementById(CARD);
     if (!el || typeof postFlow !== 'function' || typeof getSession !== 'function' || typeof tdrGroups !== 'function') return;
     const s = getSession(), role = String((s && s.role) || '').toLowerCase();
-    if (role !== 'management' && role !== 'director') return;
+    if (role !== 'management' && role !== 'director' && role !== 'hr') return;   // A397 — the HR home has it too
     load(el);
   });
 })();

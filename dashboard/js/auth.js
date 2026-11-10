@@ -308,14 +308,14 @@ function requireNewDailyReportAccess() {
   return session;
 }
 
-/* A366 — every person's new daily report, read only (team-daily-reports.html): management and the director. */
+/* A366 — every person's new daily report, read only (team-daily-reports.html): management and the director; A397 HR too. */
 function requireTeamReportsAccess() {
   const session = getSession();
   if (!session) {
     window.location.href = 'index.html';
     return null;
   }
-  if (!['management', 'director'].includes(session.role)) {
+  if (!['management', 'director', 'hr'].includes(session.role)) {
     window.location.href = _homeForRole(session.role);
     return null;
   }
@@ -1284,6 +1284,10 @@ function renderNavbar(activePage) {
       <a href="hr-daily-report.html" class="${activePage === 'hr-daily-report' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Daily Report
+      </a>
+      <a href="team-daily-reports.html" class="${activePage === 'team-daily-reports' ? 'active' : ''}">   <!-- A397 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        New Daily Reports
       </a>
       <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">   <!-- A390 -->
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
