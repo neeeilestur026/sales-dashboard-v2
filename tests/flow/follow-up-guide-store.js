@@ -69,7 +69,7 @@ const set = (c, owner, items, actor) => call(c, 'setFollowUpPlan', Object.assign
 sec('1 · the version and who may open it');
 {
   const { c, store } = world();
-  ok('getVersion = 199', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 199);
+  ok('getVersion = 200', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 200);
   [GER, NEIL, LARRY].forEach(a => ok(a.actorRole + ' opens it', call(c, 'getFollowUpGuide', a).success));
   ['hr', 'admin', 'accounting', 'warehouse', 'marketing', 'leadgen'].forEach(r => ok(r + ' is refused', !call(c, 'getFollowUpGuide', who(r, 'X', r + '1')).success));
   ok('the read is secured', !call(c, 'getFollowUpGuide', Object.assign({ flowSecret: '' }, GER)).success);

@@ -146,8 +146,8 @@ async function card(role, version, hhmm, failRead) {
 
 (async () => {
   sec('2 · who may open it');
-  for (const r of ['management', 'director']) { const g = guard(r); ok(r + ' opens it', !!g.got && g.href === ''); }
-  for (const r of ['sales', 'accounting', 'leadgen', 'admin', 'hr', 'marketing']) { const g = guard(r); ok(r + ' is sent home', g.got === null && g.href === r + '-home.html'); }
+  for (const r of ['management', 'director', 'hr']) { const g = guard(r); ok(r + ' opens it', !!g.got && g.href === ''); }   // A397: HR too
+  for (const r of ['sales', 'accounting', 'leadgen', 'admin', 'marketing']) { const g = guard(r); ok(r + ' is sent home', g.got === null && g.href === r + '-home.html'); }
   const g0 = guard(null);
   ok('nobody signed in: to the sign-in page', g0.got === null && g0.href === 'index.html');
 
@@ -250,8 +250,8 @@ async function card(role, version, hhmm, failRead) {
   ok('the classic navbar: management\'s "New Daily Reports" right after its Daily Reports', /Daily Reports\s*<\/a>\s*<a href="team-daily-reports\.html" class="\$\{activePage === 'team-daily-reports' \? 'active' : ''\}">/.test(AUTH));
   ok('  the director\'s in the Team menu, which lights up for it', />Daily Reports<\/a>\s*<a href="team-daily-reports\.html"[^>]*>New Daily Reports<\/a>/.test(AUTH) && /dirTeamActive = \['all-daily-reports', 'team-daily-reports',/.test(AUTH));
   const navFor = (role) => { const c = {}; vm.createContext(c); vm.runInContext(NAV + ';this.__l = LEDGER_NAV;', c); return JSON.stringify(c.__l[role] || []); };
-  eq('the Apple sidebar links it for management and the director, and nobody else', ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'].filter(r => /team-daily-reports\.html/.test(navFor(r))),
-     ['director', 'management']);
+  eq('the Apple sidebar links it for management, the director and (A397) HR, and nobody else', ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'].filter(r => /team-daily-reports\.html/.test(navFor(r))),
+     ['director', 'management', 'hr']);
   ok('  beside the old daily reports', /\['all-daily-reports\.html', 'Daily reports'\], \['team-daily-reports\.html', 'New daily reports'\]/.test(NAV));
 
   sec('7 · the site rules');

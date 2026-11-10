@@ -35,8 +35,11 @@ ok('the page carries NO <style> block', !/<style[\s>]/i.test(HTML));
 ok('<body class="hr"> — the scope every rule hangs off', /<body class="hr">/.test(HTML));
 ok('js/theme.js is the first child of <body>', /<body class="hr">\s*<script src="js\/theme\.js"><\/script>/.test(HTML));
 eq('script order', (HTML.match(/<script src="js\/([^"]+)"/g) || []).map(s => s.match(/js\/([^"]+)/)[1]).join(','),
-   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,ledger-nav.js,flow-api.js,hr-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,hr-home-page.js');
+   'theme.js,api.js,salary-deduction-card.js,payslip.js,my-payslip-card.js,auth.js,ledger-nav.js,flow-api.js,hr-home.js,report-render.js,report-pdf.js,team-performance.js,management-flow.js,hr-home-page.js,team-daily-reports-model.js,team-daily-reports-card.js');   // A397: the new daily reports card
 eq('zero inline <script>', (HTML.match(/<script>/g) || []).length, 0);
+ok('A397: the new daily reports card sits just before the old daily reports, hidden until it is filled',
+   /<section class="hx-glass hx-tdr" id="teamDailyReports" style="display:none;"><\/section>\s*<!-- A264: the daily reports/.test(HTML) &&
+   /body\.hr \.hx-tdr \.hx-tdr-teams \{/.test(require('fs').readFileSync(require('path').join(__dirname, '../../dashboard/css/hr-home.css'), 'utf8')));
 ok('the deck: a sticky rail with the slab and the nav, then the column', /<aside class="hx-rail" id="rail">/.test(HTML) && /<section class="hx-slab" id="spot">/.test(HTML) && /<nav class="hx-rail-nav"/.test(HTML) && /<div class="hx-col">/.test(HTML));
 ok('the theme toggle is the shared class', /class="theme-toggle" id="themeToggle" aria-pressed="false"/.test(HTML));
 ok('the mast keeps the daily report as the primary button and analytics as a plain one', /href="hr-daily-report\.html" class="btn btn-primary"/.test(HTML) && /href="hr-analytics\.html" class="btn"/.test(HTML));
@@ -50,7 +53,7 @@ const TAGS = {
   span: ['hbMon', 'pipelineCount', 'empCount', 'leaveCount', 'taskCount', 'campaignCount', 'mgmtDrMeta', 'mfTwRange'],
   dd: ['statOpen', 'statTasksPending', 'statTasksDone', 'statCampaigns', 'statLeave'],
   div: ['statEmployees', 'alertBanner', 'todayOverview', 'birthdayList', 'mgmtDrUsers', 'mgmtDrMovements', 'mgmtDrDocs', 'mgmtDrSales', 'mgmtDrPdfs', 'mgmtDrBody', 'mfTwBody'],
-  section: ['spot', 'myDeductionCard', 'myPayslipCard', 'today', 'hrmods', 'mkmods', 'newsec-daily-reports'],
+  section: ['spot', 'myDeductionCard', 'myPayslipCard', 'today', 'hrmods', 'mkmods', 'teamDailyReports', 'newsec-daily-reports'],
   button: ['themeToggle', 'mfTwReset', 'mfTwNext', 'mfTwPdfBtn'],
   input: ['mgmtDrDate', 'mgmtDrSearch'],
   header: ['navbar'], aside: ['rail'],

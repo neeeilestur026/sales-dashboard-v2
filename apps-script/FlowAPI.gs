@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 199;   // A396 — the client information hub, with accreditation and its files. History: see CHANGELOG.
+var FLOW_VERSION = 200;   // A397 — HR reads every person's new daily report (and the visits planned in it). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -17687,7 +17687,7 @@ function _powRoles() {
   var raw = '';
   try { raw = String((getFlowSettings().data || {}).proofReportRoles || ''); } catch (e) { raw = ''; }
   var list = raw.toLowerCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  return list.length ? list : ['director', 'management', 'sales', 'accounting', 'leadgen', 'admin'];   // A363 each role its own report; A366 management reads
+  return list.length ? list : ['director', 'management', 'sales', 'accounting', 'leadgen', 'admin', 'hr'];   // A363 each role its own report; A366 management reads; A397 HR reads
 }
 function _powAllowed(p) { return _powRoles().indexOf(String((p && p.actorRole) || '').trim().toLowerCase()) >= 0; }
 /* A363 — Neil, 22 Oct 2026: the new daily report on each person's own dashboard. The director reads every report (and
@@ -17701,6 +17701,10 @@ function _powOwnKind(p) { return _POW_ROLE_KIND[String((p && p.actorRole) || '')
    director and management READ every report of every kind; only the director may still save (his own trial). Management
    has no report of its own, so _powCheck keeps refusing its saves and submits. */
 function _powReadsAll(p) { var r = String((p && p.actorRole) || '').trim().toLowerCase(); return r === 'director' || r === 'management'; }
+/* A397 — Neil, 10 Nov 2026: "in the hr dashboard can you show or display also the new team daily report". HR reads every
+   person's new daily report too, like management: read only (HR has no report of its own, so saves stay refused). Kept
+   apart from _powReadsAll, which the follow-up guide also uses for its oversight. */
+function _powReadsEvery(p) { return _powReadsAll(p) || String((p && p.actorRole) || '').trim().toLowerCase() === 'hr'; }
 function _powKindDenied(p, kind) {
   if (_powIsDirector(p)) return '';
   var own = _powOwnKind(p);
@@ -17807,7 +17811,7 @@ function submitProofReport(p) {
 function getProofReports(p) {
   p = p || {};
   if (!_powAllowed(p)) return { success: false, message: _powDenied() };
-  var all = _powReadsAll(p), every = all && String(p.kind || '').trim().toLowerCase() === 'all';
+  var all = _powReadsEvery(p), every = all && String(p.kind || '').trim().toLowerCase() === 'all';
   var kind = every ? 'all' : _powKind(p.kind);
   if (!every && _POW_KINDS.indexOf(kind) < 0) return { success: false, message: 'A daily report is one of: ' + _POW_KINDS.join(', ') + '.' };
   var mine = all ? '' : _powKindDenied(p, kind);
@@ -18294,7 +18298,8 @@ function _vpNos(v) {
 function getVisitPlans(p) {
   p = p || {};
   var role = _vpRole(p), who = _vpWho(p);
-  if (['sales', 'director', 'accounting', 'management'].indexOf(role) < 0) return { success: false, message: 'Client visits are for sales, the director, accounting and management.' };
+  // A397 — HR reads them too (read only), so a rep's daily report shows HR the visits it planned, as it shows management
+  if (['sales', 'director', 'accounting', 'management', 'hr'].indexOf(role) < 0) return { success: false, message: 'Client visits are for sales, the director, accounting, management and HR.' };
   if (!who) return { success: false, message: 'Sign in again — there is no name to read the visits under.' };
   var from = _cbDate(p.from), to = _cbDate(p.to);
   var rows = _vpRows().filter(function (r) {
@@ -22739,6 +22744,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A397 HR READS THE NEW DAILY REPORTS (200; A327 takes 201 or later). Neil, 10 Nov 2026: "in the hr dashboard can you show or display also the new team daily report". proofReportRoles' default gains hr; getProofReports lets hr read every person's report of every kind like management (_powReadsEvery; _powReadsAll is unchanged, so the follow-up guide's oversight stays the director's and management's); HR has no report of its own, so saves and submits stay refused. getVisitPlans reads for hr too (read only), so a rep's report shows HR the visits it planned.
 A396 THE CLIENT INFORMATION HUB (199; it carries 197 and 198, never pasted; A327 takes 200 or later). Neil, 5 Nov 2026: every detail of every client in one place, information only (no quotation status, no POs), for management, admin, the director and HR, with each client's accreditation and its requirement files. getClientHub (secured read): one card per _cdKey from the Client master, the live Client Book rows (owners, sector, tier, addresses, contacts, each rep's accreditation label), Collection details (only for clientHubCollectionRoles: management, admin, director; left out of HR's reply) and lead gen's LgAccred; contacts merged by email, phone or name with their sources. New tabs ClientAccred (since, expires = since + 1 year by default, year, note), ClientAccredFiles (one private Drive file per row under _Internal/Client accreditation/<Company>/<Year>, never shared, never in Documents; or last year's file listed again) and ClientAccredLog. saveClientAccred / saveClientAccredFile / archiveClientAccredFile for clientHubEditRoles (the four); getClientHubFile reads a file back. State: Accredited / Renew soon (clientAccredRenewDays 60) / Expired / On process / Not accredited / No label, from the latest rep label. The checklist is FlowSettings clientAccredRequirements. No Script Property.
 A395 THE FOLLOW-UP GUIDE STARTS ON A DAY (198; it carries 197, never pasted; A327 takes 199 or later). Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". FlowSettings followUpStart (default 2026-11-09; 'off' = none): before it getFollowUpGuide answers notStarted + startsOn with each plan's size (the cards say when it starts, nothing is counted); from it, touches before the start day and quotation checkpoints dated before it are left out, so the first Monday starts clean.
 A394 THE FOLLOW-UP GUIDE, FASTER AND LONGER (197; it carries 196; A327 takes 198 or later). Neil, 4 Nov 2026: "the follow up guide takes too long to load" and "include all the 74 clients on her plan". getFollowUpGuide read whole rows of every tab (~12 s live): it now reads the plan first (a rep with none reads nothing else), then only the columns it uses (_fugCols: runs of neighbouring columns, so Quotations' PDF / Layout JSON, the PR item JSON and the Client Book contacts are never read), the daily reports' JSON only for the reps' rows of the last three weeks (_fugReports, one block), touches from three weeks before this Monday (_fugSince, was 60 days). A plan holds up to 150 clients (was 60); a list longer than five days of followUpPerDay is spread evenly (Kimberlyn's 74: 15 a day, ranks 61-74 on Friday), and the reply's perDay says how many. No new tab, column or Script Property.

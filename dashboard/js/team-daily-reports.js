@@ -1,4 +1,4 @@
-/* team-daily-reports.js — A366 · team daily reports (team-daily-reports.html), for management and the director.
+/* team-daily-reports.js — A366 · team daily reports (team-daily-reports.html), for management and the director (A397: and HR).
  *
  * Neil, 23 Oct 2026: management opens any person's new daily report and reads it exactly as that person sees their own
  * "My daily report" — all of it, read only. Laid out like Contacts on a Mac (the Client Book, A362): the people on the

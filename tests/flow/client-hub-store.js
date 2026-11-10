@@ -55,7 +55,7 @@ const cardOf = (r, name) => r.cards.find(x => x.company.toLowerCase().indexOf(na
 sec('1 · the version, and who may open it');
 {
   const { c, store } = world();
-  ok('getVersion = 199', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 199);
+  ok('getVersion = 200', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 200);
   [NEIL, LARRY, ANA, HR].forEach(a => ok(a.actorRole + ' opens it', hub(c, a).success));
   ['sales', 'accounting', 'marketing', 'leadgen', 'warehouse'].forEach(r => ok(r + ' is refused', !hub(c, who(r, 'X', r + '1')).success));
   ok('the read is secured', !call(c, 'getClientHub', Object.assign({ flowSecret: '' }, NEIL)).success);
