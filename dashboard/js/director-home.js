@@ -793,6 +793,7 @@ function _computePaySlip(emp, cutoff) {
     speHolHrs: e.speHolHrs, speHolPay: e.speHolPay,
     unworkedHolDays: e.unworkedHolDays, unworkedHolPay: e.unworkedHolPay,
     otherIncome: e.otherIncome, incentive: e.incentive, grossPay,
+    incentiveLines: _incentiveLinesFor(empName, cutoff),   // A398 — printed by type; released with the slip
     pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
     totalDed, netPay: grossPay - totalDed,
   };
@@ -1138,7 +1139,8 @@ function renderPayGrid(cutoff) {
     const advTitle = salaryDeduction > 0
       ? ' title="This employee already has a salary deduction this cutoff — do not re-enter it here."'
       : '';
-    const incCell = `<td class="num computed">
+    const incTip = _incentiveLinesFor(empName, cutoff).map(l => `${l.category} — ${peso(l.amount)}`).join(' · ');   // A398
+    const incCell = `<td class="num computed"${incTip ? ` title="${esc(incTip)}"` : ''}>
         ${incentive > 0 ? `<strong>${peso(incentive)}</strong>` : '<span class="dh-dim">—</span>'}
         <button class="btn-sm xs" title="Add an incentive for this cutoff"
           onclick="openIncentiveAdd(${_jsArg(empName)},'${cutoff}')">+</button>
@@ -1439,6 +1441,11 @@ function _buildCutoffHtml(cutoff) {
   let prBody = '';
   let gBasic=0,gHol=0,gOT=0,gOther=0,gInc=0,gGross=0,gPag=0,gSSS=0,gPHIC=0,gAdv=0,gWTax=0,gDed=0,gNet=0,gSalDed=0;
   let employeeCount = 0;
+  /* A398 — each incentive by its type. The register cell names the types under the amount, and the
+     table under the register lists every one with what it is for, so an approver can see what each
+     peso of the Incentive column is. */
+  const ex = v => hxEscBlank(v);
+  let incBody = '';
 
   _employees.forEach(emp => {
     const e = _payEarnings(emp, cutoff);            // A229 — one definition of the earnings half
@@ -1461,13 +1468,20 @@ function _buildCutoffHtml(cutoff) {
     gGross+=grossPay; gPag+=pagibig; gSSS+=sss; gPHIC+=philhealth;
     gAdv+=advances; gWTax+=wtax; gDed+=totalDed; gNet+=netPay; gSalDed+=salaryDed;
 
+    const incItems = incentive > 0 ? _incentiveItemsFor(empName, cutoff) : [];   // A398
+    const incTypes = _incentiveLinesFor(empName, cutoff).map(l => ex(l.category)).join('<br>');   // one type a line
+    incItems.forEach(it => {
+      incBody += `<tr><td class="name">${ex(empName)}</td><td>${ex(it.category)}</td>
+        <td class="why">${it.reason ? ex(it.reason) : '—'}</td><td class="num">${p(it.amount)}</td></tr>`;
+    });
+
     prBody += `<tr>
       <td class="name">${empName}</td>
       <td class="num">${p(basicPay)}</td>
       <td class="num">${holidayPay > 0 ? p(holidayPay) : '—'}</td>
       <td class="num">${otPay > 0 ? p(otPay) : '—'}</td>
       <td class="num">${otherIncome > 0 ? p(otherIncome) : '—'}</td>
-      <td class="num">${incentive > 0 ? p(incentive) : '—'}</td>
+      <td class="num">${incentive > 0 ? p(incentive) + (incTypes ? `<div class="inc-type">${incTypes}</div>` : '') : '—'}</td>
       <td class="num bold">${p(grossPay)}</td>
       <td class="num">${pagibig > 0 ? p(pagibig) : '—'}</td>
       <td class="num">${sss > 0 ? p(sss) : '—'}</td>
@@ -1526,6 +1540,10 @@ function _buildCutoffHtml(cutoff) {
   td.bold { font-weight: bold; }
   td.green { color: #16612a; font-weight: bold; }
   td.name { min-width: 120px; }
+  .inc-type { font-size: 6.5pt; color: #555; font-weight: normal; line-height: 1.3; }
+  h3 { font-size: 9pt; margin: 10px 0 4px; }
+  table.incentives { width: auto; min-width: 520px; }
+  table.incentives td.why { white-space: normal; max-width: 320px; }
   table.summary { width: 360px; margin-top: 4px; }
   table.summary td { border-bottom: 1px solid #e5e7eb; }
   table.summary tr.total td { font-weight: bold; border-top: 2px solid #333; background: #eef2ff !important; }
@@ -1561,6 +1579,12 @@ function _buildCutoffHtml(cutoff) {
   </thead>
   <tbody>${prBody}</tbody>
 </table>
+${incBody ? `
+<h3>Incentives by type</h3>
+<table class="incentives">
+  <thead><tr><th>Employee</th><th>Type</th><th>What it is for</th><th class="num">Amount</th></tr></thead>
+  <tbody>${incBody}<tr class="total"><td colspan="3">TOTAL</td><td class="num">${p(gInc)}</td></tr></tbody>
+</table>` : ''}
 
 <h2>Section 3 — Cutoff Cost Summary</h2>
 <table class="summary">
@@ -1631,6 +1655,28 @@ function _buildCutoffHtml(cutoff) {
 function _incentiveFor(empName, cutoff) {
   const map = cutoff === 'A' ? _incentivesA : _incentivesB;
   return (map && map[empName]) || 0;
+}
+
+/* A398 — the TYPE of each incentive (the "What is it for" picked when it was added), so the payslip
+   and the payroll PDF can say what the money is, not just how much. Read from the same ledger rows as
+   _incentiveFor, so the lines always add up to the total it pays. Voided rows never print. The server
+   lists newest first; these come out in the order they were given. */
+function _incentiveItemsFor(empName, cutoff) {
+  const rows = ((cutoff === 'A' ? _incentiveRowsA : _incentiveRowsB) || {})[empName] || [];
+  return rows.slice().reverse()
+    .filter(r => String(r.status || 'Active') !== 'Voided' && (parseFloat(r.amount) || 0) > 0)
+    .map(r => ({ category: String(r.category || '').trim() || 'Other',
+                 amount: parseFloat(r.amount) || 0, reason: String(r.reason || '').trim() }));
+}
+/* One line per type for the payslip: two Perfect Attendance entries print as one figure. */
+function _incentiveLinesFor(empName, cutoff) {
+  const out = [], at = {};
+  _incentiveItemsFor(empName, cutoff).forEach(it => {
+    if (!(it.category in at)) { at[it.category] = out.length; out.push({ category: it.category, amount: 0 }); }
+    const l = out[at[it.category]];
+    l.amount = Math.round((l.amount + it.amount) * 100) / 100;
+  });
+  return out;
 }
 
 /* Build both shapes for one cutoff from the handler's rows: the totals the pay maths reads, and the
