@@ -84,6 +84,15 @@ function hxPayslipHtml(s, pr, opts) {
                                  + (s.unworkedHolDays === 1 ? '' : 's') + ')', s.unworkedHolPay) : ''
       ].filter(Boolean).join('')
     : money('Holiday', s.holidayPay);
+  /* A398 — each incentive by its TYPE ("Incentive: Perfect Attendance"), one line per type, so the
+     employee can see what the money was for. The lines must add up to the Incentive total; if they do
+     not (or a payslip released before A398 has none), the single "Incentive" line prints as before.
+     "Incentive: Perfect Attendance" is 29 characters, inside the ~31 the label column holds. */
+  const incLines = (s.incentiveLines || []).filter(l => l && (Number(l.amount) || 0) > 0);
+  const incSum = incLines.reduce((t, l) => t + (Number(l.amount) || 0), 0);
+  const incentiveRows = (incLines.length && Math.abs(incSum - (Number(s.incentive) || 0)) < 0.005)
+    ? incLines.map(l => money('Incentive: ' + (l.category || 'Other'), l.amount)).join('')
+    : money('Incentive', s.incentive);
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
       <img class="ps-logo" src="${location.origin}/images/logo-login-2x.png" alt="" onerror="this.style.display='none'">
@@ -113,7 +122,7 @@ function hxPayslipHtml(s, pr, opts) {
       ${money('Overtime (' + hn(s.otHrs) + ' x1.25)', s.otPay)}
       ${holidayRows}
       ${money('Other Income', s.otherIncome)}
-      ${money('Incentive', s.incentive)}
+      ${incentiveRows}
       ${money('GROSS PAY', s.grossPay, 'sub')}
     </tbody></table>
     <div class="ps-sep"></div>
