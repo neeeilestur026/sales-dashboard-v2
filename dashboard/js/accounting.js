@@ -383,7 +383,7 @@ function renderOrdersTable(data) {
       html += '<option value="' + st + '"' + (o.orderStatus === st ? ' selected' : '') + '>' + st + '</option>';
     });
     html += '</select>';
-    html += ' <button onclick="deleteOrder(' + o.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;" title="Delete">Del</button>';
+    if (hxMayDelete()) html += ' <button onclick="deleteOrder(' + o.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;" title="Delete">Del</button>';
     html += '</td>';
     html += '</tr>';
   });
@@ -729,7 +729,7 @@ function renderExpensesTable(data) {
     html += '<td>' + (e.loadBalance ? peso(e.loadBalance) : '<span class="kpi-neutral">—</span>') + '</td>';
     html += '<td>' + (e.otherAmount ? peso(e.otherAmount) : '<span class="kpi-neutral">—</span>') + '</td>';
     html += '<td style="font-weight:700;color:var(--hx-navy);">' + peso(e.total) + '</td>';
-    html += '<td><button onclick="editExpense(' + e.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-cyan-ring);background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);cursor:pointer;margin-right:0.2rem;" title="Edit">Edit</button><button onclick="deleteExpense(' + e.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;" title="Delete">Del</button></td>';
+    html += '<td><button onclick="editExpense(' + e.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-cyan-ring);background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);cursor:pointer;margin-right:0.2rem;" title="Edit">Edit</button>' + (hxMayDelete() ? '<button onclick="deleteExpense(' + e.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;" title="Delete">Del</button>' : '') + '</td>';
     html += '</tr>';
   });
 
@@ -1133,7 +1133,7 @@ function renderCollectionsTable(data) {
     html += '<td>' + statusHtml + (balance > 0 && !isCollected ? '<div style="font-size:0.68rem;color:var(--hx-red);margin-top:2px;">Bal: ' + peso(balance) + '</div>' : '') + '</td>';
     html += '<td style="white-space:nowrap;">';
     html += '<button onclick="editCollection(' + r.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.45rem;border-radius:4px;border:1px solid var(--hx-cyan-ring);background:var(--hx-cyan-soft);color:var(--hx-cyan-ink);cursor:pointer;margin-right:4px;">Edit</button>';
-    html += '<button onclick="deleteCollection(' + r.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;margin-right:4px;">Del</button>';
+    if (hxMayDelete()) html += '<button onclick="deleteCollection(' + r.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.35rem;border-radius:4px;border:1px solid var(--hx-red-line);background:var(--hx-red-soft);color:var(--hx-red);cursor:pointer;margin-right:4px;">Del</button>';
     html += '<button onclick="openAcctFollowUpEmail(' + r.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.45rem;border-radius:4px;border:1px solid var(--hx-navy-line);background:var(--hx-navy-soft);color:var(--hx-navy-text);cursor:pointer;margin-right:4px;">Follow Up</button>';
     html += '<button onclick="openAcctCollectionEmail(' + r.rowIndex + ')" style="font-size:0.68rem;padding:0.12rem 0.45rem;border-radius:4px;border:1px solid var(--hx-warn-line);background:var(--hx-warn-soft);color:var(--hx-warn);cursor:pointer;">Collection</button>';
     html += '</td>';

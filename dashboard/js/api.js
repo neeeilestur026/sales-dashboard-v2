@@ -89,6 +89,26 @@ function hxClearCaches() {
     }
   } catch (e) {}
 }
+/* ── A399 — accounting may not delete any record (Neil, 14 Nov 2026) ─────────────────────────────
+   One rule for both backends: an action whose name starts with delete, remove, purge, erase or clear
+   is a delete.
+   Voids, cancels and archives keep the record, so they are not deletes. The servers refuse as well
+   (Code.gs 7, and Flask's /flow/secure for every FlowAPI delete); this stops the request in the
+   browser with a plain message, and hxMayDelete() is what pages ask before drawing a Delete button.
+   It sits in hx-util so every page script (and every test harness that loads this block) has it. */
+const HX_NO_DELETE_ROLES = ['accounting'];
+function hxIsDeleteAction(action) { return /^(delete|remove|purge|erase|clear)[A-Z]/.test(String(action || '')); }
+function hxMayDelete() {
+  let role = '';
+  try { const s = JSON.parse(localStorage.getItem('session') || 'null'); role = (s && s.role) || ''; } catch (e) { /* no session: not accounting */ }
+  return HX_NO_DELETE_ROLES.indexOf(String(role).toLowerCase()) === -1;
+}
+function hxDeleteRefusal(action) {
+  if (!hxIsDeleteAction(action) || hxMayDelete()) return null;
+  return { success: false, refused: true,
+           message: 'Your role cannot delete records. Ask the director or an admin to delete it.' };
+}
+
 /* ─── end hx-util ─────────────────────────────────────────────────────────────────────────── */
 
 // ─── API Cache (sessionStorage, 5-min TTL) ────────
@@ -147,6 +167,8 @@ const NO_CACHE_READS = ['getMyPayslips', 'getPendingQuotations', 'getAllPRs', 'g
  */
 async function fetchFromAPI(params, options = {}) {
   const action = params.action || '';
+  const refused = hxDeleteRefusal(action);   // A399
+  if (refused) return refused;
   const isMutation = NO_CACHE_ACTIONS.includes(action);
   const cacheable = !options.noCache && !isMutation && !NO_CACHE_READS.includes(action);
   const key = _cacheKey(params);
@@ -257,6 +279,8 @@ async function fetchFromAPI(params, options = {}) {
  * Internal: POST mutations to Apps Script doPost
  */
 async function _postMutation(params) {
+  const refusedDel = hxDeleteRefusal(params && params.action);   // A399 — callers that skip fetchFromAPI too
+  if (refusedDel) return refusedDel;
   // ── TRAINING MODE INTERCEPT ──
   // When the logged-in user has trainingMode=true, swallow mutations and
   // return a fake success so generators/UI keep working but nothing is

@@ -296,6 +296,10 @@ async function postFlow(action, params = {}) {
     throw new Error('Read-only view — your role (' + (_flowActorRole() || 'unknown') +
                     ') can view this page but not change it. Refused: ' + action + '.');
   }
+  /* A399 — accounting may not delete any record. The rule lives in api.js (loaded on every page that
+     loads this file); Flask's /flow/secure refuses the same deletes on the server. */
+  const refusedDel = (typeof hxDeleteRefusal === 'function') ? hxDeleteRefusal(action) : null;
+  if (refusedDel) return refusedDel;
   if (_flowIsSecured(action)) return _postFlowSecured(action, params);
   const body = Object.assign({ actorName: _flowActor(), actorRole: _flowActorRole() }, params, { action });
   const payload = JSON.stringify(body);

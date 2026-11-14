@@ -400,7 +400,7 @@ function cmActions(r) {
       a += `<span class="cm-gate" title="${flowEsc(r.coverageNote)}">not fully collected</span>`;
     }
     a += B(`cmSubmit("${no}")`, 'Submit');
-    a += B(`cmDelete("${no}")`, 'Delete', 'del-btn');
+    if (hxMayDelete()) a += B(`cmDelete("${no}")`, 'Delete', 'del-btn');   // A399
   }
   return a;
 }

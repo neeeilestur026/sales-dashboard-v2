@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!rsSession) return;
   renderNavbar('replace-2026-sos');
   document.getElementById('wipeBtn').addEventListener('click', runWipe);
+  if (!hxMayDelete()) document.getElementById('wipeBtn').style.display = 'none';   // A399 — accounting no longer deletes
   document.getElementById('importBtn').addEventListener('click', runImport);
   document.getElementById('verifyBtn').addEventListener('click', runVerify);
   document.getElementById('reloadBtn').addEventListener('click', loadSystem);

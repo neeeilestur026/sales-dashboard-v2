@@ -636,7 +636,7 @@ function prActions(r) {
     if (editable) {
       a += B(`prSubmit("${no}")`, 'Submit');
       a += B(`prEdit("${no}")`, 'Edit');
-      a += B(`prDelete("${no}")`, 'Delete', 'del-btn');
+      if (hxMayDelete()) a += B(`prDelete("${no}")`, 'Delete', 'del-btn');   // A399
     } else if (st !== 'Paid') {
       // A158: Edit used to render at every status but the server refuses it once the request is in
       // flight — so a wrong bank account on an approved PRF had no way out short of a sheet edit.

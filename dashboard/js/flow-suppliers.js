@@ -40,7 +40,7 @@ function render() {
       <td>${flowEsc(s.accountNumber)}</td><td>${flowEsc(s.paymentMethod)}</td><td>${flowEsc(s.currency)}</td>
       <td style="white-space:nowrap;">${supViewer ? '' : `
         <button class="link-btn" onclick='editSupplier(${JSON.stringify(s.supplier)})'>Edit</button>
-        <button class="link-btn del-btn" onclick='deleteSupplierRec(${JSON.stringify(s.supplier)})' style="margin-left:0.4rem;">Delete</button>`}
+        ${hxMayDelete() ? `<button class="link-btn del-btn" onclick='deleteSupplierRec(${JSON.stringify(s.supplier)})' style="margin-left:0.4rem;">Delete</button>` : ''}`}
       </td></tr>`).join('')}</tbody></table>`;
 }
 

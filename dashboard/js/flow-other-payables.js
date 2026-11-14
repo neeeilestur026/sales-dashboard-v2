@@ -178,7 +178,7 @@ function prActions(r) {
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.4rem;">${label}</button>`;
   let a = `<button class="link-btn" onclick='prGenPdf("${no}")'>PDF</button>` + B(`openDocsModal("Payment Request","${no}")`, 'Docs');
   const editable = st === 'Draft' || st === 'Rejected';
-  if (prCanCreate && editable) a += B(`prSubmit("${no}")`, 'Submit') + B(`prEdit("${no}")`, 'Edit') + B(`prDelete("${no}")`, 'Delete', 'del-btn');
+  if (prCanCreate && editable) a += B(`prSubmit("${no}")`, 'Submit') + B(`prEdit("${no}")`, 'Edit') + (hxMayDelete() ? B(`prDelete("${no}")`, 'Delete', 'del-btn') : '');   // A399
   // In flight or already approved? Correcting it means re-opening it — which drops every approval,
   // so an amended payee/amount/bank account can never inherit the old sign-offs.
   if (prCanCreate && !editable) a += B(`prRevise("${no}")`, 'Revise');

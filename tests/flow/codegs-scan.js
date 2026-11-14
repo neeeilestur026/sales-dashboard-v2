@@ -110,10 +110,13 @@ sec('5 · row numbers name the record the page showed');
   const ctx = fresh();
   ctx._ordersSheet(); ctx._clientsSheet();
   sheet(ctx, 'Orders').push(['2026-10-01', 'ORD-1', 'Local', 'ACME'], ['2026-10-02', 'ORD-2', 'Local', 'BETA']);
-  let r = post(ctx, { action: 'deleteOrder', token: 't-acct', rowIndex: 2, expectKey: 'ORD-2' });
+  /* A399 — accounting may no longer delete at all, so the stale-row rule is shown with the director. */
+  let r = post(ctx, { action: 'deleteOrder', token: 't-acct', rowIndex: 3, expectKey: 'ORD-2' });
+  ok('accounting may not delete an order at all (A399)', r.success === false && r.refused === true, r);
+  r = post(ctx, { action: 'deleteOrder', token: 't-dir', rowIndex: 2, expectKey: 'ORD-2' });
   ok('deleting row 2 meant for ORD-2 (it holds ORD-1) is refused', r.success === false && /changed/.test(r.message), r);
   eq('  both orders remain', sheet(ctx, 'Orders').length, 3);
-  r = post(ctx, { action: 'deleteOrder', token: 't-acct', rowIndex: 3, expectKey: 'ORD-2' });
+  r = post(ctx, { action: 'deleteOrder', token: 't-dir', rowIndex: 3, expectKey: 'ORD-2' });
   ok('the right row deletes', r.success === true && sheet(ctx, 'Orders').length === 2, r);
 
   sheet(ctx, 'Clients').push(['sam', 'ACME', 'Power', 'Site', '111', '', '', 'Jo', 'Buyer', '0917', 'jo@acme.ph', 'Active', '2026-01-01', 'old note']);

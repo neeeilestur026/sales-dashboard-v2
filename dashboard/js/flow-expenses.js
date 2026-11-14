@@ -215,7 +215,7 @@ function rowHtml(r) {
     <td class="c-act">
       ${expViewer ? '' : `<button class="ex-act" data-edit="${r.rowIndex}">Edit</button>`}
       <button class="ex-act" data-docs="${flowEsc(r.expNo)}">Docs</button>
-      ${expViewer ? '' : `<button class="ex-act" data-del="${r.rowIndex}">✕</button>`}
+      ${expViewer || !hxMayDelete() ? '' : `<button class="ex-act" data-del="${r.rowIndex}">✕</button>`}
     </td></tr>`;
 }
 

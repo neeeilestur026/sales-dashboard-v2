@@ -371,7 +371,7 @@ function poActions(p) {
   const B = (fn, label, cls) => `<button class="link-btn ${cls || ''}" onclick='${fn}' style="margin-left:0.5rem;">${label}</button>`;
   let a = `<button class="link-btn" onclick='openPdfModal("${no}")'>PDF</button>` + B(`openDocsModal("Purchase Order","${no}")`, 'Docs');
   if (isMgmt && st === 'Pending Management') a += B(`approvePOAction("${no}")`, 'Approve') + B(`rejectPOAction("${no}")`, 'Reject', 'del-btn');
-  if (poCanCreate && editable) a += B(`submitPOAction("${no}")`, 'Submit') + B(`editPO("${no}")`, 'Edit') + B(`deletePO("${no}")`, 'Delete', 'del-btn');
+  if (poCanCreate && editable) a += B(`submitPOAction("${no}")`, 'Submit') + B(`editPO("${no}")`, 'Edit') + (hxMayDelete() ? B(`deletePO("${no}")`, 'Delete', 'del-btn') : '');   // A399
   else if (poCanCreate) a += B(`editPO("${no}")`, 'Edit');
   return a;
 }
