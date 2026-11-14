@@ -496,7 +496,7 @@ function quotationActions(q, org) {
      stale PDF must always be able to regenerate it (A123 blocks Approve until they do). */
   if (editable && (isCreator || isRep || isAdmin)) a += B(`editQuotation("${no}")`, 'Edit');
   else a += B(`qcOpen("${no}","document")`, 'PDF');
-  if ((isCreator || isRep || isAdmin) && editable) a += B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');
+  if ((isCreator || isRep || isAdmin) && editable && hxMayDelete()) a += B(`deleteQuotation("${no}")`, 'Delete', 'del-btn');   // A399
   // Client came back asking for a different price? Reopen it — creator, sales or admin.
   if (reopenable && (isCreator || isRep || isAdmin)) a += B(`reviseQuotationAction("${no}")`, 'Revise');
   // A145: Send-to-Client is offered to the CREATOR and to admin/management/director — not sales-only —

@@ -693,6 +693,16 @@ SECURED_ACTIONS = [
 # says what is left; the longer wait covers the script lock and a cold start. Under gunicorn's 120 s.
 LONG_ACTIONS = {"syncBooks": 90, "getBooksCoverage": 90}
 
+# A399 — accounting may not delete any record (Neil, 14 Nov 2026). Every FlowAPI delete is a secured action, so
+# this one check covers them all; Code.gs 7 refuses its own deletes the same way, and api.js says it first.
+# Voids, cancels and archives keep the record, so they are not deletes.
+NO_DELETE_ROLES = {"accounting"}
+_DELETE_ACTION = re.compile(r"^(delete|remove|purge|erase|clear)[A-Z]")
+
+
+def delete_refused(role: str, action: str) -> bool:
+    return str(role or "").strip().lower() in NO_DELETE_ROLES and bool(_DELETE_ACTION.match(str(action or "")))
+
 
 @flow_bp.route("/flow/secure", methods=["POST"])
 @require_session()
@@ -713,6 +723,9 @@ def secure_mutation():
     action = str(body.get("action") or "").strip()
     if action not in SECURED_ACTIONS:
         return jsonify({"success": False, "message": f"'{action}' is not a secured action."}), 400
+    if delete_refused(session.get("role"), action):   # A399
+        return jsonify({"success": False, "refused": True, "message":
+                        "Your role cannot delete records. Ask the director or an admin to delete it."}), 403
 
     params = body.get("params")
     if not isinstance(params, dict):

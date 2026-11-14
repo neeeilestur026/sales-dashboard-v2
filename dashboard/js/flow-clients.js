@@ -55,7 +55,7 @@ function render() {
       ${cliSg ? `<td>${flowEsc(CLI_VAT_LABEL[x.vatType] || '—')}</td><td>${flowEsc(CLI_EWT_LABEL[x.ewtRate || ''] || x.ewtRate)}</td>` : ''}
       <td style="white-space:nowrap;">${cliViewer ? '' : `
         <button class="link-btn" onclick='editClient(${JSON.stringify(x.customer)})'>Edit</button>
-        <button class="link-btn del-btn" onclick='deleteClientRec(${JSON.stringify(x.customer)})' style="margin-left:0.4rem;">Delete</button>`}
+        ${hxMayDelete() ? `<button class="link-btn del-btn" onclick='deleteClientRec(${JSON.stringify(x.customer)})' style="margin-left:0.4rem;">Delete</button>` : ''}`}
       </td></tr>`).join('')}</tbody></table>`;
 }
 

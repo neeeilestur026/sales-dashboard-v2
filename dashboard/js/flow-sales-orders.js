@@ -728,7 +728,7 @@ function renderSOs() {
     <td style="white-space:nowrap;">${`<button class="link-btn" onclick='soEditCost("${flowEsc(s.soNo)}")'>${soViewer ? 'View costs' : 'Costs'}</button>`}
     <button class="link-btn" onclick='openDocsModal("Sales Order","${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Docs</button>${soViewer ? '' : `
     <button class="link-btn" onclick='editSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Edit</button>
-    <button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button>`}</td></tr>`).join('')}</tbody></table>`;
+    ${hxMayDelete() ? `<button class="link-btn del-btn" onclick='deleteSO("${flowEsc(s.soNo)}")' style="margin-left:0.5rem;">Delete</button>` : ''}`}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function editSO(no) {

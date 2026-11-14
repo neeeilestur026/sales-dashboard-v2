@@ -8,7 +8,7 @@ let apAnomalies = null;    // A247: previewAPAgingAnomalies, or null when it cou
 document.addEventListener('DOMContentLoaded', async () => {
   apSession = requireOversight();
   if (!apSession) return;
-  apCanDelete = apSession.role === 'admin' || apSession.role === 'accounting';
+  apCanDelete = (apSession.role === 'admin' || apSession.role === 'accounting') && hxMayDelete();   // A399 — accounting no longer deletes
   renderNavbar('flow-ap-aging');
   renderFlowNav('flow-ap-aging.html');
   /* A224 — this page now hosts the Mark Paid dialog from flow-pr-actions.js. Two things it needs:

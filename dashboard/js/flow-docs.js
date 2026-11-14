@@ -214,7 +214,7 @@ async function flowDocsRefresh() {
         <td>${d.link ? `<a href="${flowEsc(d.link)}" target="_blank" class="link-btn">${flowEsc(d.fileName || 'document')}</a>` : flowEsc(d.fileName || 'document')}</td>
         <td>${flowEsc(d.docType || '—')}</td>
         <td>${flowEsc(d.uploadedBy || '—')}</td>
-        <td style="white-space:nowrap;">${flowIsViewerOnly() ? '' : `<button class="link-btn del-btn" onclick='flowDocsDelete("${flowEsc(d.docId)}")'>Remove</button>`}</td>
+        <td style="white-space:nowrap;">${flowIsViewerOnly() || !hxMayDelete() ? '' : `<button class="link-btn del-btn" onclick='flowDocsDelete("${flowEsc(d.docId)}")'>Remove</button>`}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (e) {
     list.innerHTML = `<div style="color:var(--hx-red);font-size:0.85rem;">${flowEsc(e.message)}</div>`;

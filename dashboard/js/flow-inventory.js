@@ -11,7 +11,7 @@ let invTracked = null;            // A318 — { itemId: 1 } for items tracked pi
 document.addEventListener('DOMContentLoaded', async () => {
   invSession = requireInventoryAccess();
   if (!invSession) return;
-  invCanDelete = invSession.role === 'admin' || invSession.role === 'accounting';
+  invCanDelete = (invSession.role === 'admin' || invSession.role === 'accounting') && hxMayDelete();   // A399 — accounting no longer deletes
   invReadOnly = invSession.role === 'management' || invSession.role === 'director';
   renderNavbar('flow-inventory');
   // Sales can't open the rest of the flow — only show the flow sub-nav to admin/accounting.

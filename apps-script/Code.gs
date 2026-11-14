@@ -44,8 +44,10 @@
  *   5 — A321 payroll and payments for the books: contribution tables, Mark payroll paid, getBooksFeed.
  *   6 — A325 the system scan: server-side roles on payroll/bank/billing/mail, the caller's own role on
  *       approvals, locks on the racing writes, stale-row checks, POST-only mutations, alert e-mail from
- *       the ADMIN_ALERT_EMAIL Script Property only, and the date / column fixes. */
-var CODE_VERSION = 6;
+ *       the ADMIN_ALERT_EMAIL Script Property only, and the date / column fixes.
+ *   7 — A399 accounting may not delete any record: _authenticate refuses every delete / remove / purge /
+ *       erase / clear action for the accounting role. */
+var CODE_VERSION = 7;
 
 // ─── Configuration ───────────────────────────────────────────
 var USERS_SHEET_ID = _prop('USERS_SHEET_ID');   // AS-1 — set once under Project Settings → Script properties; never in this file
@@ -172,6 +174,8 @@ function _ctEq(a, b) {
   return diff === 0;
 }
 /** Null when the call may proceed (and _SESSION is set); otherwise the JSON reply that refuses it. */
+var _NO_DELETE_ROLES = { accounting: 1 };                // A399
+function _isDeleteAction(action) { return /^(delete|remove|purge|erase|clear)[A-Z]/.test(String(action || '')); }
 function _authenticate(params, action) {
   _SESSION = null;
   params = params || {};
@@ -193,6 +197,12 @@ function _authenticate(params, action) {
   var roles = ACTION_ROLES[action];
   if (roles && !_SESSION.backend && roles.indexOf(String(_SESSION.role || '').toLowerCase()) === -1) {
     return { success: false, message: 'Forbidden: this action is for ' + roles.join(', ') + ' only.' };
+  }
+  /* A399 — accounting may not delete any record (Neil, 14 Nov 2026). Checked on the caller's real role,
+     including a session Flask forwards with the shared secret. Voids and cancels keep the record, so
+     they are not deletes. */
+  if (!_SESSION.backend && _NO_DELETE_ROLES[String(_SESSION.role || '').toLowerCase()] && _isDeleteAction(action)) {
+    return { success: false, refused: true, message: 'Your role cannot delete records. Ask the director or an admin to delete it.' };
   }
   return _sheetIdGuard(params);
 }

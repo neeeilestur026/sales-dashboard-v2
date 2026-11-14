@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('backfillBtn').addEventListener('click', backfill);
   document.getElementById('matchTypeBtn').addEventListener('click', matchTypes);
   document.getElementById('removeMigBtn').addEventListener('click', removeMigrated);
+  if (!hxMayDelete()) document.getElementById('removeMigBtn').style.display = 'none';   // A399 — accounting no longer deletes
   load();
 });
 
