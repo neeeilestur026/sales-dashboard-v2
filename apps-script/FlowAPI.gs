@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 200;   // A397 — HR reads every person's new daily report (and the visits planned in it). History: see CHANGELOG.
+var FLOW_VERSION = 201;   // A400 — recruitment evaluation forms, one or more per candidate (HR). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -634,7 +634,10 @@ var SCHEMA = {
   ClientAccred: ['Key', 'Company', 'Year', 'Accredited Since', 'Expires', 'Note', 'Client Ref', 'Created By', 'Created At', 'Updated By', 'Updated At'],
   ClientAccredFiles: ['File No', 'Key', 'Company', 'Year', 'Requirement', 'File ID', 'File Name', 'File Type', 'File Size', 'Note', 'Client Ref',
                       'Uploaded By', 'Uploaded At', 'Archived By', 'Archived At'],
-  ClientAccredLog: ['Log No', 'Key', 'Kind', 'From', 'To', 'Note', 'By', 'At']
+  ClientAccredLog: ['Log No', 'Key', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
+  // A400 — recruitment evaluation forms: private Drive files filed under the candidate's key (C + when they were added)
+  CandidateEvals: ['Eval No', 'Candidate Key', 'Candidate', 'Position', 'Stage', 'File ID', 'File Name', 'File Type', 'File Size', 'Note',
+                   'Client Ref', 'Uploaded By', 'Uploaded At', 'Archived By', 'Archived At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -885,6 +888,7 @@ var _SECURED = {
   getBulletin: 1, getBulletinFile: 1, saveBulletin: 1, archiveBulletin: 1, ackBulletin: 1, previewBulletinMemos: 1, importBulletinMemos: 1,   // A390
   getShutdowns: 1, saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar (reads secured: names and plans)
   getClientHub: 1, getClientHubFile: 1, saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client information hub (reads secured: clients' details, files)
+  getCandidateEvals: 1, getCandidateEvalFile: 1, saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms (reads secured: candidates' assessments)
   getFollowUpGuide: 1, setFollowUpPlan: 1,   // A393 — the follow-up guide (the read is secured: clients and quotations by rep)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
@@ -2735,6 +2739,108 @@ function getClientHubFile(p) {
   } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
 }
 /* ═══ end A396 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A400 — recruitment evaluation forms (FlowAPI 201) ═════════════════════════════════════════════
+   Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard.
+   The candidates live in Code.gs (Recruitment Pipeline), addressed by a row number that shifts on every delete, so a
+   form is filed under the candidate's KEY: 'C' + the yyyyMMddHHmmss they were added (Created At — set once, never
+   edited; all 159 live candidates have a distinct one). The page works the key out; the name, position and stage go
+   with each form so it stays readable on its own. A private Drive file (no sharing) under
+   _Internal/Recruitment evaluations/<candidate>; every read is secured and role-checked; a form is archived (restore is
+   the Undo), never deleted. FlowSettings: candidateEvals (on/off), candidateEvalRoles (who sees the forms),
+   candidateEvalEditRoles (who adds and archives them). */
+var _CE_ROLES = ['hr', 'admin', 'management', 'director'], _CE_EDIT = ['hr', 'management'];
+var _CE_STAGES = ['Job Posted', 'Resume Screening', 'Initial Interview', 'Final Interview', 'Job Offer', 'Onboarding', 'Complete'];
+function _ceCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  return { on: _bbSwitch(d.candidateEvals), roles: _bbList(d.candidateEvalRoles, _CE_ROLES), edit: _bbList(d.candidateEvalEditRoles, _CE_EDIT) };
+}
+function _ceDenied(p, cfg, edit) {
+  if (!cfg.on) return 'Evaluation forms are switched off (FlowSettings candidateEvals).';
+  var r = _ibRole(p);
+  if (cfg.roles.indexOf(r) < 0) return 'Evaluation forms are open to ' + cfg.roles.join(', ') + '.';
+  if (edit && cfg.edit.indexOf(r) < 0) return 'Only ' + cfg.edit.join(', ') + ' can add or archive evaluation forms.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save this under.';
+  return '';
+}
+function _ceKey(v) { var s = String(v == null ? '' : v).trim(); return /^C\d{14}$/.test(s) ? s : ''; }
+function _ceOut(r) {
+  return { evalNo: String(r['Eval No']), candidateKey: String(r['Candidate Key'] || ''), candidate: String(r['Candidate'] || ''),
+           position: String(r['Position'] || ''), stage: String(r['Stage'] || ''), fileName: String(r['File Name'] || ''),
+           fileType: String(r['File Type'] || ''), fileSize: _num(r['File Size']), note: String(r['Note'] || ''),
+           uploadedBy: String(r['Uploaded By'] || ''), uploadedAt: _webIso(r['Uploaded At']), archived: !!r['Archived At'] };
+}
+/** getCandidateEvals() — every evaluation form on file (archived ones left out), oldest first, for candidateEvalRoles. */
+function getCandidateEvals(p) {
+  p = p || {};
+  var cfg = _ceCfg(), no = _ceDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var rows = _sbRows('CandidateEvals').filter(function (r) { return r['Eval No'] && !r['Archived At']; }).map(_ceOut);
+  rows.sort(function (a, b) { return String(a.uploadedAt).localeCompare(String(b.uploadedAt)); });
+  return { success: true, data: rows, stages: _CE_STAGES.slice(), may: { edit: cfg.edit.indexOf(_ibRole(p)) >= 0 } };
+}
+/** saveCandidateEval({candidateKey, candidate, position?, stage?, fileBase64 + fileName + mimeType, note?, clientRef?}) — one form, one file. */
+function saveCandidateEval(p) {
+  p = p || {};
+  var cfg = _ceCfg(), no = _ceDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var key = _ceKey(p.candidateKey), name = _webCell(p.candidate).slice(0, 120), by = String(p.actorName).trim();
+  if (!key) return { success: false, message: 'This candidate could not be identified: refresh the page and try again.' };
+  if (!name) return { success: false, message: 'Say which candidate.' };
+  var stage = _webCell(p.stage).slice(0, 40);
+  if (stage && _CE_STAGES.indexOf(stage) < 0) return { success: false, message: 'Pick one of the stages: ' + _CE_STAGES.join(', ') + '.' };
+  var rows = _sbRows('CandidateEvals');
+  if (p.clientRef) {
+    var dup = rows.filter(function (r) { return String(r['Client Ref'] || '') && String(r['Client Ref']) === String(p.clientRef); })[0];
+    if (dup) return { success: true, duplicate: true, refNo: String(dup['Candidate'] || ''), form: _ceOut(dup), message: 'Already added.' };
+  }
+  var mime = String(p.mimeType || '').toLowerCase(), b64 = String(p.fileBase64 || '').replace(/^data:[^,]*,/, '');
+  if (!b64) return { success: false, message: 'Choose the evaluation form to upload.' };
+  if (!_BB_MIME[mime]) return { success: false, message: 'Add a PDF, a picture (JPEG, PNG, WebP, GIF), a Word, Excel or PowerPoint file, or a text file.' };
+  if (b64.length > _BB_B64_MAX) return { success: false, message: 'The file is too large: keep it under 10 MB.' };
+  var fname = _webCell(p.fileName || 'evaluation').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120) || 'evaluation';
+  var folder = null;
+  try { folder = _ensurePath(['_Internal', 'Recruitment evaluations', name.replace(/[\\/:*?"<>|]/g, '-')]); } catch (e) { folder = null; }
+  var file = (folder || _flowFolder()).createFile(Utilities.newBlob(Utilities.base64Decode(b64), mime, fname));   // private: no setSharing
+  var obj = {};
+  SCHEMA.CandidateEvals.forEach(function (h) { obj[h] = ''; });
+  Object.assign(obj, { 'Eval No': _bbId('CEV'), 'Candidate Key': key, 'Candidate': name, 'Position': _webCell(p.position).slice(0, 120), 'Stage': stage,
+                       'File ID': String(file.getId()), 'File Name': fname, 'File Type': mime, 'File Size': Math.round(b64.length * 3 / 4),
+                       'Note': _webCell(p.note).slice(0, 190), 'Client Ref': _webCell(p.clientRef).slice(0, 60), 'Uploaded By': by, 'Uploaded At': _now() });
+  _chPut('CandidateEvals', null, obj);
+  return { success: true, refNo: name, form: _ceOut(obj), message: 'Evaluation form added for ' + name + '.' };
+}
+/** archiveCandidateEval({evalNo, restore?}) — takes a form off the candidate's list (kept in Drive), or puts it back (the Undo). */
+function archiveCandidateEval(p) {
+  p = p || {};
+  var cfg = _ceCfg(), no = _ceDenied(p, cfg, true);
+  if (no) return { success: false, message: no };
+  var row = _sbRows('CandidateEvals').filter(function (r) { return String(r['Eval No']) === String(p.evalNo || ''); })[0];
+  if (!row) return { success: false, message: 'That evaluation form was not found.' };
+  var restore = p.restore === true || String(p.restore) === 'true', by = String(p.actorName).trim();
+  if (restore === !row['Archived At']) return { success: false, message: restore ? 'That form is not archived.' : 'That form is archived already.' };
+  var obj = {};
+  SCHEMA.CandidateEvals.forEach(function (h) { obj[h] = row[h]; });
+  obj['Archived By'] = restore ? '' : by; obj['Archived At'] = restore ? '' : _now();
+  _chPut('CandidateEvals', row, obj);
+  return { success: true, refNo: String(row['Candidate'] || ''), form: _ceOut(obj), message: restore ? 'Back on the list.' : 'Archived.' };
+}
+/** getCandidateEvalFile({evalNo}) — one form's file as base64, for candidateEvalRoles; the type is checked again on the way out. */
+function getCandidateEvalFile(p) {
+  p = p || {};
+  var cfg = _ceCfg(), no = _ceDenied(p, cfg, false);
+  if (no) return { success: false, message: no };
+  var r = _sbRows('CandidateEvals').filter(function (x) { return String(x['Eval No']) === String(p.evalNo || ''); })[0];
+  if (!r || r['Archived At']) return { success: false, message: 'That evaluation form is not on file.' };
+  var type = String(r['File Type'] || '');
+  if (!_BB_MIME[type]) return { success: false, message: 'That file cannot be shown.' };
+  try {
+    var blob = DriveApp.getFileById(String(r['File ID'])).getBlob();
+    return { success: true, mimeType: type, fileName: String(r['File Name'] || 'evaluation'), base64: Utilities.base64Encode(blob.getBytes()) };
+  } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
+}
+/* ═══ end A400 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
@@ -14333,7 +14439,8 @@ var _FLOW_SETTING_DEFAULTS = {
      how many days before expiry it says Renew soon, and the requirement checklist (separated by ';'). */
   clientHub: 'on', clientHubRoles: 'management,admin,director,hr', clientHubEditRoles: 'management,admin,director,hr',
   clientHubCollectionRoles: 'management,admin,director', clientAccredRenewDays: 60,
-  clientAccredRequirements: 'Their accreditation / vendor form; Company profile; SEC or DTI registration; Business permit; BIR 2303; Financial statement / ITR; Certificates (ISO, safety); Their accreditation certificate; Other'
+  clientAccredRequirements: 'Their accreditation / vendor form; Company profile; SEC or DTI registration; Business permit; BIR 2303; Financial statement / ITR; Certificates (ISO, safety); Their accreditation certificate; Other',
+  candidateEvals: 'on', candidateEvalRoles: 'hr,admin,management,director', candidateEvalEditRoles: 'hr,management'   // A400
 };
 function getFlowSettings() {
   var out = {};
@@ -17196,6 +17303,7 @@ var _MODULE_MAP = {
   saveBulletin: ['Bulletin board', 'Saved'], archiveBulletin: ['Bulletin board', 'Archived'], importBulletinMemos: ['Bulletin board', 'Memos imported'],   // A390
   setFollowUpPlan: ['Follow-up guide', 'Plan set'],   // A393
   saveClientAccred: ['Client hub', 'Accreditation saved'], saveClientAccredFile: ['Client hub', 'File added'], archiveClientAccredFile: ['Client hub', 'File archived'],   // A396
+  saveCandidateEval: ['Recruitment', 'Evaluation form added'], archiveCandidateEval: ['Recruitment', 'Evaluation form archived'],   // A400
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -22596,6 +22704,8 @@ var HANDLERS = {
   getFollowUpGuide: getFollowUpGuide, setFollowUpPlan: setFollowUpPlan,   // A393
   getClientHub: getClientHub, getClientHubFile: getClientHubFile, saveClientAccred: saveClientAccred, saveClientAccredFile: saveClientAccredFile,
   archiveClientAccredFile: archiveClientAccredFile,   // A396
+  getCandidateEvals: getCandidateEvals, getCandidateEvalFile: getCandidateEvalFile, saveCandidateEval: saveCandidateEval,
+  archiveCandidateEval: archiveCandidateEval,   // A400
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -22716,6 +22826,7 @@ var MUTATIONS = {
   saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar
   setFollowUpPlan: 1,   // A393 — the director sets a rep's ranked follow-up list
   saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client hub's accreditation dates and files
+  saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -22744,6 +22855,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A400 RECRUITMENT EVALUATION FORMS (201; A327 takes 202 or later). Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard. New tab CandidateEvals; getCandidateEvals (every form on file, archived ones left out), saveCandidateEval (one file per call: a private Drive file under _Internal/Recruitment evaluations/<candidate>, the bulletin's allow-list and 10 MB), archiveCandidateEval (off the list, kept in Drive; restore is the Undo) and getCandidateEvalFile (base64; the type checked again on the way out). The candidates live in Code.gs and are addressed by a row number that shifts on a delete, so a form is filed under the candidate's key: C + the yyyyMMddHHmmss they were added (Created At, never edited; distinct for all 159 live candidates); the name, position and stage go with each form. Every action is secured: FlowSettings candidateEvalRoles (hr, admin, management, director) see the forms, candidateEvalEditRoles (hr, management) add and archive them, candidateEvals off closes it.
 A397 HR READS THE NEW DAILY REPORTS (200; A327 takes 201 or later). Neil, 10 Nov 2026: "in the hr dashboard can you show or display also the new team daily report". proofReportRoles' default gains hr; getProofReports lets hr read every person's report of every kind like management (_powReadsEvery; _powReadsAll is unchanged, so the follow-up guide's oversight stays the director's and management's); HR has no report of its own, so saves and submits stay refused. getVisitPlans reads for hr too (read only), so a rep's report shows HR the visits it planned.
 A396 THE CLIENT INFORMATION HUB (199; it carries 197 and 198, never pasted; A327 takes 200 or later). Neil, 5 Nov 2026: every detail of every client in one place, information only (no quotation status, no POs), for management, admin, the director and HR, with each client's accreditation and its requirement files. getClientHub (secured read): one card per _cdKey from the Client master, the live Client Book rows (owners, sector, tier, addresses, contacts, each rep's accreditation label), Collection details (only for clientHubCollectionRoles: management, admin, director; left out of HR's reply) and lead gen's LgAccred; contacts merged by email, phone or name with their sources. New tabs ClientAccred (since, expires = since + 1 year by default, year, note), ClientAccredFiles (one private Drive file per row under _Internal/Client accreditation/<Company>/<Year>, never shared, never in Documents; or last year's file listed again) and ClientAccredLog. saveClientAccred / saveClientAccredFile / archiveClientAccredFile for clientHubEditRoles (the four); getClientHubFile reads a file back. State: Accredited / Renew soon (clientAccredRenewDays 60) / Expired / On process / Not accredited / No label, from the latest rep label. The checklist is FlowSettings clientAccredRequirements. No Script Property.
 A395 THE FOLLOW-UP GUIDE STARTS ON A DAY (198; it carries 197, never pasted; A327 takes 199 or later). Neil, 4 Nov 2026: "we will start the counting of the follow up guide next week monday". FlowSettings followUpStart (default 2026-11-09; 'off' = none): before it getFollowUpGuide answers notStarted + startsOn with each plan's size (the cards say when it starts, nothing is counted); from it, touches before the start day and quotation checkpoints dated before it are left out, so the first Monday starts clean.

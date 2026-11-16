@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HR-Marketing — Recruitment Pipeline</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/hr-recruitment.css">   <!-- A400 — evaluation forms -->
   <style>
     .rec-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem; }
     .rec-form .full { grid-column: 1 / -1; }
@@ -134,10 +135,33 @@
       </div>
     </div>
   </main>
+  <!-- A400 — a candidate's evaluation forms: the ones on file, then the upload (HR and management add; admin and the
+       director read). Files are private in Drive; js/hr-recruitment.js draws this from FlowAPI 201. -->
+  <div class="modal-overlay" id="evalModal" onclick="if (event.target === this) closeEvalForms()">
+    <div class="modal rec-eval" role="dialog" aria-modal="true" aria-labelledby="evalTitle">
+      <h3 id="evalTitle">Evaluation forms</h3>
+      <p class="rec-eval-sub" id="evalSub"></p>
+      <ul class="rec-eval-list" id="evalList"></ul>
+      <p class="rec-eval-empty" id="evalEmpty" hidden>No evaluation form on file yet.</p>
+      <div class="rec-eval-add" id="evalAdd" hidden>
+        <h4>Add an evaluation form</h4>
+        <div class="rec-eval-fields">
+          <div><label for="evalStage">For which stage</label><select id="evalStage"></select></div>
+          <div><label for="evalNote">Note <span style="font-weight:400;">(optional)</span></label><input type="text" id="evalNote" maxlength="190" placeholder="e.g. panel interview with Larry"></div>
+        </div>
+        <button type="button" class="btn btn-primary rec-eval-btn" id="evalPick" onclick="document.getElementById('evalFile').click()">Choose file and upload</button>
+        <input type="file" id="evalFile" hidden accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.webp,.gif,.txt,.csv,application/pdf,image/*" onchange="uploadEvalForm(this)">
+        <p class="rec-eval-hint">PDF, Word, Excel, PowerPoint or a photo of the form, up to 10 MB. It is kept private in Drive.</p>
+        <p class="rec-eval-msg" id="evalMsg" aria-live="polite"></p>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn btn-secondary rec-eval-btn" id="evalClose" onclick="closeEvalForms()">Close</button></div>
+    </div>
+  </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/ledger-nav.js"></script>
+  <script src="js/flow-api.js"></script>   <!-- A400 — the evaluation forms live in FlowAPI -->
   <script src="js/hr-recruitment.js"></script>
 </body>
 </html>
