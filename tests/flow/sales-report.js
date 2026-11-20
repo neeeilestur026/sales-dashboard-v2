@@ -282,6 +282,53 @@ eq('the report column: Mon submitted with its time, Tue due', [W.rows[0].report.
 ok('Thu to Sun are still to come', W.rows.slice(3).every(r => r.future));
 eq('totals against the week\'s targets', [W.totals.emails, W.totals.emailsTarget, W.totals.calls, W.totals.callsTarget, W.totals.booked, W.totals.reports, W.totals.reportDays], [83, 250, 35, 100, 2, 1, 3]);
 
+sec('7b · A402: a submitted day keeps the mail its 4:30 report counted');
+/* Neil, 20 Nov 2026: Kimberlyn's 4:30 report said 57 emails and the week table 1 for the same day (Mon: 50 and 19).
+   Mail filed out of the Sent folder (or deleted) after the report drops out of every later read. */
+const MC = (live, snap) => JSON.parse(run('JSON.stringify(srMailCount(' + JSON.stringify(live) + ', ' + JSON.stringify(snap) + '))'));
+const mails = (ids) => ids.map(id => ({ messageId: id, subject: 'S ' + id, sentAt: '2026-10-20T09:00:00+08:00' }));
+const K = (ids) => JSON.parse(run('JSON.stringify(' + JSON.stringify(ids) + '.map(srMailKey))'));
+eq('no report: the mailbox as it is now', MC(mails(['a', 'b']), null), { count: 2, ids: K(['a', 'b']), now: 2, submitted: null, gone: 0 });
+ok('  a fingerprint is short and steady, and two ids differ', K(['<abc@mail.example>'])[0] === K(['<abc@mail.example>'])[0] && K(['a'])[0] !== K(['b'])[0] && K(['x'.repeat(90)])[0].length <= 7);
+eq('the 20 Nov case: submitted 57 (before ids were kept), 1 in Sent now → 57, 56 gone', [MC(mails(['z']), { value: 57 }).count, MC(mails(['z']), { value: 57 }).now, MC(mails(['z']), { value: 57 }).gone], [57, 1, 56]);
+eq('  mail sent after the report is added when the report kept its ids: a b c, then c d', MC(mails(['c', 'd']), { value: 3, ids: K(['a', 'b', 'c']) }), { count: 4, ids: K(['a', 'b', 'c', 'd']), now: 2, submitted: 3, gone: 2 });
+eq('  a message with no id in today\'s read still counts once', MC([{ subject: 'x' }].concat(mails(['a'])), { value: 1, ids: K(['a']) }).count, 2);
+eq('  more in Sent now than submitted: the mailbox wins, nothing gone', [MC(mails(['a', 'b', 'c']), { value: 2 }).count, MC(mails(['a', 'b', 'c']), { value: 2 }).gone], [3, 0]);
+eq('  not read yet: the report\'s count, nothing called gone', MC(undefined, { value: 57 }), { count: 57, ids: [], now: null, submitted: 57, gone: 0 });
+eq('  neither: not counted', MC(null, null).count, null);
+eq('  a report with no email count (an empty tile) is ignored', MC(mails(['a']), { value: null, text: '—' }).count, 1);
+C.__wk2 = { '2026-10-19': { report: srBlankWith(14), submittedAt: '2026-10-19T08:31:00.000Z', snapshot: { emailsSent: { text: '50', value: 50, status: 'ok' } } },
+            '2026-10-20': { report: srBlankWith(20), submittedAt: '2026-10-20T09:52:00.000Z', snapshot: { emailsSent: { text: '57', value: 57, status: 'ok' } } } };
+C.__wm2 = { '2026-10-19': C.__emails45.slice(0, 19), '2026-10-20': C.__emails45.slice(0, 1) };
+const W2 = JSON.parse(run('JSON.stringify(srWeek(IX, ME, "2026-10-20", __wk2, __wm2))'));
+eq('the week: Mon 50 (19 still in Sent), Tue 57 (1 still in Sent)', W2.rows.slice(0, 2).map(r => [r.emails, r.emailsNow, r.emailsGone, r.emailsSubmitted]), [[50, 19, 31, 50], [57, 1, 56, 57]]);
+eq('  coloured as the counts they show', W2.rows.slice(0, 2).map(r => r.emailTone), ['ok', 'ok']);
+eq('  the week total adds the counts shown', W2.totals.emails, 107);
+eq('  a day not yet read shows the report\'s count at once', JSON.parse(run('JSON.stringify(srWeek(IX, ME, "2026-10-20", __wk2, {}).rows[1].emails)')), 57);
+{
+  const tl = JSON.parse(run('JSON.stringify(srPortalTiles(IX, ME, "2026-10-20", __emails45.slice(0, 1), 17*60, { value: 57 })[0])'));
+  eq('the tile on a submitted day: 57, listing the 1 still in Sent and saying why', [tl.value, tl.text, tl.items.length], [57, '57', 1]);
+  ok('  its note: 56 of the 57 no longer in the Sent folder', /^56 of the 57 were counted when the 4:30 report was submitted and are no longer in the Sent folder/.test(tl.note), tl.note);
+  const tu = JSON.parse(run('JSON.stringify(srPortalTiles(IX, ME, "2026-10-20", __emails45, 17*60)[0])'));
+  eq('  before the report the tile is the mailbox exactly as before (45, no note)', [tu.value, tu.note], [45, '']);
+  const sn = JSON.parse(run('JSON.stringify(srSnapshot(srPortalTiles(IX, ME, "2026-10-20", __emails45, 17*60), [], "2026-10-20", REP))'));
+  eq('  the 4:30 report keeps which mails it counted', [sn.emailsSent.value, sn.emailsSent.ids.length, sn.emailsSent.ids[0]], [45, 45, K(['m0'])[0]]);
+  {
+    const big = run('JSON.stringify(srSnapshot(srPortalTiles(IX, ME, "2026-10-20", Array.from({ length: 400 }, function (_, i) { return { messageId: "<" + i + ".SG2PR06MB5000000000000000000000000000000@SG2PR06MB5000000000.apcprd06.prod.outlook.com>" }; }), 17*60), srMineTiles(IX, ME, "2026-10-20", REP, 17*60), "2026-10-20", REP))');
+    ok('  400 long Outlook ids still leave the 4:30 numbers far under FlowAPI\'s 20,000 characters', big.length < 8000, big.length);
+  }
+  ok('  and only the email tile carries ids', Object.keys(sn).filter(k => sn[k] && sn[k].ids).join() === 'emailsSent');
+  const many = JSON.parse(run('JSON.stringify(srMailCount(Array.from({ length: 400 }, function (_, i) { return { messageId: "x" + i }; }), null))'));
+  eq('  at most 300 ids are kept, the count is still all 400', [many.count, many.ids.length], [400, 300]);
+}
+{
+  const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+  ok('on the page: the week cell says how many are still in Sent, with the reason in its title',
+     /' in Sent now<\/span><\/td>'/.test(SRC) && /counted when the 4:30 report was submitted\. /.test(SRC) && /the others were moved to another folder or deleted\./.test(SRC));
+  ok('  and the tiles get the submitted count of that day only once it was submitted',
+     /subMail = saved && saved\.submittedAt && saved\.snapshot \? saved\.snapshot\.emailsSent : null/.test(SRC) && /srPortalTiles\(ix, me, day, SR_UI\.sent, now, subMail\)/.test(SRC));
+}
+
 sec('8 · the page');
 run('SR_UI.ix = IX; SR_UI.me = ME; SR_UI.day = "2026-10-20"; SR_UI.state = REP; SR_UI.sent = __emails45.slice(0, 3); SR_UI.received = __in; SR_UI.saved = {}; SR_UI.nums = _srNums();');
 const tile = run('_srTileHtml(srPortalTiles(IX, ME, "2026-10-20", __emails45, 17*60)[0])');
