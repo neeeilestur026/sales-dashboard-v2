@@ -360,10 +360,55 @@ function _srPace(ix, day, nowMin, value, target, red) {
 }
 function _srTile(key, label, o) { return Object.assign({ key, label, value: 0, text: '0', bar: null, target: '', status: 'none', note: '', items: [] }, o || {}); }
 
-/** Row A — the portal fills these. `emails` is the day's sent list, or null when the mailbox could not be read. */
-function srPortalTiles(ix, me, day, emails, nowMin) {
+/* A402 — A DAY'S SENT MAIL IS COUNTED ONCE IT HAS BEEN SEEN. Neil, 20 Nov 2026: Kimberlyn's 4:30 report said 57 emails
+   and the week table under it said 1 for the same day; Monday's report said 50 and the table 19. The count is a read of
+   the Sent folder, and mail that leaves that folder later (filed into another folder, or deleted) drops out of every
+   later read — on 16–20 Nov every re-read was lower than the submitted count, never higher. The submitted count was
+   read from the mailbox at the time, so a submitted day keeps it: the day's mail is everything seen in either read
+   (by Message-ID fingerprint when the report kept them, A402 on), and `gone` says how much is no longer in the Sent folder. */
+const SR_MAIL_IDS_MAX = 300;   // how many fingerprints a report keeps (about 3,000 characters of FlowAPI's 20,000 for the 4:30 numbers)
+/** A short fingerprint of a Message-ID (FNV-1a, base 36, about 7 characters): a Message-ID runs to 90 characters and the 4:30
+ *  numbers may be at most 20,000 (_POW_MAX_PORTAL), so the report keeps these instead. Two of one day's mails sharing one is
+ *  about a one-in-a-million chance, and would only count them once. */
+function srMailKey(id) {
+  const t = _srS(id);
+  if (!t) return '';
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
+}
+/** {count, ids, now, submitted, gone}. `live` is the day's sent list (null/undefined when not read); `snap` is the
+ *  submitted report's emailsSent entry ({value, ids?}) or nothing. count is null only when neither exists. */
+function srMailCount(live, snap) {
+  const L = Array.isArray(live) ? live : null;
+  const s = snap && typeof snap === 'object' ? snap : null;
+  const sv = s && s.value !== null && s.value !== undefined && s.value !== '' ? Math.max(0, Math.round(_srNum(s.value))) : null;
+  const nowIds = L ? L.map(e => srMailKey(e && e.messageId)).filter(Boolean) : [];
+  if (!L && sv === null) return { count: null, ids: [], now: null, submitted: null, gone: 0 };
+  let count, ids;
+  if (s && Array.isArray(s.ids) && s.ids.length) {
+    const seen = {};
+    ids = s.ids.map(_srS).concat(nowIds).filter(i => i && !seen[i] && (seen[i] = 1));
+    count = Math.max(ids.length + (L ? L.length - nowIds.length : 0), sv || 0);   // a message with no id counts once, from today's read
+  } else {
+    ids = nowIds;
+    count = Math.max(L ? L.length : 0, sv || 0);
+  }
+  const now = L ? L.length : null;
+  return { count, ids: ids.slice(0, SR_MAIL_IDS_MAX), now, submitted: sv, gone: now === null ? 0 : Math.max(0, count - now) };
+}
+/** The plain sentence for mail no longer in the Sent folder, or ''. */
+function srMailGoneNote(mc) {
+  if (!mc || !mc.gone) return '';
+  return mc.gone + ' of the ' + mc.count + ' were counted when the 4:30 report was submitted and are no longer in the Sent folder (moved to another folder or deleted), so they are not listed here.';
+}
+
+/** Row A — the portal fills these. `emails` is the day's sent list, or null when the mailbox could not be read.
+ *  A402 — `submitted` is the day's submitted emailsSent entry, when the 4:30 report went in: see srMailCount. */
+function srPortalTiles(ix, me, day, emails, nowMin, submitted) {
   const c = ix.cfg;
   const em = Array.isArray(emails) ? emails : null;
+  const mc = srMailCount(em, submitted);
   const rfqs = _srPrsOn(ix, me, day, 'owner'), made = _srPrsOn(ix, me, day, 'made');
   const sent = srQuotesSent(ix, me, day);
   const week = srWeekDays(day).filter(d => d <= day).reduce((a, d) => a.concat(srQuotesSent(ix, me, d)), []);
@@ -373,10 +418,12 @@ function srPortalTiles(ix, me, day, emails, nowMin) {
   const w48 = srWithin48(ix, me, day), w48ok = w48.filter(x => x.ok).length, share = w48.length ? w48ok / w48.length : null;
   const open = srOpenQuotes(ix, me, day), openValue = open.reduce((s, q) => s + _srNet(q), 0);
   return [
-    _srTile('emailsSent', 'Emails sent', em ? {
-      value: em.length, text: String(em.length), bar: Math.min(1, em.length / c.srEmailsDay), target: c.srEmailsDay + ' a day',
-      status: _srPace(ix, day, nowMin, em.length, c.srEmailsDay, c.srEmailsDayRed),
-      items: em.map(e => ({ time: srClock(e.sentAt), what: _srS(e.subject) || '(no subject)', client: _srS(e.name || e.recipient) }))
+    _srTile('emailsSent', 'Emails sent', mc.count !== null ? {
+      value: mc.count, text: String(mc.count), bar: Math.min(1, mc.count / c.srEmailsDay), target: c.srEmailsDay + ' a day',
+      status: _srPace(ix, day, nowMin, mc.count, c.srEmailsDay, c.srEmailsDayRed),
+      items: (em || []).map(e => ({ time: srClock(e.sentAt), what: _srS(e.subject) || '(no subject)', client: _srS(e.name || e.recipient) })),
+      ids: mc.ids,                                                       // A402 — kept by the 4:30 report
+      note: em ? srMailGoneNote(mc) : 'The work mailbox could not be read just now; this is the count from the 4:30 report.'
     } : { value: null, text: '—', target: c.srEmailsDay + ' a day', status: 'nr', note: 'The work mailbox could not be read, so sent emails cannot be counted.' }),
     _srTile('rfqs', 'RFQs received', { value: rfqs.length, text: String(rfqs.length), items: rfqs, note: 'Purchase requests created that day for your clients (one PR is one client RFQ).' }),
     _srTile('prsMade', 'PRs made', { value: made.length, text: String(made.length), items: made, note: 'Purchase requests you created that day.' }),
@@ -462,7 +509,10 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
 /** Every number on the page, as text and value — what the 4:30 report fixes when it is submitted. */
 function srSnapshot(portal, mine, day, report) {
   const out = { day, at: '', linked: srLinked(report, day) };
-  portal.concat(mine).forEach(t => { out[t.key] = { text: t.text, value: t.value, status: t.status }; });
+  portal.concat(mine).forEach(t => {
+    out[t.key] = { text: t.text, value: t.value, status: t.status };
+    if (Array.isArray(t.ids) && t.ids.length) out[t.key].ids = t.ids.slice(0, SR_MAIL_IDS_MAX);   // A402 — which mails the count was
+  });
   return out;
 }
 
@@ -625,10 +675,13 @@ function srWeek(ix, me, day, reports, emailsByDay) {
     const calls = _srLive(rep).filter(_srOn(d)).filter(l => l.type === 'Call');
     const nCalls = calls.length + srCallLog(ix, me, d).length;
     const fu = srFollowUps(ix, me, d, rep), fuOther = srOtherFollowUps(ix, me, d, rep).length;
-    const em = emailsByDay && Array.isArray(emailsByDay[d]) ? emailsByDay[d].length : null;
+    /* A402 — a submitted day keeps the mail its 4:30 report counted (srMailCount) */
+    const mc = srMailCount(emailsByDay && emailsByDay[d], saved && saved.submittedAt && saved.snapshot ? saved.snapshot.emailsSent : null);
+    const em = mc.count;
     const weekend = srDow(d) === 'Sat' || srDow(d) === 'Sun';
     return {
-      day: d, emails: em, calls: nCalls, fuDone: fu.filter(x => x.done).length, fuDue: fu.length, fuOther,
+      day: d, emails: em, emailsNow: mc.now, emailsGone: mc.gone, emailsSubmitted: mc.submitted,
+      calls: nCalls, fuDone: fu.filter(x => x.done).length, fuDue: fu.length, fuOther,
       quotes: srQuotesSent(ix, me, d).length, booked: calls.filter(l => l.result === 'Booked').length + rep.bookings.length,
       report: saved && saved.submittedAt ? { state: 'done', time: srClock(saved.submittedAt) } : weekend ? { state: 'none' } : { state: 'due' },
       emailTone: em === null || weekend ? '' : em < c.srEmailsDayRed ? 'watch' : em >= c.srEmailsDay ? 'ok' : '',
@@ -649,5 +702,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, SR_FOLLOW_THEN, srFollowRule, srFollowStep, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, SR_LINK_KINDS, srLinkItems, srLinkPick, srLinkFind, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
-                     srWeekDays, srShiftWeekend, srAddDays };
+                     srWeekDays, srShiftWeekend, srAddDays, srMailCount, srMailGoneNote, srMailKey, SR_MAIL_IDS_MAX };
 }

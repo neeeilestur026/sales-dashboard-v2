@@ -228,7 +228,8 @@ function _srSetState() {
 function _srNums() {
   const ix = SR_UI.ix, me = SR_UI.me, day = SR_UI.day, now = _srNowMin(), st = SR_UI.state;
   const dt = srDayType(ix, me, day, st);
-  return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now), mine: srMineTiles(ix, me, day, st, now, dt),
+  const saved = SR_UI.saved[day], subMail = saved && saved.submittedAt && saved.snapshot ? saved.snapshot.emailsSent : null;   // A402
+  return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now, subMail), mine: srMineTiles(ix, me, day, st, now, dt),
            fu: srFollowUps(ix, me, day, st), other: srOtherFollowUps(ix, me, day, st), linked: srLinked(st, day) };
 }
 function _srLiveNumbers() { const n = SR_UI.nums || _srNums(); return srSnapshot(n.portal, n.mine, SR_UI.day, SR_UI.state); }
@@ -658,10 +659,14 @@ function _srRenderWeek() {
   const td = (v, tone) => '<td class="' + (tone || '') + '">' + v + '</td>';
   const noMail = SR_UI.sentState === 'setup';   // "…" only while a day's mail is being read; "—" when it cannot be
   const mailCell = (r) => (r.emails !== null ? r.emails : noMail || SR_UI.weekEmails[r.day] === null ? '—' : '<span class="sr-dim">…</span>');
+  /* A402 — a submitted day keeps the mail its 4:30 report counted; say plainly when the Sent folder holds fewer now */
+  const mailTd = (r) => !r.emailsGone ? td(mailCell(r), r.emailTone)
+    : '<td class="' + (r.emailTone || '') + '" title="' + _srE(r.emails + ' counted when the 4:30 report was submitted. ' + r.emailsNow + ' of them ' + (r.emailsNow === 1 ? 'is' : 'are') +
+        ' still in the Sent folder; the others were moved to another folder or deleted.') + '">' + r.emails + '<span class="sr-sub">' + r.emailsNow + ' in Sent now</span></td>';
   tb.innerHTML = w.rows.map(r => {
     const lab = '<th scope="row"' + (r.day === SR_UI.day ? ' class="cur"' : '') + '>' + srDow(r.day) + ' ' + Number(r.day.slice(8)) + '</th>';
     if (r.future) return '<tr class="future">' + lab + '<td colspan="6">—</td></tr>';
-    return '<tr>' + lab + td(mailCell(r), r.emailTone) + td(r.calls, r.callTone) +
+    return '<tr>' + lab + mailTd(r) + td(r.calls, r.callTone) +
       td((r.fuDue ? r.fuDone + ' of ' + r.fuDue : r.fuOther ? '' : '—') + (r.fuOther ? (r.fuDue ? ' ' : '') + '+' + r.fuOther : ''), r.fuDue ? (r.fuDone === r.fuDue ? 'ok' : 'red') : '') + td(r.quotes) + td(r.booked) +
       td(r.report.state === 'done' ? '✓ ' + _srE(r.report.time) : r.report.state === 'due' ? 'due' : '—', r.report.state === 'done' ? 'ok' : r.report.state === 'due' ? 'watch' : '') + '</tr>';
   }).join('') + '<tr class="total"><th scope="row">Week</th>' +
