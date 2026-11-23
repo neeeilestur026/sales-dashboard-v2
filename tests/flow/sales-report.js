@@ -179,7 +179,15 @@ eq('quotes within 48 h: Q-NEW, 25 h from PR-A', [t(A, 'within48').text, t(A, 'wi
 eq('open quotations: his Sent ones, not won, lost, Kim\'s or demo (400k+300k+200k+50k+60k+100k+250k)', [t(A, 'openQuotes').value, t(A, 'openQuotes').status], [1360000, 'red']);
 const mine = (rep, now) => JSON.parse(run('JSON.stringify(srMineTiles(IX, ME, "2026-10-20", ' + rep + ', ' + (now || '17 * 60') + '))'));
 const withCalls = (n) => 'Object.assign(srBlank(), { lines: Array.from({ length: ' + n + ' }, (_, i) => srNewLine({ type: "Call", company: "C" + i }, "G", "2026-10-20T0" + (i % 9) + ":00:00.000Z")) })';
-eq('row B in the prompt\'s order, and A371 Other tasks last', mine('REP').map(x => x.key), ['calls', 'followUps', 'booked', 'visits', 'otherTasks']);
+eq('row B in the prompt\'s order, A371 Other tasks, then A403 Meetings and surveys last', mine('REP').map(x => x.key), ['calls', 'followUps', 'booked', 'visits', 'otherTasks', 'meetings']);
+/* A403 — the workbook's other activity types are lines of their own, with a next action, counted on one tile */
+run('var REP3 = srBlank(); REP3.lines.push(srNewLine({ type: "Site survey", company: "Mine D", person: "Engr. Cruz", result: "Measured", nextAction: "Send the layout", nextDate: "2026-10-22" }, "Gerald Lucena", "2026-10-20T05:00:00.000Z"));' +
+    'REP3.lines.push(srNewLine({ type: "Collection follow-up", company: "Cement E", result: "Promised Friday" }, "Gerald Lucena", "2026-10-20T06:00:00.000Z"));' +
+    'REP3.lines.push(srNewLine({ type: "Online meeting", company: "Plant B Inc", nextAction: "Demo" }, "Gerald Lucena", "2026-10-20T07:00:00.000Z"));');
+ok('A403: the four new types are kept as typed (not turned into a call)', run('REP3.lines.map(function (l) { return l.type; }).join()') === 'Site survey,Collection follow-up,Online meeting');
+ok('A403: a line keeps its next action, and an edit remembers the old one', run('(function(){ var l = REP3.lines[0]; var a = l.nextAction; srEditLine(l, { nextAction: "Call the planner" }, "changed plan", "2026-10-20T08:00:00.000Z"); return a === "Send the layout" && l.nextAction === "Call the planner" && l.history[0].before.nextAction === "Send the layout"; })()'));
+ok('A403: one tile counts the meetings, surveys and collection follow-ups', run('(function(){ var t = srMineTiles(IX, ME, "2026-10-20", REP3, 17 * 60).filter(function (x) { return x.key === "meetings"; })[0]; return t.value === 3 && t.label === "Meetings and surveys" && t.items[0].what === "Site survey"; })()'));
+ok('A403: they are not calls or visits', run('(function(){ var g = function (r, k) { return srMineTiles(IX, ME, "2026-10-20", r, 17 * 60).filter(function (x) { return x.key === k; })[0].value; }; return g(REP3, "calls") === g(srBlank(), "calls") && g(REP3, "visits") === g(srBlank(), "visits"); })()'));
 eq('calls: 13 lines + 1 on the old page = 14 on a finished day is red', [t(mine(withCalls(13)), 'calls').value, t(mine(withCalls(13)), 'calls').status], [14, 'red']);
 eq('  15 is not red', t(mine(withCalls(14)), 'calls').status, 'watch');
 eq('  20 is on pace', t(mine(withCalls(19)), 'calls').status, 'ok');

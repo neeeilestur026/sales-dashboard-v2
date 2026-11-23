@@ -27,6 +27,7 @@ from pdf_generators.flow_pr_pdf import build_pr_pdf_bytes
 from pdf_generators.payment_request_pdf import build_payment_request_pdf
 from pdf_generators.travel_allowance_pdf import build_travel_allowance_pdf_bytes
 from pdf_generators.leadgen_report_pdf import build_leadgen_week_pdf_bytes, build_leadgen_lead_pdf_bytes   # A277
+from pdf_generators.sales_plan_xlsx import build_sales_plan_xlsx   # A403
 from pdf_generators.utils import sanitize_filename, ph_date_ymd, ph_date_long
 from flask import g
 from blueprints.session_auth import require_session, display_name_for, INTERNAL_SHARED_SECRET
@@ -667,6 +668,7 @@ SECURED_ACTIONS = [
     "getBulletin", "getBulletinFile", "saveBulletin", "archiveBulletin", "ackBulletin", "previewBulletinMemos", "importBulletinMemos",   # A390
     "getShutdowns", "saveShutdown", "archiveShutdown",   # A391 — the shutdown calendar
     "getFollowUpGuide", "setFollowUpPlan",   # A393 — the follow-up guide
+    "getSalesPlan", "getSalesActivity", "saveSalesPlanTarget", "saveSalesPlanAccount", "saveSalesOpp", "archiveSalesOpp",   # A403 — the Sales plan
     "getClientHub", "getClientHubFile", "saveClientAccred", "saveClientAccredFile", "archiveClientAccredFile",   # A396 — the client information hub
     "getCandidateEvals", "getCandidateEvalFile", "saveCandidateEval", "archiveCandidateEval",   # A400 — recruitment evaluation forms
     "submitCommissionRequest", "submitDailyReport", "submitForPricing", "submitPOApproval", "submitPaymentRequest",
@@ -946,6 +948,78 @@ def leadgen_report_pdf():
     week = (data.get("week") or {}) if isinstance(data, dict) else {}
     stem = sanitize_filename(_s(week.get("start")) or "week")
     return _pdf_response(pdf_bytes, f"LeadGen_Week_{stem}.pdf")
+
+
+# A403 — the Sales plan as Neil's Individual Sales Strategy Workbook. The two reads go to FlowAPI as the SIGNED-IN person
+# (the session's role and name, never the browser's), so a rep gets their own plan and no cost, exactly as on the page.
+SALES_PLAN_ROLES = {"sales", "director", "management"}
+
+
+def _sales_plan_read(action, params, session):
+    body = dict(params)
+    body["action"] = action
+    body["actorRole"] = str(session.get("role") or "").strip().lower()
+    body["actorName"] = display_name_for(session.get("username", ""))
+    body["actorUsername"] = session.get("username", "")
+    body["flowSecret"] = INTERNAL_SHARED_SECRET
+    resp = gs_call(FLOW_APPS_SCRIPT_URL, json=body, timeout=90)
+    text = resp.text or ""
+    if text.lstrip().startswith("<"):
+        raise RuntimeError("the backend returned an error page; try again in a minute")
+    return json.loads(text)
+
+
+@flow_bp.route("/flow/sales-plan-xlsx", methods=["POST"])
+@require_session()
+def sales_plan_xlsx():
+    session = g.session
+    role = str(session.get("role") or "").strip().lower()
+    if role not in SALES_PLAN_ROLES:
+        return jsonify({"success": False, "message": "The sales plan is for sales, the director and management."}), 403
+    if not FLOW_APPS_SCRIPT_URL or not INTERNAL_SHARED_SECRET:
+        return jsonify({"success": False, "message": "The sales plan is not configured on the server."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        year = int(data.get("year") or datetime.now().year)
+    except (TypeError, ValueError):
+        year = datetime.now().year
+    user = str(data.get("user") or "").strip()[:80]
+    params = {"year": year}
+    if user and role != "sales":
+        params["user"] = user
+    today = datetime.now().strftime("%Y-%m-%d")
+    end = min(today, f"{year}-12-31")
+    from datetime import timedelta
+    start = max(f"{year}-01-01", (datetime.strptime(end, "%Y-%m-%d") - timedelta(days=91)).strftime("%Y-%m-%d"))   # getSalesActivity reads 92 days at most
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_plan = pool.submit(_sales_plan_read, "getSalesPlan", params, session)
+            f_act = pool.submit(_sales_plan_read, "getSalesActivity", dict(params, **{"from": start, "to": end}), session) if start <= end else None
+            plan = f_plan.result()
+            act = f_act.result() if f_act else {"success": True, "rows": [], "from": "", "to": ""}
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "timedOut": True, "message": "Google took too long to answer. Try the download again in a minute."}), 504
+    except Exception as exc:
+        logger.exception("sales plan workbook: read failed")
+        return jsonify({"success": False, "message": f"The plan could not be read: {exc}"}), 502
+    if not (isinstance(plan, dict) and plan.get("success")):
+        return jsonify({"success": False, "message": (plan or {}).get("message") or "The plan could not be read."}), 400
+    if not (isinstance(act, dict) and act.get("success")):
+        act = {"success": True, "rows": [], "from": start, "to": end}
+    try:
+        xlsx = build_sales_plan_xlsx(plan, act, prepared_by=display_name_for(session.get("username", "")), today=today)
+    except Exception as exc:
+        logger.exception("sales plan workbook: build failed")
+        return jsonify({"success": False, "message": f"The workbook could not be built: {exc}"}), 500
+    name = sanitize_filename(f"Sales plan {plan.get('year')} - {plan.get('user')}") + ".xlsx"
+    resp = make_response(xlsx)
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    import unicodedata
+    from urllib.parse import quote
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").replace('"', "'") or "Sales plan.xlsx"
+    resp.headers["Content-Disposition"] = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return resp
 
 
 @flow_bp.route("/flow/leadgen-lead-pdf", methods=["POST"])

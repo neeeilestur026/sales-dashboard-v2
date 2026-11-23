@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/payslip-card.css">
   <link rel="stylesheet" href="css/new-daily-report-card.css">
   <link rel="stylesheet" href="css/follow-up-guide.css">   <!-- A393: the follow-up guide card -->
+  <link rel="stylesheet" href="css/sales-plan.css">   <!-- A403: the Sales target card -->
   <link rel="stylesheet" href="css/sales-home.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
@@ -77,6 +78,9 @@
             Submit daily report
           </a>
         </header>
+
+        <!-- A403: this month and the year against the Sales plan's targets (js/sales-plan-card.js); hidden until it can be read -->
+        <section class="hx-glass" id="salesPlanCard" style="display:none;"></section>
 
         <!-- A146: what needs you — the unified action center, mounted by sales-home-page.js -->
         <section class="hx-glass" id="inbox">
@@ -206,6 +210,8 @@
   <script src="js/shutdowns-card.js"></script>       <!-- A391: Coming shutdowns -->
   <script src="js/follow-up-guide-model.js"></script>   <!-- A393: the follow-up guide, drawn -->
   <script src="js/follow-up-guide-card.js"></script>    <!-- A393: Today's follow-ups -->
+  <script src="js/sales-plan-model.js"></script>   <!-- A403: the Sales target card's arithmetic -->
+  <script src="js/sales-plan-card.js"></script>    <!-- A403: Sales target -->
   <script src="js/auth.js"></script>
   <script src="js/ledger-nav.js"></script>
   <script src="js/dashboard.js"></script>

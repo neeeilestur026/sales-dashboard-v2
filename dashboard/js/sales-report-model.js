@@ -10,7 +10,7 @@
  *
  * A tile is { key, label, value, text, bar (0..1, or null), target, status, note, items[] }:
  *   status  'ok' (on pace) · 'watch' · 'red' (past the red line) · 'none' (no target) · 'nr' (cannot be counted)
- * A log line is { id, type, company, person, note, result, reason, nextDate, linkType, linkId, linkLabel, loggedAt,
+ * A log line is { id, type, company, person, note, result, reason, nextDate, nextAction, linkType, linkId, linkLabel, loggedAt,
  *   createdBy, editedAt, editReason, voidedAt, voidReason, history[] } — never deleted; an edit or a void keeps a
  *   reason and what the line said before.
  */
@@ -26,7 +26,11 @@ const SR_TARGETS = {
 };
 const SR_FOLLOW_DAYS = [3, 5, 7, 14];              // A393 — after the sent date, then every SR_FOLLOW_THEN days until won or lost;
 const SR_FOLLOW_THEN = 7;                          // a weekend due date moves to Monday (FlowAPI's follow-up guide uses the same)
-const SR_LINE_TYPES = ['Call', 'Performance call', 'Quote result', 'Sales order', 'Visit', 'Other task'];   // A371 — Other task (Neil, 26 Oct: "add other tasks")
+const SR_LINE_TYPES = ['Call', 'Performance call', 'Quote result', 'Sales order', 'Visit', 'Other task',   // A371 — Other task (Neil, 26 Oct: "add other tasks")
+                       'Online meeting', 'Technical meeting', 'Site survey', 'Collection follow-up'];   // A403 — the workbook's other activity types
+/* A403 — Neil, 23 Nov 2026 (the Sales plan's Daily Activity): meetings, site surveys and collection follow-ups are their own
+   lines, logged from one "+ Meeting or survey" dialog and counted on one tile. */
+const SR_MEETING_TYPES = ['Online meeting', 'Technical meeting', 'Site survey', 'Collection follow-up'];
 const SR_CALL_RESULTS = ['Reached', 'No answer', 'Booked', 'Call back'];
 const SR_VISIT_RESULTS = ['RFQ promised', 'RFQ on site', 'Need later', 'No need'];
 const SR_LOST_REASONS = ['Price', 'Time', 'Spec', 'Other'];
@@ -163,7 +167,7 @@ function srFill(saved) {
   if (o.legacy) b.legacy = o.legacy;
   return b;
 }
-const SR_LINE_FIELDS = ['type', 'company', 'person', 'note', 'result', 'reason', 'nextDate', 'linkType', 'linkId', 'linkLabel'];
+const SR_LINE_FIELDS = ['type', 'company', 'person', 'note', 'result', 'reason', 'nextDate', 'nextAction', 'linkType', 'linkId', 'linkLabel'];   // A403 — nextAction
 /** A new line, stamped now. */
 function srNewLine(f, who, nowIso) {
   const line = { id: 'L' + Date.parse(nowIso).toString(36) + Math.random().toString(36).slice(2, 6), loggedAt: nowIso, createdBy: _srS(who),
@@ -502,6 +506,11 @@ function srMineTiles(ix, me, day, report, nowMin, dayType) {
     _srTile('otherTasks', 'Other tasks', {
       value: lines.filter(l => l.type === 'Other task').length, text: String(lines.filter(l => l.type === 'Other task').length), target: 'typed lines', status: 'none',
       items: lines.filter(l => l.type === 'Other task').map(l => ({ time: srClock(l.loggedAt), client: l.company, what: l.note, result: l.result }))
+    }),
+    /* A403 — online and technical meetings, site surveys, collection follow-ups */
+    _srTile('meetings', 'Meetings and surveys', {
+      value: lines.filter(l => SR_MEETING_TYPES.indexOf(l.type) >= 0).length, text: String(lines.filter(l => SR_MEETING_TYPES.indexOf(l.type) >= 0).length), target: 'typed lines', status: 'none',
+      items: lines.filter(l => SR_MEETING_TYPES.indexOf(l.type) >= 0).map(l => ({ time: srClock(l.loggedAt), client: l.company, person: l.person, what: l.type + (l.note ? ': ' + l.note : ''), result: l.result, ref: l.linkId }))
     })
   ];
 }
