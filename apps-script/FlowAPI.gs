@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 201;   // A400 — recruitment evaluation forms, one or more per candidate (HR). History: see CHANGELOG.
+var FLOW_VERSION = 202;   // A403 — the Sales plan (the Individual Sales Strategy Workbook). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -637,7 +637,14 @@ var SCHEMA = {
   ClientAccredLog: ['Log No', 'Key', 'Kind', 'From', 'To', 'Note', 'By', 'At'],
   // A400 — recruitment evaluation forms: private Drive files filed under the candidate's key (C + when they were added)
   CandidateEvals: ['Eval No', 'Candidate Key', 'Candidate', 'Position', 'Stage', 'File ID', 'File Name', 'File Type', 'File Size', 'Note',
-                   'Client Ref', 'Uploaded By', 'Uploaded At', 'Archived By', 'Archived At']
+                   'Client Ref', 'Uploaded By', 'Uploaded At', 'Archived By', 'Archived At'],
+  // A403 — the Sales plan: each rep's year target and month split (SalesPlan, set by the director and management), each
+  // account's tier / target / focus / status where the rep changed the automatic one (SalesPlanAccounts), and the pipeline's
+  // typed leads and the rep's own figures on a quotation or purchase request (SalesOpps). Clock ids OPP-; no Script Properties.
+  SalesPlan: ['Owner', 'Year', 'Annual Target', 'Month Split JSON', 'Tier Targets JSON', 'Note', 'Created By', 'Created At', 'Updated By', 'Updated At'],
+  SalesPlanAccounts: ['Owner', 'Year', 'Client No', 'Company', 'Tier', 'Target', 'Focus', 'Status', 'Updated By', 'Updated At'],
+  SalesOpps: ['Opp No', 'Owner', 'Source', 'Record No', 'Client No', 'Company', 'Project', 'Category', 'Value', 'Stage', 'Probability', 'Expected Close',
+              'Decision Maker', 'Next Action', 'Next Action Date', 'Notes', 'Client Ref', 'Created By', 'Created At', 'Updated By', 'Updated At', 'Closed At', 'Archived At']
 };
 
 // ── Chart of Accounts (seeded) ───────────────────────────────────────────────
@@ -889,6 +896,7 @@ var _SECURED = {
   getShutdowns: 1, saveShutdown: 1, archiveShutdown: 1,   // A391 — the shutdown calendar (reads secured: names and plans)
   getClientHub: 1, getClientHubFile: 1, saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client information hub (reads secured: clients' details, files)
   getCandidateEvals: 1, getCandidateEvalFile: 1, saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms (reads secured: candidates' assessments)
+  getSalesPlan: 1, getSalesActivity: 1, saveSalesPlanTarget: 1, saveSalesPlanAccount: 1, saveSalesOpp: 1, archiveSalesOpp: 1,   // A403 — the Sales plan (reads secured: sales, costs, pipeline by rep)
   getFollowUpGuide: 1, setFollowUpPlan: 1,   // A393 — the follow-up guide (the read is secured: clients and quotations by rep)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
@@ -2320,7 +2328,8 @@ function _fugGuide(m, who, cfg, today) {
     var st = String(r['Status'] || '').trim(), sent = _lgDayOf(r['Sent At']);
     if (st === 'Sent' && String(r['Result'] || '') !== 'Won' && !m.hasSO[no] && sent) openQuotes.push({ row: r, no: no, clientNo: cno, sent: sent });
   });
-  var lineKind = { 'Call': 'Call', 'Performance call': 'Call', 'Quote result': 'Quote result', 'Sales order': 'Sales order', 'Visit': 'Visit', 'Other task': 'Task' };
+  var lineKind = { 'Call': 'Call', 'Performance call': 'Call', 'Quote result': 'Quote result', 'Sales order': 'Sales order', 'Visit': 'Visit', 'Other task': 'Task',
+                   'Online meeting': 'Meeting', 'Technical meeting': 'Meeting', 'Site survey': 'Site survey', 'Collection follow-up': 'Collection follow-up' };   // A403
   var vpClient = {};
   m.visits.forEach(function (r) { vpClient[String(r['Visit Plan No'] || '').trim()] = String(r['Client No'] || '').trim(); });
   m.reports.forEach(function (r) {
@@ -2841,6 +2850,652 @@ function getCandidateEvalFile(p) {
   } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
 }
 /* ═══ end A400 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A403 · the Sales plan (the Individual Sales Strategy Workbook in the portal, FlowAPI 202) ═══════════════════════
+   Neil, 23 Nov 2026: his "2027 Individual Sales Strategy Workbook" (50 customer accounts, a ₱25M year) adapted to the
+   portal, filled in by itself wherever the portal already knows the answer. His decisions: a sale is a SALES ORDER on its
+   date, before VAT (the order lines are before VAT — VAT is added on the invoice — so an order counts as recorded); cost
+   and gross profit only for salesPlanCostRoles (director, management), left out of anyone else's reply; the director and
+   management set each rep's year target and its month split; reps keep their own accounts' tier, target, focus and status.
+   What fills itself:
+    · accounts — the rep's live Client Book (sector, main contact), the director's follow-up rank (1–10 A, 11–25 B,
+      26–50 C, salesPlanTierRanks), the target by tier (salesPlanTierTargets), last and next visit (visit plans and the
+      daily report's visits), status (On hold from the book, else Active with a sale in salesPlanDormantDays, Dormant
+      with an older one, Prospect with none), the year's sales, and the latest quotation subjects as focus suggestions;
+    · sales — every sales order of the year credited to the quotation's owner, else the Client Book owner of the customer
+      (_cdKey exact, then _canonKey when one rep has it), else to nobody (shown to the director and management only);
+      invoice numbers, products and payment status (ARAging) beside it;
+    · pipeline — the rep's open quotations (sent or approved, not won, no sales order, not closed; net of discount),
+      live purchase requests not yet quoted, and leads the rep types; stage, odds (salesPipelineOdds), expected close
+      (sent + salesPipelineCloseDays) and the next follow-up (day 3/5/7/14 then every 7) by default, each overridable.
+   Overrides live in three tabs; nothing else is written. Clock ids SPA- / OPP-; no Script Properties. */
+var _SP_ROLES = ['sales', 'director', 'management'], _SP_OVER = ['director', 'management'];
+var _SP_STAGES = ['Lead', 'Qualified', 'Technical Review', 'Quotation', 'Negotiation', 'Closed Won', 'Closed Lost'];
+var _SP_OPEN_STAGES = ['Lead', 'Qualified', 'Technical Review', 'Quotation', 'Negotiation'];
+var _SP_STATUSES = ['Active', 'Prospect', 'Dormant', 'On Hold'], _SP_TIERS = ['A', 'B', 'C'];
+var _SP_CATEGORIES = ['Tools and equipment', 'Spare parts', 'Service', 'Hire', 'Project', 'Other'];
+var _SP_ODDS = { 'Lead': 10, 'Qualified': 20, 'Technical Review': 30, 'Quotation': 40, 'Negotiation': 60, 'Closed Won': 100, 'Closed Lost': 0 };
+/** 'A 1000000; B 600000' or 'Lead 10; Quotation 40' → { A: 1000000, … } over the defaults; a bad entry keeps the default. */
+function _spPairs(v, base) {
+  var out = {}; Object.keys(base).forEach(function (k) { out[k] = base[k]; });
+  String(v == null ? '' : v).split(';').forEach(function (part) {
+    var m = String(part).trim().match(/^(.+?)\s*[:=]?\s+(-?[\d.,]+)\s*%?$/);
+    if (!m) return;
+    var k = m[1].trim(), n = Number(m[2].replace(/,/g, ''));
+    Object.keys(base).forEach(function (b) { if (b.toLowerCase() === k.toLowerCase() && isFinite(n) && n >= 0) out[b] = n; });
+  });
+  return out;
+}
+function _spCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  var n = function (v, def, lo, hi) { var x = Number(v); return v !== '' && v !== null && v !== undefined && isFinite(x) && x >= lo && x <= hi ? x : def; };
+  var ranks = String(d.salesPlanTierRanks == null || d.salesPlanTierRanks === '' ? '10,25,50' : d.salesPlanTierRanks).split(',').map(function (x) { return parseInt(x, 10); });
+  if (!(ranks.length === 3 && ranks[0] > 0 && ranks[1] > ranks[0] && ranks[2] > ranks[1] && ranks[2] <= 500)) ranks = [10, 25, 50];
+  var odds = _spPairs(d.salesPipelineOdds, _SP_ODDS);
+  Object.keys(odds).forEach(function (k) { if (odds[k] > 100) odds[k] = _SP_ODDS[k]; });
+  return { on: _bbSwitch(d.salesPlan), roles: _bbList(d.salesPlanRoles, _SP_ROLES), targetRoles: _bbList(d.salesPlanTargetRoles, _SP_OVER),
+           costRoles: _bbList(d.salesPlanCostRoles, _SP_OVER), defTarget: n(d.salesPlanDefaultTarget, 25000000, 0, 1e10),
+           tiers: _spPairs(d.salesPlanTierTargets, { A: 1000000, B: 600000, C: 240000 }), ranks: ranks, odds: odds,
+           closeDays: n(d.salesPipelineCloseDays, 30, 1, 365), dormantDays: n(d.salesPlanDormantDays, 365, 30, 2000), fu: _fugCfg(), prDays: _prArchiveDays() };
+}
+function _spDenied(p, cfg) {
+  if (!cfg.on) return 'The sales plan is switched off (FlowSettings salesPlan).';
+  if (cfg.roles.indexOf(_ibRole(p)) < 0) return 'The sales plan is open to ' + cfg.roles.join(', ') + '.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to read the plan under.';
+  return '';
+}
+/** Oversight reads any rep (the director and management); everyone else reads their own plan only. */
+function _spOver(p, cfg) { var r = _ibRole(p); return r !== 'sales' && cfg.roles.indexOf(r) >= 0; }
+function _spYear(v, today) {
+  var cy = parseInt(today.slice(0, 4), 10), y = parseInt(v, 10);
+  return y >= 2024 && y <= cy + 1 ? y : cy;
+}
+function _spPut(name, row, obj) {
+  var vals = SCHEMA[name].map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : obj[h]; });
+  if (row) _sheet(name).getRange(row.rowIndex, 1, 1, vals.length).setValues([vals]);
+  else _append(name, vals);
+}
+/** Twelve month shares that add up to 100 (a stored split, else even). */
+function _spMonths(json) {
+  var a = [];
+  try { a = JSON.parse(String(json || '[]')); } catch (e) { a = []; }
+  if (!Array.isArray(a) || a.length !== 12 || a.some(function (x) { return !(isFinite(Number(x)) && Number(x) >= 0); })) return null;
+  a = a.map(Number);
+  var s = a.reduce(function (t, x) { return t + x; }, 0);
+  return Math.abs(s - 100) <= 0.05 ? a : null;
+}
+function _spEven() { var a = []; for (var i = 0; i < 12; i++) a.push(Math.round(10000 / 12) / 100); a[11] = Math.round((100 - a.slice(0, 11).reduce(function (t, x) { return t + x; }, 0)) * 100) / 100; return a; }
+function _spPlanOut(row, cfg, owner, year) {
+  var months = row ? _spMonths(row['Month Split JSON']) : null, tiers = {};
+  try { tiers = row ? JSON.parse(String(row['Tier Targets JSON'] || '{}')) || {} : {}; } catch (e) { tiers = {}; }
+  var t = {}; _SP_TIERS.forEach(function (k) { var v = Number(tiers[k]); t[k] = isFinite(v) && v >= 0 && tiers[k] !== '' && tiers[k] !== null && tiers[k] !== undefined ? v : cfg.tiers[k]; });
+  var annual = row && String(row['Annual Target']) !== '' && isFinite(Number(row['Annual Target'])) ? Number(row['Annual Target']) : cfg.defTarget;
+  return { owner: owner, year: year, annual: annual, months: months || _spEven(), evenSplit: !months, tierTargets: t, note: row ? String(row['Note'] || '') : '',
+           set: !!row, updatedBy: row ? String(row['Updated By'] || '') : '', updatedAt: row ? _webIso(row['Updated At']) : '' };
+}
+/** The tabs a plan needs, each read once and only its columns. `owners` are the reps being worked out; `full` also reads
+ *  what only one rep's whole plan uses (contacts, visits, report lines, items, receivables, costs). */
+function _spData(owners, year, full, cost, today) {
+  var mine = function (v) { return owners.some(function (o) { return _cbSame(v, o); }); };
+  var y0 = year + '-01-01', y1 = year + '-12-31';
+  var m = { year: year, y0: y0, y1: y1, quotes: {}, qmeta: {}, prs: {}, links: {}, hasSO: {}, soOf: {} };
+  m.book = _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Status', 'Next Step', 'Next Step Date', 'Contacts JSON', 'Archived At', 'Tier', 'Sector'].filter(function (h) { return full || h !== 'Contacts JSON'; }))
+    .filter(function (r) { return !r['Archived At'] && String(r['Owner'] || '').trim(); });
+  m.rank = _sbRows('FollowUpPlan');
+  _fugCols('Quotations', ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Created At', 'Subject', 'Discount %', 'PR No', 'Sent At', 'Salesperson',
+                          'Type', 'Result', 'Result At', 'Result Reason', 'Last Follow Up', 'Closed From']).forEach(function (r) {
+    var no = String(r['Quotation No'] || '').trim(); if (no) { m.quotes[no] = r; m.qmeta[no] = { prNo: String(r['PR No'] || '').trim() }; }
+  });
+  m.so = _fugCols('SalesOrders', ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Client PO No', 'Type', 'VAT Type']);
+  m.so.forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q) { m.hasSO[q] = true; m.soOf[q] = String(r['SO No'] || ''); } });
+  _sbRows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
+  m.prRows = _fugCols('PricingRequests', ['PR No', 'Date', 'Requested By', 'Customer', 'Status', 'Created At', 'Updated At', 'Salesperson', 'Client Book No']);
+  m.prRows.forEach(function (r) { var no = String(r['PR No'] || '').trim(); if (no) m.prs[no] = { owners: [_prOwner(r)], clientNo: String(r['Client Book No'] || '').trim() }; });
+  m.plans = _sbRows('SalesPlan'); m.accts = _sbRows('SalesPlanAccounts'); m.opps = _sbRows('SalesOpps');
+  m.inv = _fugCols('Invoices', ['INV No', 'SO No', 'Date', 'Total COGS', 'Voided']);
+  m.full = full; m.cost = cost;
+  if (full) {
+    m.items = _fugCols('SalesOrderItems', ['SO No', 'Item Name']);
+    m.ar = _fugCols('ARAging', ['AR No', 'INV No', 'SO No', 'Amount (PHP)', 'Collected (PHP)', 'Status', 'Due Date']);
+    m.visits = _fugCols('VisitPlans', ['Visit Plan No', 'Date', 'User', 'Client No', 'Company', 'Status', 'Done At']).filter(function (r) { return mine(r['User']); });
+    m.reports = _fugReports(owners, _lgAddDays(today, -400) < y0 ? _lgAddDays(today, -400) : y0);
+  }
+  if (cost) m.costs = _fugCols('SOCostDetails', ['SO No', 'Total COGS']);
+  return m;
+}
+/** A rep's sales daily reports since `since`: Report JSON (and, with `snap`, Snapshot JSON) read only for the block of rows
+ *  that holds them (A394's _fugReports, plus the 4:30 snapshot that counts the day's sent emails). */
+function _spReports(owners, since, snap) {
+  var rows = _fugReports(owners, since);
+  if (!snap || !rows.length) return rows;
+  var sh = _ss().getSheetByName('ProofReports'), col = SCHEMA.ProofReports.indexOf('Snapshot JSON') + 1, lo = rows[0].rowIndex, hi = rows[rows.length - 1].rowIndex;
+  var vals = sh.getRange(lo, col, hi - lo + 1, 1).getValues();
+  rows.forEach(function (r) { r['Snapshot JSON'] = vals[r.rowIndex - lo][0]; });
+  return rows;
+}
+/** Every rep with something to plan: a live Client Book, a follow-up plan, a sales plan, or a sales daily report. */
+function _spOwners(m) {
+  var seen = {}, out = [];
+  var add = function (v) { var o = String(v || '').trim(), k = o.toLowerCase(); if (o && !seen[k] && !_commIsMigratedName(o)) { seen[k] = 1; out.push(o); } };
+  m.book.forEach(function (r) { add(r['Owner']); });
+  m.rank.forEach(function (r) { add(r['Owner']); });
+  m.plans.forEach(function (r) { add(r['Owner']); });
+  _fugCols('ProofReports', ['User', 'Role', 'Kind']).forEach(function (r) { if (_powKind(r['Kind']) === 'sales' && String(r['Role'] || '').toLowerCase() === 'sales') add(r['User']); });
+  return out.sort(function (a, b) { return a.localeCompare(b); });
+}
+/** Whose sale is each order: the quotation's owner, else the one Client Book owner of the customer. */
+function _spAttribute(m) {
+  var byCd = {}, byCanon = {};
+  m.book.forEach(function (r) {
+    var e = { owner: String(r['Owner']).trim(), clientNo: String(r['Client No']), company: String(r['Company'] || '') };
+    var a = _cdKey(e.company), b = _canonKey(e.company);
+    if (a) (byCd[a] = byCd[a] || []).push(e);
+    if (b) (byCanon[b] = byCanon[b] || []).push(e);
+  });
+  var owners = function (list) { var s = {}; (list || []).forEach(function (e) { s[e.owner.toLowerCase()] = e.owner; }); return Object.keys(s).map(function (k) { return s[k]; }); };
+  var clientOf = function (owner, customer) {
+    var a = (byCd[_cdKey(customer)] || []).filter(function (e) { return _cbSame(e.owner, owner); });
+    if (a.length) return a[0];
+    var b = (byCanon[_canonKey(customer)] || []).filter(function (e) { return _cbSame(e.owner, owner); });
+    return b.length === 1 ? b[0] : null;
+  };
+  var latestQuoteOwner = function (cands, customer, day) {
+    var k = _canonKey(customer), best = null, bestDay = '';
+    Object.keys(m.quotes).forEach(function (no) {
+      var q = m.quotes[no], d = _lgDayOf(q['Date']);
+      if (_canonKey(q['Customer']) !== k || !d || d > day) return;
+      var o = _quoOwner(q);
+      if (cands.some(function (c) { return _cbSame(c, o); }) && d > bestDay) { best = o; bestDay = d; }
+    });
+    return best;
+  };
+  m.soOwner = {}; m.byCd = byCd; m.byCanon = byCanon; m.clientOf = clientOf;
+  m.so.forEach(function (r) {
+    var no = String(r['SO No'] || '').trim(), cust = String(r['Customer'] || ''), day = _lgDayOf(r['Date']);
+    if (!no) return;
+    var qn = String(r['Quotation No'] || '').trim(), q = qn ? m.quotes[qn] : null, who = q ? _quoOwner(q) : '';
+    if (who && !_commIsMigratedName(who)) { var c0 = clientOf(who, cust); m.soOwner[no] = { owner: who, via: 'quotation', clientNo: c0 ? c0.clientNo : '', shared: false }; return; }
+    var hit = byCd[_cdKey(cust)], list = owners(hit);
+    if (!list.length) { hit = byCanon[_canonKey(cust)]; list = owners(hit); }
+    if (!list.length) { m.soOwner[no] = { owner: '', via: '', clientNo: '', shared: false }; return; }
+    var pick = list.length === 1 ? list[0] : (latestQuoteOwner(list, cust, day || '9999') || list.slice().sort()[0]);
+    var c1 = clientOf(pick, cust);
+    m.soOwner[no] = { owner: pick, via: 'client book', clientNo: c1 ? c1.clientNo : '', shared: list.length > 1 };
+  });
+}
+/** The payment status of an order from its receivables: Paid / Partially Paid / Overdue / Unpaid, or '' (none yet). */
+function _spPayment(rows, today) {
+  if (!rows || !rows.length) return { status: '', outstanding: 0 };
+  var amt = 0, got = 0, due = '';
+  rows.forEach(function (r) { amt += _num(r['Amount (PHP)']); got += _num(r['Collected (PHP)']); var d = _lgDayOf(r['Due Date']); if (d && (!due || d < due)) due = d; });
+  var left = Math.round((amt - got) * 100) / 100;
+  if (left <= 0.5) return { status: 'Paid', outstanding: 0 };
+  if (due && due < today) return { status: 'Overdue', outstanding: left, due: due };
+  return { status: got > 0.5 ? 'Partially Paid' : 'Unpaid', outstanding: left, due: due };
+}
+/** One rep's sales of the year (and, for the account status, every order's last date by client). */
+function _spSales(m, who, today) {
+  var invBy = {}, itemsBy = {}, arBy = {}, costBy = {}, invCogs = {};
+  m.inv.forEach(function (r) { if (String(r['Voided'] || '') === 'true' || r['Voided'] === true) return; var s = String(r['SO No'] || '').trim(); (invBy[s] = invBy[s] || []).push(String(r['INV No'] || '')); invCogs[s] = (invCogs[s] || 0) + _num(r['Total COGS']); });
+  (m.items || []).forEach(function (r) { var s = String(r['SO No'] || '').trim(), n = String(r['Item Name'] || '').trim(); if (s && n) (itemsBy[s] = itemsBy[s] || []).push(n); });
+  (m.ar || []).forEach(function (r) { var s = String(r['SO No'] || '').trim(); if (s) (arBy[s] = arBy[s] || []).push(r); });
+  (m.costs || []).forEach(function (r) { var s = String(r['SO No'] || '').trim(); if (s && _num(r['Total COGS']) > 0) costBy[s] = _num(r['Total COGS']); });
+  var out = [], lastSale = {};
+  m.so.forEach(function (r) {
+    var no = String(r['SO No'] || '').trim(), a = m.soOwner[no], day = _lgDayOf(r['Date']), st = String(r['Status'] || '');
+    if (!no || !a || !_cbSame(a.owner, who) || /cancel|void/i.test(st)) return;
+    if (a.clientNo && day && (!lastSale[a.clientNo] || day > lastSale[a.clientNo])) lastSale[a.clientNo] = day;
+    if (!day || day < m.y0 || day > m.y1) return;
+    var names = itemsBy[no] || [], amount = Math.round(_num(r['Total']) * 100) / 100;
+    var row = { soNo: no, date: day, customer: String(r['Customer'] || ''), clientNo: a.clientNo, via: a.via, shared: a.shared, poNo: String(r['Client PO No'] || ''),
+                invNos: invBy[no] || [], products: names.slice(0, 4).join('; ') + (names.length > 4 ? ' +' + (names.length - 4) + ' more' : ''), itemCount: names.length,
+                amount: amount, quotationNo: String(r['Quotation No'] || ''), status: st, vatType: _sgVatType(r['VAT Type']), type: String(r['Type'] || '') };
+    var pay = _spPayment(arBy[no], today); row.payment = pay.status || (row.invNos.length ? 'Unpaid' : 'Not invoiced'); row.outstanding = pay.outstanding;
+    if (m.cost) { var c = costBy[no] || invCogs[no] || 0; row.cost = c > 0 ? Math.round(c * 100) / 100 : null; row.gp = c > 0 ? Math.round((amount - c) * 100) / 100 : null; row.costFrom = costBy[no] ? 'cost sheet' : invCogs[no] ? 'invoice' : ''; }
+    out.push(row);
+  });
+  out.sort(function (x, y) { return y.date.localeCompare(x.date) || y.soNo.localeCompare(x.soNo); });
+  return { rows: out, lastSale: lastSale };
+}
+/** Which Client Book client a quotation or PR belongs to (its link row, else its PR's, else the PR column, else the name). */
+function _spRecClient(m, who, kind, no, customer) {
+  var l = _cbLinkOf({ links: m.links, prs: m.prs, quotes: m.qmeta }, kind, no);
+  if (l) return l;
+  if (m.links[kind + ':' + no]) return '';
+  var c = m.clientOf(who, customer);
+  return c ? c.clientNo : '';
+}
+/** One rep's pipeline: open quotations, live PRs not yet quoted, typed leads, and the year's closed quotations. */
+function _spPipeline(m, who, cfg, today) {
+  var ov = {}, leads = [];
+  m.opps.forEach(function (r) {
+    if (!_cbSame(r['Owner'], who)) return;
+    var src = String(r['Source'] || '');
+    if (src === 'lead') { if (!r['Archived At']) leads.push(r); }
+    else ov[src + ':' + String(r['Record No']).trim()] = r;
+  });
+  var fu = cfg.fu, out = [], quotedPr = {};
+  Object.keys(m.quotes).forEach(function (no) { var pr = String(m.quotes[no]['PR No'] || '').trim(); if (pr) quotedPr[pr] = true; });
+  var nextCheck = function (sent) {
+    if (!sent) return null;
+    var cps = _fugCheckpoints(sent, _lgAddDays(today, 120), fu);
+    for (var i = 0; i < cps.length; i++) if (cps[i].date >= today) return cps[i];
+    return null;
+  };
+  var apply = function (o, r) {
+    o.oppNo = r ? String(r['Opp No'] || '') : ''; o.updatedAt = r ? _webIso(r['Updated At']) : ''; o.updatedBy = r ? String(r['Updated By'] || '') : '';
+    o.notes = r ? String(r['Notes'] || '') : '';
+    o.archived = !!(r && r['Archived At']);
+    var stage = r && String(r['Stage'] || '').trim();
+    if (stage && o.stageAuto.indexOf('Closed') !== 0 && _SP_OPEN_STAGES.indexOf(stage) >= 0) o.stage = stage;
+    var pr = r && String(r['Probability']) !== '' && isFinite(Number(r['Probability'])) ? Number(r['Probability']) : null;
+    o.probAuto = cfg.odds[o.stage]; o.probability = o.stage.indexOf('Closed') === 0 ? cfg.odds[o.stage] : (pr !== null ? pr : o.probAuto);
+    o.probSet = pr !== null && o.stage.indexOf('Closed') !== 0;
+    o.closeAuto = o.closeAuto || ''; o.expectedClose = (r && _lgDayOf(r['Expected Close'])) || o.closeAuto; o.closeSet = !!(r && _lgDayOf(r['Expected Close']));
+    o.decisionMaker = r ? String(r['Decision Maker'] || '') : '';
+    o.nextActionSet = !!(r && String(r['Next Action'] || '').trim());
+    o.nextAction = o.nextActionSet ? String(r['Next Action']).trim() : o.nextAuto.text;
+    o.nextActionDate = (r && _lgDayOf(r['Next Action Date'])) || (o.nextActionSet ? '' : o.nextAuto.date);
+    if (r && String(r['Category'] || '').trim()) o.category = String(r['Category']).trim();
+    if (r && o.source !== 'quotation' && String(r['Value']) !== '' && isFinite(Number(r['Value']))) o.value = Number(r['Value']);
+    o.weighted = o.value === null ? null : Math.round(o.value * o.probability) / 100;
+    return o;
+  };
+  Object.keys(m.quotes).forEach(function (no) {
+    var q = m.quotes[no];
+    if (!_cbSame(_quoOwner(q), who)) return;
+    var st = String(q['Status'] || ''), res = String(q['Result'] || ''), day = _lgDayOf(q['Date']), sent = _lgDayOf(q['Sent At']);
+    var won = !!m.hasSO[no] || (res === 'Won' && (st === 'Sent' || st === 'Approved')), lost = FLOW_Q_CLOSED_STATUSES_GS.indexOf(st) >= 0;
+    var open = !won && !lost && (st === 'Sent' || st === 'Approved');
+    var closedDay = won ? (_lgDayOf(q['Result At']) || day) : lost ? (_lgDayOf(q['Result At']) || day) : '';
+    if (!open && !((won || lost) && closedDay >= m.y0 && closedDay <= m.y1)) return;
+    var disc = Math.max(0, Math.min(100, _num(q['Discount %'])));
+    var stageAuto = won ? 'Closed Won' : lost ? 'Closed Lost' : 'Quotation';
+    var nc = open && st === 'Sent' ? nextCheck(sent) : null;
+    var o = { source: 'quotation', recordNo: no, clientNo: _spRecClient(m, who, 'quotation', no, q['Customer']), company: String(q['Customer'] || ''),
+              project: String(q['Subject'] || ''), category: String(q['Type'] || '') === 'Service' ? 'Service' : String(q['Type'] || '') === 'Hire' ? 'Hire' : '',
+              value: Math.round(_num(q['Total']) * (1 - disc / 100) * 100) / 100, stageAuto: stageAuto, stage: stageAuto, date: day, sentAt: sent,
+              quoteStatus: st, result: res, reason: String(q['Result Reason'] || ''), soNo: m.soOf[no] || '', closedAt: closedDay,
+              lastFollowUp: _lgDayOf(q['Last Follow Up']), age: _lgDaysBetween(sent || day || today, today),
+              closeAuto: open ? _lgAddDays(sent || day || today, cfg.closeDays) : '',
+              nextAuto: !open ? { text: '', date: '' } : st === 'Approved' ? { text: 'Send the quotation', date: today }
+                : nc ? { text: 'Follow up (day ' + nc.step + ')', date: nc.date } : { text: 'Follow up', date: '' } };
+    out.push(apply(o, ov['quotation:' + no]));
+  });
+  var days = cfg.prDays, nowMs = _now().getTime();
+  m.prRows.forEach(function (r) {
+    var no = String(r['PR No'] || '').trim(), st = String(r['Status'] || '');
+    if (!no || !_cbSame(_prOwner(r), who) || quotedPr[no] || ['Quoted', 'Migrated', 'Cancelled', 'Closed'].indexOf(st) >= 0) return;
+    if (_prIsArchived(_prLastUpdate(r, [], {}), days, nowMs)) return;
+    var day = _lgDayOf(r['Date'] || r['Created At']), ready = st === 'Returned to Sales' || st === 'Mgmt Priced';
+    var o = { source: 'request', recordNo: no, clientNo: _spRecClient(m, who, 'pr', no, r['Customer']), company: String(r['Customer'] || ''), project: '',
+              category: '', value: null, stageAuto: 'Technical Review', stage: 'Technical Review', date: day, sentAt: '', quoteStatus: st, result: '', reason: '',
+              soNo: '', closedAt: '', lastFollowUp: '', age: _lgDaysBetween(day || today, today), closeAuto: _lgAddDays(day || today, cfg.closeDays + 14),
+              nextAuto: ready ? { text: 'Make the quotation', date: today } : { text: 'Waiting for the price', date: '' } };
+    out.push(apply(o, ov['request:' + no]));
+  });
+  leads.forEach(function (r) {
+    var stg = String(r['Stage'] || 'Lead'), day = _lgDayOf(r['Created At']);
+    var o = { source: 'lead', recordNo: String(r['Opp No']), clientNo: String(r['Client No'] || ''), company: String(r['Company'] || ''), project: String(r['Project'] || ''),
+              category: String(r['Category'] || ''), value: String(r['Value']) !== '' && isFinite(Number(r['Value'])) ? Number(r['Value']) : null,
+              stageAuto: _SP_STAGES.indexOf(stg) >= 0 ? stg : 'Lead', stage: _SP_STAGES.indexOf(stg) >= 0 ? stg : 'Lead', date: day, sentAt: '', quoteStatus: '', result: '', reason: '',
+              soNo: '', closedAt: _lgDayOf(r['Closed At']), lastFollowUp: '', age: _lgDaysBetween(day || today, today), closeAuto: _lgAddDays(day || today, cfg.closeDays * 2), nextAuto: { text: '', date: '' } };
+    o = apply(o, r); o.stage = o.stageAuto; o.probAuto = cfg.odds[o.stage];
+    var pr = String(r['Probability']) !== '' && isFinite(Number(r['Probability'])) ? Number(r['Probability']) : null;
+    o.probability = o.stage.indexOf('Closed') === 0 ? cfg.odds[o.stage] : pr !== null ? pr : o.probAuto; o.probSet = pr !== null;
+    o.weighted = o.value === null ? null : Math.round(o.value * o.probability) / 100;
+    if (o.stage.indexOf('Closed') === 0 && !(o.closedAt >= m.y0 && o.closedAt <= m.y1)) return;
+    out.push(o);
+  });
+  out.sort(function (a, b) { return (a.stage.indexOf('Closed') === 0) - (b.stage.indexOf('Closed') === 0) || String(b.date).localeCompare(String(a.date)); });
+  return out;
+}
+var FLOW_Q_CLOSED_STATUSES_GS = ['Not Pursued', 'Lost', 'Cancelled'];   // the twin of flow-api.js FLOW_Q_CLOSED_STATUSES
+/** The main contact of a client: the one marked main, else the first with a name. */
+function _spContact(json) {
+  var list = _cbParse(json), c = list.filter(function (x) { return x.primary; })[0] || list.filter(function (x) { return String(x.name || '').trim(); })[0] || list[0];
+  if (!c) return null;
+  return { name: String(c.name || ''), position: String(c.position || ''), phone: (c.phones || [])[0] || '', email: (c.emails || [])[0] || '', count: list.length };
+}
+/** One rep's accounts: the live Client Book in follow-up rank order, with the plan's tier, target, focus and status. */
+function _spAccounts(m, who, cfg, plan, sales, today) {
+  var rank = {}, rows = {};
+  m.rank.forEach(function (r) { if (_cbSame(r['Owner'], who)) rank[String(r['Client No'] || '').trim()] = _num(r['Rank']); });
+  m.accts.forEach(function (r) { if (_cbSame(r['Owner'], who) && Number(r['Year']) === m.year) rows[String(r['Client No'] || '').trim()] = r; });
+  var tierOf = function (k) { return !k ? '' : k <= cfg.ranks[0] ? 'A' : k <= cfg.ranks[1] ? 'B' : k <= cfg.ranks[2] ? 'C' : ''; };
+  var actual = {}, count = {};
+  sales.rows.forEach(function (s) { if (s.clientNo) { actual[s.clientNo] = (actual[s.clientNo] || 0) + s.amount; count[s.clientNo] = (count[s.clientNo] || 0) + 1; } });
+  var lastVisit = {}, nextVisit = {};
+  var seen = function (map, no, day, later) { if (!no || !day) return; if (!map[no] || (later ? day < map[no] : day > map[no])) map[no] = day; };
+  var byName = function (name) { var c = m.clientOf(who, name); return c ? c.clientNo : ''; };
+  (m.visits || []).forEach(function (r) {
+    var no = String(r['Client No'] || '').trim(), st = String(r['Status'] || ''), day = _lgDayOf(r['Date']);
+    if (st === 'Done') seen(lastVisit, no, _lgDayOf(r['Done At']) || day, false);
+    else if (['Draft', 'Pending Director', 'Approved'].indexOf(st) >= 0 && day >= today) seen(nextVisit, no, day, true);
+  });
+  (m.reports || []).forEach(function (r) {
+    if (!_cbSame(r['User'], who)) return;
+    var rep = {}; try { rep = JSON.parse(String(r['Report JSON'] || '{}')) || {}; } catch (e) { rep = {}; }
+    (rep.lines || []).forEach(function (l) {
+      if (!l || l.voidedAt || ['Visit', 'Site survey', 'Technical meeting'].indexOf(l.type) < 0) return;
+      var no = l.linkType === 'client' && l.linkId ? String(l.linkId) : byName(l.company);
+      seen(lastVisit, no, _lgDayOf(l.loggedAt), false);
+    });
+  });
+  var quoteSubj = {};
+  Object.keys(m.quotes).forEach(function (no) {
+    var q = m.quotes[no], s = String(q['Subject'] || '').trim();
+    if (!s || !_cbSame(_quoOwner(q), who)) return;
+    var c = _spRecClient(m, who, 'quotation', no, q['Customer']);
+    if (c) (quoteSubj[c] = quoteSubj[c] || []).push({ day: _lgDayOf(q['Date']), s: s });
+  });
+  var book = m.book.filter(function (r) { return _cbSame(r['Owner'], who); });
+  return book.map(function (r) {
+    var no = String(r['Client No']), o = rows[no], k = rank[no] || 0, tAuto = tierOf(k);
+    var tier = o && _SP_TIERS.indexOf(String(o['Tier'] || '')) >= 0 ? String(o['Tier']) : o && String(o['Tier']) === '-' ? '' : tAuto;
+    var tgtAuto = tier ? plan.tierTargets[tier] : 0;
+    var tgtSet = !!(o && String(o['Target']) !== '' && isFinite(Number(o['Target'])));
+    var cbSt = String(r['Status'] || ''), last = sales.lastSale[no] || '';
+    var stAuto = cbSt === 'On hold' ? 'On Hold' : last && _lgDaysBetween(last, today) <= cfg.dormantDays ? 'Active' : last ? 'Dormant' : 'Prospect';
+    var st = o && _SP_STATUSES.indexOf(String(o['Status'] || '')) >= 0 ? String(o['Status']) : stAuto;
+    var hints = (quoteSubj[no] || []).sort(function (a, b) { return String(b.day).localeCompare(String(a.day)); }).map(function (x) { return x.s; })
+      .filter(function (s, i, a) { return a.indexOf(s) === i; }).slice(0, 4);
+    return { clientNo: no, company: String(r['Company'] || ''), sector: String(r['Sector'] || ''), bookTier: String(r['Tier'] || ''), rank: k,
+             tier: tier, tierAuto: tAuto, tierSet: !!(o && String(o['Tier'] || '') !== ''), target: tgtSet ? Number(o['Target']) : tgtAuto, targetAuto: tgtAuto, targetSet: tgtSet,
+             actual: Math.round((actual[no] || 0) * 100) / 100, orders: count[no] || 0, lastSale: last,
+             contact: m.full ? _spContact(r['Contacts JSON']) : null, lastVisit: lastVisit[no] || '', nextVisit: nextVisit[no] || '',
+             focus: o ? String(o['Focus'] || '') : '', focusHints: hints, status: st, statusAuto: stAuto, statusSet: !!(o && String(o['Status'] || '') !== ''),
+             bookStatus: cbSt, nextStep: String(r['Next Step'] || ''), updatedAt: o ? _webIso(o['Updated At']) : '', updatedBy: o ? String(o['Updated By'] || '') : '' };
+  }).sort(function (a, b) { return (a.rank || 9999) - (b.rank || 9999) || a.company.toLowerCase().localeCompare(b.company.toLowerCase()); });
+}
+/** The quotations of the year for the workbook's Quotation Tracker and the dashboard's win rate. */
+function _spQuotes(m, who) {
+  var out = [];
+  Object.keys(m.quotes).forEach(function (no) {
+    var q = m.quotes[no], day = _lgDayOf(q['Date']);
+    if (!_cbSame(_quoOwner(q), who) || !day || day < m.y0 || day > m.y1) return;
+    var st = String(q['Status'] || ''), res = String(q['Result'] || ''), disc = Math.max(0, Math.min(100, _num(q['Discount %'])));
+    var won = !!m.hasSO[no] || (res === 'Won' && (st === 'Sent' || st === 'Approved')), lost = FLOW_Q_CLOSED_STATUSES_GS.indexOf(st) >= 0;
+    var state = won ? 'Won' : lost ? 'Lost' : st === 'Sent' ? (res === 'Pending' ? 'Under Review' : 'Submitted') : st === 'Approved' ? 'Submitted' : 'Draft';
+    out.push({ quotationNo: no, date: day, customer: String(q['Customer'] || ''), subject: String(q['Subject'] || ''), value: Math.round(_num(q['Total']) * (1 - disc / 100) * 100) / 100,
+               state: state, status: st, result: res, sentAt: _lgDayOf(q['Sent At']), lastFollowUp: _lgDayOf(q['Last Follow Up']),
+               decidedAt: won || lost ? (_lgDayOf(q['Result At']) || '') : '', reason: String(q['Result Reason'] || ''), soNo: m.soOf[no] || '', prNo: String(q['PR No'] || '') });
+  });
+  return out.sort(function (a, b) { return b.date.localeCompare(a.date); });
+}
+/** One rep's month by month: the target share and the orders. */
+function _spMonthsOut(plan, sales) {
+  var act = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  sales.rows.forEach(function (s) { var i = parseInt(s.date.slice(5, 7), 10) - 1; if (i >= 0 && i < 12) act[i] += s.amount; });
+  return plan.months.map(function (pct, i) { return { month: i + 1, share: pct, target: Math.round(plan.annual * pct) / 100, actual: Math.round(act[i] * 100) / 100 }; });
+}
+function _spPlanRow(m, who) { return m.plans.filter(function (r) { return _cbSame(r['Owner'], who) && Number(r['Year']) === m.year; })[0] || null; }
+/** getSalesPlan({user?, year?, all?}) — a rep's plan for a year (their own, always: a rep's `user` is ignored). The director
+ *  and management may name any rep, or ask `all` for every rep's summary plus the orders credited to nobody. */
+function getSalesPlan(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var today = _lgDay(_now()), year = _spYear(p.year, today), over = _spOver(p, cfg), role = _ibRole(p), cost = cfg.costRoles.indexOf(role) >= 0;
+  var may = { target: cfg.targetRoles.indexOf(role) >= 0, cost: cost, oversight: over };
+  var lists = { stages: _SP_STAGES, openStages: _SP_OPEN_STAGES, statuses: _SP_STATUSES, tiers: _SP_TIERS, categories: _SP_CATEGORIES, odds: cfg.odds, ranks: cfg.ranks };
+  if (over && (p.all === true || String(p.all) === 'true')) {
+    var ma = _spData([], year, false, cost, today), reps = _spOwners(ma);
+    _spAttribute(ma);
+    var people = reps.map(function (o) {
+      var plan = _spPlanOut(_spPlanRow(ma, o), cfg, o, year), s = _spSales(ma, o, today), months = _spMonthsOut(plan, s);
+      var pipe = _spPipeline(ma, o, cfg, today).filter(function (x) { return _SP_OPEN_STAGES.indexOf(x.stage) >= 0 && !x.archived; });
+      var ytd = s.rows.reduce(function (t, x) { return t + x.amount; }, 0), mi = parseInt(today.slice(5, 7), 10) - 1, inYear = String(year) === today.slice(0, 4);
+      var gp = cost ? s.rows.reduce(function (t, x) { return t + (x.gp || 0); }, 0) : null;
+      return { user: o, plan: plan, ytd: Math.round(ytd * 100) / 100, orders: s.rows.length, gp: gp === null ? null : Math.round(gp * 100) / 100,
+               month: inYear ? months[mi] : null, accounts: ma.book.filter(function (r) { return _cbSame(r['Owner'], o); }).length,
+               weighted: Math.round(pipe.reduce(function (t, x) { return t + (x.weighted || 0); }, 0) * 100) / 100,
+               open: Math.round(pipe.reduce(function (t, x) { return t + (x.value || 0); }, 0) * 100) / 100, openCount: pipe.length };
+    });
+    /* the orders no rep's plan counts: nobody's, or credited (through its quotation) to someone with no plan */
+    var none = [], onTeam = function (o) { return reps.some(function (x) { return _cbSame(x, o); }); };
+    ma.so.forEach(function (r) {
+      var n = String(r['SO No'] || '').trim(), d = _lgDayOf(r['Date']), a = ma.soOwner[n];
+      if (n && a && (!a.owner || !onTeam(a.owner)) && d >= ma.y0 && d <= ma.y1 && !/cancel|void/i.test(String(r['Status'] || '')))
+        none.push({ soNo: n, date: d, customer: String(r['Customer'] || ''), amount: Math.round(_num(r['Total']) * 100) / 100, owner: a.owner || '' });
+    });
+    none.sort(function (a, b) { return b.date.localeCompare(a.date); });
+    return { success: true, today: today, year: year, all: true, people: people, unassigned: none, may: may, lists: lists };
+  }
+  var who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+  var m = _spData([who], year, String(p.summary) !== 'true', cost, today);
+  _spAttribute(m);
+  var plan = _spPlanOut(_spPlanRow(m, who), cfg, who, year), sales = _spSales(m, who, today);
+  if (String(p.summary) === 'true') {
+    var ms = _spMonthsOut(plan, sales);
+    return { success: true, today: today, year: year, user: who, summary: true, plan: plan, months: ms, ytd: Math.round(sales.rows.reduce(function (t, x) { return t + x.amount; }, 0) * 100) / 100,
+             orders: sales.rows.length, may: may };
+  }
+  var res = { success: true, today: today, year: year, user: who, readOnly: !_cbSame(who, p.actorName) && !over, plan: plan,
+              accounts: _spAccounts(m, who, cfg, plan, sales, today), sales: sales.rows, pipeline: _spPipeline(m, who, cfg, today), quotes: _spQuotes(m, who),
+              months: _spMonthsOut(plan, sales), may: may, lists: lists, people: over ? _spOwners(m) : [] };
+  return res;
+}
+/** saveSalesPlanTarget({user, year, annual, months[12], tierTargets?, note?, ifUpdatedAt?}) — a rep's year target and its
+ *  month split (shares that add up to 100), for salesPlanTargetRoles. */
+function saveSalesPlanTarget(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  if (cfg.targetRoles.indexOf(_ibRole(p)) < 0) return { success: false, message: 'Only ' + cfg.targetRoles.join(', ') + ' can set the sales targets.' };
+  var today = _lgDay(_now()), who = _webCell(p.user).slice(0, 80), year = parseInt(p.year, 10), cy = parseInt(today.slice(0, 4), 10);
+  if (!who) return { success: false, message: 'Say whose plan this is.' };
+  var known = _spOwners({ book: _fugCols('ClientBook', ['Owner', 'Archived At']).filter(function (r) { return !r['Archived At']; }), rank: _sbRows('FollowUpPlan'), plans: _sbRows('SalesPlan') });
+  if (!known.some(function (o) { return _cbSame(o, who); })) return { success: false, message: who + ' has no Client Book, follow-up plan or sales daily report yet.' };
+  if (!(year >= 2024 && year <= cy + 1)) return { success: false, message: 'The plan year should be between 2024 and ' + (cy + 1) + '.' };
+  var annual = Number(String(p.annual == null ? '' : p.annual).replace(/,/g, ''));
+  if (!(isFinite(annual) && annual >= 0 && annual <= 1e10)) return { success: false, message: 'The year target must be an amount in pesos.' };
+  var months = p.months === undefined || p.months === null || p.months === '' ? _spEven() : _spMonths(typeof p.months === 'string' ? p.months : JSON.stringify(p.months));
+  if (!months) return { success: false, message: 'The twelve months must add up to 100%.' };
+  var tiers = {};
+  if (p.tierTargets !== undefined && p.tierTargets !== null && p.tierTargets !== '') {
+    var t = p.tierTargets; if (typeof t === 'string') { try { t = JSON.parse(t); } catch (e) { t = null; } }
+    if (!t || typeof t !== 'object') return { success: false, message: 'The tier targets are not readable.' };
+    for (var i = 0; i < _SP_TIERS.length; i++) {
+      var k = _SP_TIERS[i], v = Number(String(t[k] == null ? '' : t[k]).replace(/,/g, ''));
+      if (!(isFinite(v) && v >= 0 && v <= 1e9)) return { success: false, message: 'Tier ' + k + '\'s target must be an amount in pesos.' };
+      tiers[k] = v;
+    }
+  }
+  var rows = _sbRows('SalesPlan'), row = rows.filter(function (r) { return _cbSame(r['Owner'], who) && Number(r['Year']) === year; })[0];
+  if (row && p.ifUpdatedAt !== undefined && String(p.ifUpdatedAt || '') !== _webIso(row['Updated At']))
+    return { success: false, stale: true, message: (row['Updated By'] || 'Someone') + ' changed this plan just now. Open it again to see the change.' };
+  var by = String(p.actorName).trim(), obj = {};
+  SCHEMA.SalesPlan.forEach(function (h) { obj[h] = row ? row[h] : ''; });
+  obj['Owner'] = row ? row['Owner'] : who; obj['Year'] = year; obj['Annual Target'] = Math.round(annual * 100) / 100;
+  obj['Month Split JSON'] = JSON.stringify(months.map(function (x) { return Math.round(x * 100) / 100; }));
+  if (Object.keys(tiers).length) obj['Tier Targets JSON'] = JSON.stringify(tiers);
+  if (p.note !== undefined) obj['Note'] = _webCell(p.note, true).slice(0, 500);
+  if (!row) { obj['Created By'] = by; obj['Created At'] = _now(); }
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _spPut('SalesPlan', row, obj);
+  return { success: true, refNo: who + ' ' + year, plan: _spPlanOut(obj, cfg, String(obj['Owner']), year), updatedAt: _webIso(obj['Updated At']),
+           message: who + '\'s ' + year + ' target saved: ₱' + Math.round(annual).toLocaleString('en-US') + '.' };
+}
+/** "Saved for X." without a second full stop after "Inc." */
+function _spDot(s) { s = String(s || ''); return /[.!?]$/.test(s) ? s : s + '.'; }
+/** May this caller change `who`'s plan rows? Their own, or anyone's for oversight. */
+function _spMayEdit(p, cfg, who) { return _spOver(p, cfg) || _cbSame(who, p.actorName); }
+/** saveSalesPlanAccount({user?, year, clientNo, tier?, target?, focus?, status?, ifUpdatedAt?}) — one account's plan: a field
+ *  sent as '' goes back to the automatic value; a field not sent keeps its value. */
+function saveSalesPlanAccount(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var today = _lgDay(_now()), over = _spOver(p, cfg), who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+  if (!_spMayEdit(p, cfg, who)) return { success: false, message: 'You can change your own plan only.' };
+  var year = parseInt(p.year, 10), cy = parseInt(today.slice(0, 4), 10);
+  if (!(year >= 2024 && year <= cy + 1)) return { success: false, message: 'The plan year should be between 2024 and ' + (cy + 1) + '.' };
+  var cno = String(p.clientNo || '').trim();
+  var client = _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Archived At']).filter(function (r) { return String(r['Client No']) === cno && !r['Archived At']; })[0];
+  if (!client || !_cbSame(client['Owner'], who)) return { success: false, message: 'That client is not in ' + who + '\'s Client Book.' };
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(p, k); };
+  var rows = _sbRows('SalesPlanAccounts'), row = rows.filter(function (r) { return _cbSame(r['Owner'], who) && Number(r['Year']) === year && String(r['Client No']) === cno; })[0];
+  if (row && has('ifUpdatedAt') && String(p.ifUpdatedAt || '') !== _webIso(row['Updated At']))
+    return { success: false, stale: true, message: (row['Updated By'] || 'Someone') + ' changed this account just now. Open it again to see the change.' };
+  var obj = {};
+  SCHEMA.SalesPlanAccounts.forEach(function (h) { obj[h] = row ? row[h] : ''; });
+  if (has('tier')) { var t = String(p.tier == null ? '' : p.tier).trim().toUpperCase(); if (t && t !== '-' && _SP_TIERS.indexOf(t) < 0) return { success: false, message: 'The tier is A, B or C.' }; obj['Tier'] = t; }
+  if (has('target')) {
+    var s = String(p.target == null ? '' : p.target).replace(/,/g, '').trim(), v = Number(s);
+    if (s !== '' && !(isFinite(v) && v >= 0 && v <= 1e9)) return { success: false, message: 'The target must be an amount in pesos.' };
+    obj['Target'] = s === '' ? '' : Math.round(v * 100) / 100;
+  }
+  if (has('focus')) obj['Focus'] = _webCell(p.focus, true).slice(0, 300);
+  if (has('status')) { var st = String(p.status || '').trim(); if (st && _SP_STATUSES.indexOf(st) < 0) return { success: false, message: 'The status is one of ' + _SP_STATUSES.join(', ') + '.' }; obj['Status'] = st; }
+  obj['Owner'] = row ? row['Owner'] : String(client['Owner']).trim(); obj['Year'] = year; obj['Client No'] = cno; obj['Company'] = String(client['Company'] || '');
+  obj['Updated By'] = String(p.actorName).trim(); obj['Updated At'] = _now();
+  _spPut('SalesPlanAccounts', row, obj);
+  return { success: true, refNo: obj['Company'], clientNo: cno, updatedAt: _webIso(obj['Updated At']), message: _spDot('Saved for ' + obj['Company']) };
+}
+/** saveSalesOpp({user?, source, recordNo?, oppNo?, company?, clientNo?, project?, category?, value?, stage?, probability?,
+ *  expectedClose?, decisionMaker?, nextAction?, nextActionDate?, notes?, clientRef?, ifUpdatedAt?}) — a typed lead
+ *  (source 'lead': new without oppNo), or the rep's own figures on a quotation or purchase request of theirs. A field sent
+ *  as '' goes back to the automatic value; a field not sent keeps its value. */
+function saveSalesOpp(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var today = _lgDay(_now()), over = _spOver(p, cfg), who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+  if (!_spMayEdit(p, cfg, who)) return { success: false, message: 'You can change your own pipeline only.' };
+  var src = String(p.source || '').trim(), has = function (k) { return Object.prototype.hasOwnProperty.call(p, k); };
+  if (['lead', 'quotation', 'request'].indexOf(src) < 0) return { success: false, message: 'Say what this is: a lead, a quotation or a purchase request.' };
+  var rows = _sbRows('SalesOpps'), row = null, rec = String(p.recordNo || '').trim();
+  if (src === 'lead') {
+    if (p.oppNo) { row = rows.filter(function (r) { return String(r['Opp No']) === String(p.oppNo) && String(r['Source']) === 'lead'; })[0]; if (!row) return { success: false, message: 'That lead was not found.' }; if (!_cbSame(row['Owner'], who) && !over) return { success: false, message: 'That lead is not yours.' }; }
+    else if (p.clientRef) { var dup = rows.filter(function (r) { return String(r['Client Ref']) === String(p.clientRef); })[0]; if (dup) return { success: true, duplicate: true, oppNo: String(dup['Opp No']), message: 'Already added.' }; }
+  } else {
+    if (!rec) return { success: false, message: 'Say which ' + (src === 'quotation' ? 'quotation' : 'purchase request') + '.' };
+    if (src === 'quotation') {
+      var q = _fugCols('Quotations', ['Quotation No', 'Created By', 'Salesperson']).filter(function (r) { return String(r['Quotation No']).trim() === rec; })[0];
+      if (!q) return { success: false, message: 'Quotation ' + rec + ' was not found.' };
+      if (!_cbSame(_quoOwner(q), who)) return { success: false, message: 'Quotation ' + rec + ' is not ' + (over ? who + '\'s' : 'yours') + '.' };
+    } else {
+      var pr = _fugCols('PricingRequests', ['PR No', 'Requested By', 'Salesperson']).filter(function (r) { return String(r['PR No']).trim() === rec; })[0];
+      if (!pr) return { success: false, message: 'Purchase request ' + rec + ' was not found.' };
+      if (!_cbSame(_prOwner(pr), who)) return { success: false, message: 'Purchase request ' + rec + ' is not ' + (over ? who + '\'s' : 'yours') + '.' };
+    }
+    row = rows.filter(function (r) { return String(r['Source']) === src && String(r['Record No']).trim() === rec && _cbSame(r['Owner'], who); })[0] || null;
+  }
+  if (row && has('ifUpdatedAt') && String(p.ifUpdatedAt || '') !== _webIso(row['Updated At']))
+    return { success: false, stale: true, message: (row['Updated By'] || 'Someone') + ' changed this just now. Open it again to see the change.' };
+  var obj = {};
+  SCHEMA.SalesOpps.forEach(function (h) { obj[h] = row ? row[h] : ''; });
+  var day = function (v) { var s = String(v == null ? '' : v).trim(); return s === '' ? '' : (_cbDate(s) || null); };
+  var money = function (v) { var s = String(v == null ? '' : v).replace(/,/g, '').trim(), n = Number(s); return s === '' ? '' : isFinite(n) && n >= 0 && n <= 1e10 ? Math.round(n * 100) / 100 : null; };
+  if (has('stage')) {
+    var stg = String(p.stage || '').trim();
+    if (stg && (src === 'lead' ? _SP_STAGES : ['Quotation', 'Negotiation', 'Technical Review', 'Qualified']).indexOf(stg) < 0)
+      return { success: false, message: src === 'lead' ? 'Pick one of the stages.' : 'Mark a quotation won or lost on Quotation status; here it can be Quotation or Negotiation.' };
+    obj['Stage'] = stg;
+    if (src === 'lead') obj['Closed At'] = stg.indexOf('Closed') === 0 ? (row && row['Closed At'] && String(row['Stage']) === stg ? row['Closed At'] : today) : '';
+  }
+  if (has('probability')) { var ps = String(p.probability == null ? '' : p.probability).replace('%', '').trim(), pn = Number(ps); if (ps !== '' && !(isFinite(pn) && pn >= 0 && pn <= 100)) return { success: false, message: 'The probability is 0 to 100%.' }; obj['Probability'] = ps === '' ? '' : Math.round(pn); }
+  if (has('value')) { if (src === 'quotation') return { success: false, message: 'A quotation\'s value comes from the quotation.' }; var mv = money(p.value); if (mv === null) return { success: false, message: 'The value must be an amount in pesos.' }; obj['Value'] = mv; }
+  if (has('expectedClose')) { var ec = day(p.expectedClose); if (ec === null) return { success: false, message: 'The expected close must be a date.' }; obj['Expected Close'] = ec; }
+  if (has('nextActionDate')) { var nd = day(p.nextActionDate); if (nd === null) return { success: false, message: 'The next action date must be a date.' }; obj['Next Action Date'] = nd; }
+  if (has('decisionMaker')) obj['Decision Maker'] = _webCell(p.decisionMaker).slice(0, 120);
+  if (has('nextAction')) obj['Next Action'] = _webCell(p.nextAction).slice(0, 200);
+  if (has('notes')) obj['Notes'] = _webCell(p.notes, true).slice(0, 500);
+  if (has('category')) { var cat = String(p.category || '').trim(); if (cat && _SP_CATEGORIES.indexOf(cat) < 0) return { success: false, message: 'Pick one of the categories.' }; obj['Category'] = cat; }
+  if (src === 'lead') {
+    if (has('company') || !row) obj['Company'] = _webCell(p.company).slice(0, 160);
+    if (has('project') || !row) obj['Project'] = _webCell(p.project).slice(0, 200);
+    if (has('clientNo')) {
+      var cn = String(p.clientNo || '').trim();
+      if (cn) { var cb = _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Archived At']).filter(function (r) { return String(r['Client No']) === cn && !r['Archived At'] && _cbSame(r['Owner'], who); })[0]; if (!cb) return { success: false, message: 'That client is not in ' + who + '\'s Client Book.' }; if (!String(obj['Company'] || '').trim()) obj['Company'] = String(cb['Company']); }
+      obj['Client No'] = cn;
+    }
+    if (!String(obj['Company'] || '').trim()) return { success: false, message: 'Say which company the lead is with.' };
+    if (!String(obj['Project'] || '').trim()) return { success: false, message: 'Say what the opportunity is.' };
+    if (!obj['Stage']) obj['Stage'] = 'Lead';
+  }
+  var by = String(p.actorName).trim();
+  if (!row) {
+    obj['Opp No'] = _bbId('OPP'); obj['Owner'] = who; obj['Source'] = src; obj['Record No'] = src === 'lead' ? '' : rec;
+    obj['Client Ref'] = _webCell(p.clientRef).slice(0, 60); obj['Created By'] = by; obj['Created At'] = _now();
+    if (src === 'lead') obj['Record No'] = obj['Opp No'];
+  }
+  obj['Updated By'] = by; obj['Updated At'] = _now();
+  _spPut('SalesOpps', row, obj);
+  return { success: true, refNo: String(obj['Opp No']), oppNo: String(obj['Opp No']), updatedAt: _webIso(obj['Updated At']),
+           message: src === 'lead' ? (row ? 'Lead saved.' : _spDot('Lead added: ' + obj['Company'])) : _spDot('Saved for ' + rec) };
+}
+/** archiveSalesOpp({oppNo, restore?}) — takes a typed lead off the pipeline (kept on the sheet), or puts it back (the Undo). */
+function archiveSalesOpp(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var row = _sbRows('SalesOpps').filter(function (r) { return String(r['Opp No']) === String(p.oppNo || '') && String(r['Source']) === 'lead'; })[0];
+  if (!row) return { success: false, message: 'That lead was not found.' };
+  if (!_spMayEdit(p, cfg, row['Owner'])) return { success: false, message: 'That lead is not yours.' };
+  var restore = p.restore === true || String(p.restore) === 'true';
+  if (restore === !row['Archived At']) return { success: false, message: restore ? 'That lead is not archived.' : 'That lead is archived already.' };
+  var obj = {};
+  SCHEMA.SalesOpps.forEach(function (h) { obj[h] = row[h]; });
+  obj['Archived At'] = restore ? '' : _now(); obj['Updated By'] = String(p.actorName).trim(); obj['Updated At'] = _now();
+  _spPut('SalesOpps', row, obj);
+  return { success: true, refNo: String(row['Opp No']), updatedAt: _webIso(obj['Updated At']), message: restore ? 'Back on the pipeline.' : 'Taken off the pipeline.' };
+}
+/* What each daily-report line is in the workbook's words. A call about a quotation is a quotation follow-up. */
+var _SP_ACT_TYPES = { 'Call': 'Phone call', 'Performance call': 'Phone call', 'Visit': 'Customer visit', 'Quote result': 'Quotation follow-up',
+                      'Sales order': 'Sales order', 'Other task': 'Other task', 'Online meeting': 'Online meeting', 'Technical meeting': 'Technical meeting',
+                      'Site survey': 'Site survey', 'Collection follow-up': 'Collection follow-up', 'Email': 'Email' };
+/** getSalesActivity({user?, from, to}) — the rep's customer-facing work, day by day (at most 92 days): the daily report's
+ *  lines (voided ones left out) and each day's sent-email count, visits marked done, and the older call log. */
+function getSalesActivity(p) {
+  p = p || {};
+  var cfg = _spCfg(), no = _spDenied(p, cfg);
+  if (no) return { success: false, message: no };
+  var today = _lgDay(_now()), over = _spOver(p, cfg), who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
+  var to = _cbDate(p.to) || today, from = _cbDate(p.from) || _lgAddDays(to, -30);
+  if (from > to) return { success: false, message: 'The start is after the end.' };
+  if (_lgDaysBetween(from, to) > 92) return { success: false, message: 'Pick at most three months at a time.' };
+  var quotes = {}, prs = {};
+  _fugCols('Quotations', ['Quotation No', 'Total', 'Discount %']).forEach(function (r) { var n = String(r['Quotation No'] || '').trim(); if (n) quotes[n] = Math.round(_num(r['Total']) * (1 - Math.max(0, Math.min(100, _num(r['Discount %']))) / 100) * 100) / 100; });
+  var rows = [];
+  _spReports([who], from, true).forEach(function (r) {
+    if (!_cbSame(r['User'], who) || _powKind(r['Kind']) !== 'sales') return;
+    var day = _lgDayOf(r['Date']);
+    if (!day || day < from || day > to) return;
+    var rep = {}; try { rep = JSON.parse(String(r['Report JSON'] || '{}')) || {}; } catch (e) { rep = {}; }
+    (rep.lines || []).forEach(function (l) {
+      if (!l || l.voidedAt) return;
+      var lt = String(l.type || ''), link = String(l.linkType || ''), id = String(l.linkId || '').trim();
+      var type = lt === 'Call' && link === 'quotation' ? 'Quotation follow-up' : (_SP_ACT_TYPES[lt] || lt || 'Other task');
+      rows.push({ date: day, at: String(l.loggedAt || ''), type: type, lineType: lt, company: String(l.company || ''), person: String(l.person || ''),
+                  purpose: String(l.note || ''), outcome: [String(l.result || ''), String(l.reason || '')].filter(Boolean).join(' · '),
+                  nextAction: String(l.nextAction || ''), nextDate: _cbDate(l.nextDate) || '', link: link === 'none' ? '' : link, linkId: id, linkLabel: String(l.linkLabel || ''),
+                  value: link === 'quotation' && quotes[id] !== undefined ? quotes[id] : null, source: 'Daily report' });
+    });
+    var snap = {}; try { snap = JSON.parse(String(r['Snapshot JSON'] || '{}')) || {}; } catch (e2) { snap = {}; }
+    var em = snap && snap.emailsSent && isFinite(Number(snap.emailsSent.value)) ? Number(snap.emailsSent.value) : 0;
+    if (em > 0) rows.push({ date: day, at: '', type: 'Email', lineType: 'Email', company: '', person: '', purpose: em + ' email' + (em === 1 ? '' : 's') + ' sent (counted at 4:30)',
+                            outcome: '', nextAction: '', nextDate: '', link: '', linkId: '', linkLabel: '', value: null, source: 'Daily report', count: em });
+  });
+  _fugCols('VisitPlans', ['Visit Plan No', 'Date', 'User', 'Company', 'Purpose', 'Status', 'Done At', 'Result']).forEach(function (r) {
+    var day = _lgDayOf(r['Done At']) || _lgDayOf(r['Date']);
+    if (!_cbSame(r['User'], who) || String(r['Status']) !== 'Done' || !day || day < from || day > to) return;
+    rows.push({ date: day, at: _webIso(r['Done At']), type: 'Customer visit', lineType: 'Visit plan', company: String(r['Company'] || ''), person: '', purpose: String(r['Purpose'] || ''),
+                outcome: String(r['Result'] || ''), nextAction: '', nextDate: '', link: 'visit', linkId: String(r['Visit Plan No'] || ''), linkLabel: '', value: null, source: 'Visit plan' });
+  });
+  _fugCols('SalesCalls', ['Date', 'User', 'Contact', 'Company', 'Outcome', 'Notes', 'Created At', 'Kind']).forEach(function (r) {
+    var day = _lgDayOf(r['Date']);
+    if (!_cbSame(r['User'], who) || !day || day < from || day > to) return;
+    rows.push({ date: day, at: _webIso(r['Created At']), type: 'Phone call', lineType: 'Call log', company: String(r['Company'] || ''), person: String(r['Contact'] || ''),
+                purpose: String(r['Notes'] || ''), outcome: String(r['Outcome'] || ''), nextAction: '', nextDate: '', link: '', linkId: '', linkLabel: '', value: null, source: 'Call log' });
+  });
+  rows.sort(function (a, b) { return b.date.localeCompare(a.date) || String(b.at).localeCompare(String(a.at)); });
+  return { success: true, user: who, from: from, to: to, today: today, rows: rows, types: ['Customer visit', 'Phone call', 'Email', 'Online meeting', 'Technical meeting', 'Site survey',
+           'Quotation follow-up', 'Collection follow-up', 'Sales order', 'Other task'] };
+}
+/* ═══ end A403 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 /** Idempotency guard for create-mutations (generalizes the A79 PR pattern): a retried request that
  *  carries the same clientRef returns the originally created doc number instead of writing again.
@@ -14440,7 +15095,14 @@ var _FLOW_SETTING_DEFAULTS = {
   clientHub: 'on', clientHubRoles: 'management,admin,director,hr', clientHubEditRoles: 'management,admin,director,hr',
   clientHubCollectionRoles: 'management,admin,director', clientAccredRenewDays: 60,
   clientAccredRequirements: 'Their accreditation / vendor form; Company profile; SEC or DTI registration; Business permit; BIR 2303; Financial statement / ITR; Certificates (ISO, safety); Their accreditation certificate; Other',
-  candidateEvals: 'on', candidateEvalRoles: 'hr,admin,management,director', candidateEvalEditRoles: 'hr,management'   // A400
+  candidateEvals: 'on', candidateEvalRoles: 'hr,admin,management,director', candidateEvalEditRoles: 'hr,management',   // A400
+  /* A403 — the Sales plan: who opens it (a rep sees their own), who sets the year targets, who sees cost and gross profit, the
+     default year target, each tier's account target ('A 1000000; B 600000; C 240000'), the follow-up ranks that make A, B and C
+     ('10,25,50'), the odds of each pipeline stage, the days from sending to the expected close, and the days after the last
+     order that an account stays Active. */
+  salesPlan: 'on', salesPlanRoles: 'sales,director,management', salesPlanTargetRoles: 'director,management', salesPlanCostRoles: 'director,management',
+  salesPlanDefaultTarget: 25000000, salesPlanTierTargets: 'A 1000000; B 600000; C 240000', salesPlanTierRanks: '10,25,50',
+  salesPipelineOdds: 'Lead 10; Qualified 20; Technical Review 30; Quotation 40; Negotiation 60', salesPipelineCloseDays: 30, salesPlanDormantDays: 365
 };
 function getFlowSettings() {
   var out = {};
@@ -17304,6 +17966,8 @@ var _MODULE_MAP = {
   setFollowUpPlan: ['Follow-up guide', 'Plan set'],   // A393
   saveClientAccred: ['Client hub', 'Accreditation saved'], saveClientAccredFile: ['Client hub', 'File added'], archiveClientAccredFile: ['Client hub', 'File archived'],   // A396
   saveCandidateEval: ['Recruitment', 'Evaluation form added'], archiveCandidateEval: ['Recruitment', 'Evaluation form archived'],   // A400
+  saveSalesPlanTarget: ['Sales plan', 'Target set'], saveSalesPlanAccount: ['Sales plan', 'Account updated'], saveSalesOpp: ['Sales plan', 'Pipeline updated'],
+  archiveSalesOpp: ['Sales plan', 'Lead archived'],   // A403
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -22706,6 +23370,8 @@ var HANDLERS = {
   archiveClientAccredFile: archiveClientAccredFile,   // A396
   getCandidateEvals: getCandidateEvals, getCandidateEvalFile: getCandidateEvalFile, saveCandidateEval: saveCandidateEval,
   archiveCandidateEval: archiveCandidateEval,   // A400
+  getSalesPlan: getSalesPlan, getSalesActivity: getSalesActivity, saveSalesPlanTarget: saveSalesPlanTarget, saveSalesPlanAccount: saveSalesPlanAccount,
+  saveSalesOpp: saveSalesOpp, archiveSalesOpp: archiveSalesOpp,   // A403
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -22827,6 +23493,7 @@ var MUTATIONS = {
   setFollowUpPlan: 1,   // A393 — the director sets a rep's ranked follow-up list
   saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client hub's accreditation dates and files
   saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms
+  saveSalesPlanTarget: 1, saveSalesPlanAccount: 1, saveSalesOpp: 1, archiveSalesOpp: 1,   // A403 — the Sales plan
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -22855,6 +23522,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A403 THE SALES PLAN (202; A327 takes 203 or later). Neil, 23 Nov 2026: his 2027 Individual Sales Strategy Workbook (50 customer accounts, a ₱25M year) in the portal, filled in by itself wherever the portal knows. New tabs SalesPlan (a rep's year target, month split and tier targets; director and management), SalesPlanAccounts (an account's tier, target, focus and status where the rep changed the automatic one) and SalesOpps (typed leads, and the rep's own stage / odds / close / decision maker / next action on a quotation or purchase request). getSalesPlan (secured read; a rep their own, the director and management any rep or `all` with the orders credited to nobody): accounts from the live Client Book in follow-up rank order (1-10 A, 11-25 B, 26-50 C; target by tier), main contact, last and next visit, status (On hold / Active within 365 days of an order / Dormant / Prospect) and the year's orders; sales = every sales order of the year (its total as recorded: before VAT) credited to the quotation's owner, else the one Client Book owner of the customer, with invoices, products and payment status, and cost / gross profit only for salesPlanCostRoles (left out of anyone else's reply); pipeline = open quotations net of discount, live purchase requests not yet quoted and typed leads, stage, odds, expected close and the next follow-up by default; the year's quotations; month by month. saveSalesPlanTarget, saveSalesPlanAccount, saveSalesOpp, archiveSalesOpp (+ restore); getSalesActivity (secured read, at most 92 days): the daily report's lines and sent-email counts, visits done, the old call log. FlowSettings salesPlan*, salesPipelineOdds, salesPipelineCloseDays. No Script Property.
 A400 RECRUITMENT EVALUATION FORMS (201; A327 takes 202 or later). Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard. New tab CandidateEvals; getCandidateEvals (every form on file, archived ones left out), saveCandidateEval (one file per call: a private Drive file under _Internal/Recruitment evaluations/<candidate>, the bulletin's allow-list and 10 MB), archiveCandidateEval (off the list, kept in Drive; restore is the Undo) and getCandidateEvalFile (base64; the type checked again on the way out). The candidates live in Code.gs and are addressed by a row number that shifts on a delete, so a form is filed under the candidate's key: C + the yyyyMMddHHmmss they were added (Created At, never edited; distinct for all 159 live candidates); the name, position and stage go with each form. Every action is secured: FlowSettings candidateEvalRoles (hr, admin, management, director) see the forms, candidateEvalEditRoles (hr, management) add and archive them, candidateEvals off closes it.
 A397 HR READS THE NEW DAILY REPORTS (200; A327 takes 201 or later). Neil, 10 Nov 2026: "in the hr dashboard can you show or display also the new team daily report". proofReportRoles' default gains hr; getProofReports lets hr read every person's report of every kind like management (_powReadsEvery; _powReadsAll is unchanged, so the follow-up guide's oversight stays the director's and management's); HR has no report of its own, so saves and submits stay refused. getVisitPlans reads for hr too (read only), so a rep's report shows HR the visits it planned.
 A396 THE CLIENT INFORMATION HUB (199; it carries 197 and 198, never pasted; A327 takes 200 or later). Neil, 5 Nov 2026: every detail of every client in one place, information only (no quotation status, no POs), for management, admin, the director and HR, with each client's accreditation and its requirement files. getClientHub (secured read): one card per _cdKey from the Client master, the live Client Book rows (owners, sector, tier, addresses, contacts, each rep's accreditation label), Collection details (only for clientHubCollectionRoles: management, admin, director; left out of HR's reply) and lead gen's LgAccred; contacts merged by email, phone or name with their sources. New tabs ClientAccred (since, expires = since + 1 year by default, year, note), ClientAccredFiles (one private Drive file per row under _Internal/Client accreditation/<Company>/<Year>, never shared, never in Documents; or last year's file listed again) and ClientAccredLog. saveClientAccred / saveClientAccredFile / archiveClientAccredFile for clientHubEditRoles (the four); getClientHubFile reads a file back. State: Accredited / Renew soon (clientAccredRenewDays 60) / Expired / On process / Not accredited / No label, from the latest rep label. The checklist is FlowSettings clientAccredRequirements. No Script Property.

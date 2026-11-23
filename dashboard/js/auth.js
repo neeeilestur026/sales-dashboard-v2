@@ -403,6 +403,16 @@ function requireFollowUpGuideAccess() {
   return session;
 }
 
+/* A403 — the Sales plan (sales-plan.html): a rep's own plan; the director and management read any rep's and set the targets
+   (FlowSettings salesPlanRoles / salesPlanTargetRoles). */
+const FLOW_SALES_PLAN_ROLES = ['sales', 'director', 'management'];
+function requireSalesPlanAccess() {
+  const session = getSession();
+  if (!session) { window.location.href = 'index.html'; return null; }
+  if (!FLOW_SALES_PLAN_ROLES.includes(session.role)) { window.location.href = _homeForRole(session.role); return null; }
+  return session;
+}
+
 /* A387 — the Item Book (item-book.html): every role that works with items. Mirrors FlowAPI.gs FlowSettings itemBookRoles'
    default; the server decides, from its own list, who may read (getItemBook) and who may change a card (saveItemDetails). */
 const FLOW_ITEM_BOOK_ROLES = ['sales', 'admin', 'accounting', 'management', 'director', 'warehouse'];
@@ -929,7 +939,7 @@ function renderNavbar(activePage) {
         </div>
       </div>`;
   } else if (session.role === 'management') {
-    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status', 'shutdown-calendar', 'follow-up-guide'];   // A207 · A216 · A217 · A226 · A369 · A391 · A393
+    const mApprPages = ['flow-quotations', 'flow-purchase-orders', 'flow-payment-requests', 'flow-other-payables', 'flow-pricing-request', 'management-leave', 'flow-commissions', 'commission-payout-report', 'management-itinerary', 'client-visits', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status', 'shutdown-calendar', 'sales-plan', 'follow-up-guide'];   // A207 · A216 · A217 · A226 · A369 · A391 · A393 · A403
     const mFinPages = ['accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check', 'flow-inventory', 'flow-ap-aging', 'flow-ar-aging', 'flow-lifecycle', 'flow-payments'];   // A223 · A271 dropped management-sales-orders
     const mAcctPages = ['leave-request', 'change-password'];
     /* A231 — the operational Process Flow. Only the pages management could NOT already reach: every
@@ -969,6 +979,7 @@ function renderNavbar(activePage) {
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
+          <a href="sales-plan.html" class="${activePage === 'sales-plan' ? 'active' : ''}">Sales Plan</a>   <!-- A403 -->
           <a href="commission-payout-report.html" class="${activePage === 'commission-payout-report' ? 'active' : ''}">Sales Commissions${_soon(session.role)}</a>
         </div>
       </div>
@@ -1056,7 +1067,7 @@ function renderNavbar(activePage) {
   } else if (session.role === 'director') {
     const dirPayablesActive = ['supplier-list', 'flow-payment-requests', 'flow-other-payables', 'director-expenses', 'flow-commissions', 'commission-payout-report', 'commission-rates', 'flow-travel', 'flow-payments'].includes(activePage);   // A207 · A212 · A223
     const dirReportsActive = ['director-sales-orders', 'accounting-summary', 'balance-sheet', 'ap-aging-monthly', 'flow-month-check'].includes(activePage);
-    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits', 'shutdown-calendar', 'bulletin', 'follow-up-guide'].includes(activePage);   // A216, A366, A369, A390, A391, A393
+    const dirTeamActive = ['all-daily-reports', 'team-daily-reports', 'team-performance', 'management-itinerary', 'client-visits', 'shutdown-calendar', 'bulletin', 'sales-plan', 'follow-up-guide'].includes(activePage);   // A216, A366, A369, A390, A391, A393, A403
     const dirAcctActive = ['director-emails', 'email-setup', 'change-password', 'pf-admin', 'collection-details'].includes(activePage);
     // A175: one quotation page — the builder and the history live together on flow-quotations.html.
     const dirQuoteActive = ['flow-quotations', 'quotation-board', 'client-tracker', 'website-requests', 'quotation-status'].includes(activePage);   // A217 · A338
@@ -1142,6 +1153,7 @@ function renderNavbar(activePage) {
           <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">Team Performance</a>
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
+          <a href="sales-plan.html" class="${activePage === 'sales-plan' ? 'active' : ''}">Sales Plan</a>   <!-- A403 -->
           <a href="bulletin.html" class="${activePage === 'bulletin' ? 'active' : ''}">Bulletin Board</a>   <!-- A390 -->
         </div>
       </div>
@@ -1322,7 +1334,7 @@ function renderNavbar(activePage) {
       </a>`;
   } else {
     const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
-    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary', 'shutdown-calendar', 'follow-up-guide'].includes(activePage);   // A391 · A393
+    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary', 'shutdown-calendar', 'sales-plan', 'follow-up-guide'].includes(activePage);   // A391 · A393 · A403
     const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
@@ -1360,6 +1372,7 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">Client Book</a>
+          <a href="sales-plan.html" class="${activePage === 'sales-plan' ? 'active' : ''}">Sales Plan</a>   <!-- A403 -->
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
           <a href="performance.html" class="${activePage === 'performance' ? 'active' : ''}">Client Tracker</a>

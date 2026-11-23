@@ -163,6 +163,7 @@ const FLOW_SECURED_ACTIONS = [
   'getBulletin', 'getBulletinFile', 'saveBulletin', 'archiveBulletin', 'ackBulletin', 'previewBulletinMemos', 'importBulletinMemos',   // A390
   'getShutdowns', 'saveShutdown', 'archiveShutdown',   // A391 — the shutdown calendar
   'getFollowUpGuide', 'setFollowUpPlan',   // A393 — the follow-up guide
+  'getSalesPlan', 'getSalesActivity', 'saveSalesPlanTarget', 'saveSalesPlanAccount', 'saveSalesOpp', 'archiveSalesOpp',   // A403 — the Sales plan
   'getClientHub', 'getClientHubFile', 'saveClientAccred', 'saveClientAccredFile', 'archiveClientAccredFile',   // A396 — the client information hub
   'getCandidateEvals', 'getCandidateEvalFile', 'saveCandidateEval', 'archiveCandidateEval',   // A400 — recruitment evaluation forms
   'submitCommissionRequest', 'submitDailyReport', 'submitForPricing', 'submitPOApproval', 'submitPaymentRequest',
