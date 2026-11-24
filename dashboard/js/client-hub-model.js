@@ -84,17 +84,108 @@ function chFileCheck(file) {
 /** The main person: the one marked main, else the first. */
 function chPrimary(c) { const p = (c && c.people) || []; return p.find(x => x.primary) || p[0] || null; }
 function _chCsvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-/** The list as a CSV: identity, terms, the main contact, accreditation. */
-function chCsv(cards) {
-  const head = ['Client', 'Also written', 'Sector', 'Tier', 'Reps', 'Address', 'Main contact', 'Phone', 'Email', 'Terms', 'VAT', 'EWT %', 'TIN', 'Accreditation', 'Since', 'Expires', 'Files missing'];
+/** The list as a CSV: identity, terms, the main contact, accreditation; with `sales` (A404), the sales columns too. */
+function chCsv(cards, sales) {
+  const head = ['Client', 'Also written', 'Sector', 'Tier', 'Reps', 'Address', 'Main contact', 'Phone', 'Email', 'Terms', 'VAT', 'EWT %', 'TIN', 'Accreditation', 'Since', 'Expires', 'Files missing']
+    .concat(sales ? CH_SALES_HEAD : []);
   const rows = (cards || []).map(c => {
     const p = chPrimary(c) || {}, b = c.billing || {}, a = c.accred || {};
     return [c.company, (c.names || []).filter(n => n !== c.company).join('; '), c.sector, c.tier, (c.owners || []).join('; '), ((c.addresses || [])[0] || {}).text,
-      p.name, (p.phones || [])[0], (p.emails || [])[0], b.terms, b.vatType, b.ewtRate, b.tin, a.state, a.since, a.expires, a.missing];
+      p.name, (p.phones || [])[0], (p.emails || [])[0], b.terms, b.vatType, b.ewtRate, b.tin, a.state, a.since, a.expires, a.missing].concat(sales ? chSalesCols(sales[c.key]) : []);
   });
   return [head].concat(rows).map(r => r.map(_chCsvCell).join(',')).join('\n') + '\n';
 }
 
+/* ── A404 · the sales view (the director and management): each client's status, reps and Major / Minor ─────────────────
+ * FlowAPI 203's getClientHubSales works the status out from the records (orders, quotations, requests, the daily reports,
+ * visits); `sales` below is its reply as a map of the hub's keys. A card with no entry has no sales activity and no rep. */
+const CH_SALES_SEGS = [['all', 'All clients'], ['major', 'Major'], ['minor', 'Minor'], ['nolabel', 'No label'], ['quiet', 'Quiet'], ['norep', 'No rep']];
+const CH_STAGE_TONE = { 'PO received': 'ok', 'Quotation sent': 'mid', 'Following up': 'mid', 'Negotiating': 'mid', 'RFQ received': 'mid', 'RFQ pending': 'mid',
+  'Contacted': 'off', 'Not reached': 'warn', 'On hold': 'warn', 'Lost': 'off', 'No requirement now': 'off' };
+/** The sales map: key → the client's sales picture. */
+function chSalesMap(reply) { const m = {}; ((reply && reply.clients) || []).forEach(s => { m[s.key] = s; }); return m; }
+function chStageTone(stage) { return CH_STAGE_TONE[stage] || 'off'; }
+/** The reps of a client: the sales view's (the live Client Book), else the card's. */
+function chOwners(card, s) { return (s && s.owners && s.owners.length ? s.owners : (card && card.owners) || []).slice(); }
+function chFirst(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+/** 'Major', 'Minor', 'Reps differ', 'No label' (a client some rep has), or '' (no rep: nowhere to keep a label). */
+function chTierText(s) {
+  if (!s || !(s.rows || []).length) return '';
+  return s.tier === 'Major' || s.tier === 'Minor' ? s.tier : s.tier === 'mixed' ? 'Reps differ' : 'No label';
+}
+function chIsQuiet(s, quietDays) { return !!s && (s.rows || []).length > 0 && (s.quiet === null || s.quiet === undefined || s.quiet >= quietDays); }
+/** 'Today', 'Yesterday', '5 days ago'; or how long it has been quiet. */
+function chAgo(days) { return days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'; }
+function chQuietText(s, quietDays, salesDays) {
+  if (!s || s.quiet === null || s.quiet === undefined) return 'No update in ' + (salesDays >= 60 ? Math.round(salesDays / 30) + ' months' : salesDays + ' days');
+  return 'Last update ' + chAgo(s.quiet) + (s.quiet >= quietDays ? ' · quiet' : '');
+}
+/** The next thing promised: 'Call for the decision · 27 Nov 2026', or overdue. */
+function chNextText(n) { return n ? (n.overdue ? 'Overdue: ' : '') + n.text + ' · ' + chDay(n.day) : ''; }
+function chSalesInSeg(card, s, seg, quietDays) {
+  const owned = !!s && (s.rows || []).length > 0;
+  if (!seg || seg === 'all') return true;
+  if (seg === 'major') return !!s && s.tier === 'Major';
+  if (seg === 'minor') return !!s && s.tier === 'Minor';
+  if (seg === 'nolabel') return owned && s.tier !== 'Major' && s.tier !== 'Minor';
+  if (seg === 'quiet') return chIsQuiet(s, quietDays);
+  if (seg === 'norep') return !chOwners(card, s).length;
+  return true;
+}
+/** The rep filter: '' every rep, '-' no rep, else one rep's name. */
+function chRepMatch(card, s, rep) {
+  if (!rep) return true;
+  const o = chOwners(card, s);
+  return rep === '-' ? !o.length : o.some(x => x.toLowerCase() === String(rep).toLowerCase());
+}
+/** The list in the sales view: the search, the chip and the rep; newest update first, the never-updated after, by name. */
+function chSalesFilter(cards, sales, f, quietDays) {
+  const q = String((f && f.q) || '').trim().toLowerCase(), words = q ? q.split(/\s+/) : [], m = sales || {};
+  return (cards || []).filter(c => chSalesInSeg(c, m[c.key], f && f.sseg, quietDays) && chRepMatch(c, m[c.key], f && f.rep) &&
+      (!words.length || (t => words.every(w => t.indexOf(w) >= 0))(chText(c) + ' ' + ((m[c.key] && m[c.key].stage) || '').toLowerCase())))
+    .sort((a, b) => {
+      const x = (m[a.key] && m[a.key].latest && m[a.key].latest.day) || '', y = (m[b.key] && m[b.key].latest && m[b.key].latest.day) || '';
+      return y.localeCompare(x) || a.company.toLowerCase().localeCompare(b.company.toLowerCase());
+    });
+}
+function chSalesSummary(cards, sales, quietDays) {
+  const out = { all: 0, owned: 0, fresh: 0 }, m = sales || {};
+  CH_SALES_SEGS.forEach(s => { out[s[0]] = 0; });
+  (cards || []).forEach(c => {
+    const s = m[c.key];
+    out.all++;
+    if (s && (s.rows || []).length) { out.owned++; if (!chIsQuiet(s, quietDays)) out.fresh++; }
+    CH_SALES_SEGS.forEach(g => { if (g[0] !== 'all' && chSalesInSeg(c, s, g[0], quietDays)) out[g[0]]++; });
+  });
+  return out;
+}
+/** Every rep named on a client, for the rep picker. */
+function chReps(cards, sales) {
+  const set = {};
+  (cards || []).forEach(c => chOwners(c, (sales || {})[c.key]).forEach(o => { set[o] = 1; }));
+  return Object.keys(set).sort((a, b) => a.localeCompare(b));
+}
+/** The Undo of a Major / Minor change: each Client Book row back to its own label. */
+function chTierUndo(s) { return ((s && s.rows) || []).map(r => ({ clientNo: r.clientNo, tier: r.tier || '' })); }
+/** The sales picture after a label change, without a fresh read. */
+function chTierApplied(s, tier, rows) {
+  const by = {};
+  (rows || []).forEach(r => { by[r.clientNo] = r.tier; });
+  const next = (s.rows || []).map(r => Object.assign({}, r, { tier: rows ? (by[r.clientNo] !== undefined ? by[r.clientNo] : r.tier) : tier }));
+  const set = {};
+  next.forEach(r => { set[r.tier || ''] = 1; });
+  const k = Object.keys(set);
+  return Object.assign({}, s, { rows: next, tier: k.length === 1 ? k[0] : 'mixed' });
+}
+/** The CSV's sales columns (only when the sales view is loaded). */
+function chSalesCols(s) {
+  return [chTierText(s), (s && s.stage) || '', (s && s.latest && s.latest.day) || '', s && s.latest ? [s.latest.kind, s.latest.by, s.latest.text].filter(Boolean).join(' · ') : '',
+    s && s.quiet !== null && s.quiet !== undefined ? s.quiet : '', s && s.next ? chNextText(s.next) : ''];
+}
+const CH_SALES_HEAD = ['Major or minor', 'Sales status', 'Last update', 'Latest update', 'Days since', 'Next'];
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CH_SEGS, CH_TYPES, CH_MAX_MB, chDay, chTone, chStatusLine, chBadge, chInSeg, chText, chFilter, chSummary, chChecklist, chYears, chSize, chFileCheck, chPrimary, chCsv };
+  module.exports = { CH_SEGS, CH_TYPES, CH_MAX_MB, chDay, chTone, chStatusLine, chBadge, chInSeg, chText, chFilter, chSummary, chChecklist, chYears, chSize, chFileCheck, chPrimary, chCsv,
+    CH_SALES_SEGS, CH_SALES_HEAD, chSalesMap, chStageTone, chOwners, chFirst, chTierText, chIsQuiet, chAgo, chQuietText, chNextText, chSalesInSeg, chRepMatch, chSalesFilter,
+    chSalesSummary, chReps, chTierUndo, chTierApplied, chSalesCols };
 }

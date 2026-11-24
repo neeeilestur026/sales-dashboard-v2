@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 202;   // A403 — the Sales plan (the Individual Sales Strategy Workbook). History: see CHANGELOG.
+var FLOW_VERSION = 203;   // A404 — the client hub's sales view (status, reps, Major / Minor). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -897,6 +897,7 @@ var _SECURED = {
   getClientHub: 1, getClientHubFile: 1, saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client information hub (reads secured: clients' details, files)
   getCandidateEvals: 1, getCandidateEvalFile: 1, saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms (reads secured: candidates' assessments)
   getSalesPlan: 1, getSalesActivity: 1, saveSalesPlanTarget: 1, saveSalesPlanAccount: 1, saveSalesOpp: 1, archiveSalesOpp: 1,   // A403 — the Sales plan (reads secured: sales, costs, pipeline by rep)
+  getClientHubSales: 1, saveClientHubTier: 1,   // A404 — the client hub's sales view (read secured: every client's sales activity)
   getFollowUpGuide: 1, setFollowUpPlan: 1,   // A393 — the follow-up guide (the read is secured: clients and quotations by rep)
   submitPOApproval: 1, submitPaymentRequest: 1, submitQuotationApproval: 1, submitTravelReplenishment: 1, submitWeeklyItinerary: 1, unlinkQuotationEmail: 1,
   getProofReports: 1, saveProofReport: 1,   // A347 — the report is private while it is a trial, so even its read is secured
@@ -2634,9 +2635,10 @@ function getClientHub(p) {
   p = p || {};
   var cfg = _chCfg(), no = _chDenied(p, cfg, false);
   if (no) return { success: false, message: no };
-  var role = _ibRole(p), collect = cfg.collect.indexOf(role) >= 0, today = _lgDay(_now());
+  var role = _ibRole(p), collect = cfg.collect.indexOf(role) >= 0, today = _lgDay(_now()), sc = _chsCfg();
   return { success: true, today: today, cards: _chCards(cfg, collect, today), renewDays: cfg.renew,
-           lists: { requirements: cfg.requirements, states: _CH_STATES }, may: { edit: cfg.edit.indexOf(role) >= 0, collection: collect } };
+           lists: { requirements: cfg.requirements, states: _CH_STATES },
+           may: { edit: cfg.edit.indexOf(role) >= 0, collection: collect, sales: sc.sales.indexOf(role) >= 0, tier: sc.tier.indexOf(role) >= 0 } };   // A404 — sales, tier
 }
 /** saveClientAccred({company, since?, expires?, year?, note?, ifUpdatedAt?, clientRef?}) — the hub's own accreditation dates for one
  *  client. Expires defaults to a year after since; a field not sent keeps its value ('' clears it). The reps' label is not touched. */
@@ -2748,6 +2750,228 @@ function getClientHubFile(p) {
   } catch (e) { return { success: true, missing: true, message: 'The file is no longer in Drive.' }; }
 }
 /* ═══ end A396 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A404 — the client hub's sales view (FlowAPI 203) ══════════════════════════════════════════════
+   Neil, 23 Nov 2026: "in the client hub, but specifically for management dashboard and director dashboard … an update
+   status, depending on what is the latest update from that client on the sales dashboard … a label who own it on sales
+   and label major and minor". The Sales plan reads one rep at a time; this reads one CLIENT across every rep. The reps
+   hardly type a status (on 23 Nov: Major/Minor on 1 of 124 Client Book rows, a sales status on 4, a next step on none),
+   but they log every call and visit in the daily report, so the status is worked out from the records, newest first:
+   an order or a won quotation → PO received; a quotation sent → Quotation sent, and a follow-up or a call after it →
+   Following up; a purchase request not yet quoted → RFQ received; a call that promised an RFQ → RFQ pending; "No need"
+   → No requirement now; a lost quotation → Lost; a call after a closed one → Contacted; calls alone → Contacted (or Not
+   reached when nobody answered). The rep's own Client Book status counts as the newest record of its day. Keyed by
+   _cdKey like the hub's cards (business units stay apart). Major / Minor stays the Client Book's label (A354); the
+   director and management set it here for every live Client Book row of the client (Neil's choice), each change logged
+   in the Client Book's history. FlowSettings: clientHubSalesRoles, clientHubTierRoles (both director,management),
+   clientHubQuietDays (30: no update for that long reads Quiet), clientHubSalesDays (180: how far back the daily reports
+   are read; the records are read whole). Read only, besides the label. */
+var _CHS_ROLES = ['director', 'management'];
+var _CHS_CLOSED = ['Lost', 'No requirement now', 'On hold'];
+function _chsCfg() {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  var q = parseInt(d.clientHubQuietDays, 10), w = parseInt(d.clientHubSalesDays, 10);
+  return { sales: _bbList(d.clientHubSalesRoles, _CHS_ROLES), tier: _bbList(d.clientHubTierRoles, _CHS_ROLES), quiet: q > 0 && q < 400 ? q : 30, days: w >= 30 && w <= 400 ? w : 180 };
+}
+function _chsDenied(p, hub, list, what) {
+  if (!hub.on) return 'The client information hub is switched off (FlowSettings clientHub).';
+  var r = _ibRole(p);
+  if (hub.roles.indexOf(r) < 0 || list.indexOf(r) < 0) return what + ' ' + list.join(', ') + '.';
+  if (!String((p && p.actorName) || '').trim()) return 'Sign in again — there is no name to save this under.';
+  return '';
+}
+function _chsPeso(n) { return '₱' + String(Math.round(_num(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+/** One client's Major / Minor from its live Client Book rows: the one label they agree on, 'mixed', or ''. */
+function _chsTierOf(rows) {
+  var set = {};
+  rows.forEach(function (r) { set[String(r.tier || '')] = 1; });
+  var k = Object.keys(set);
+  return k.length === 1 ? k[0] : 'mixed';
+}
+/** Every client's sales picture, keyed by the hub's _cdKey. */
+function _chsBuild(cfg, today) {
+  var since = _lgAddDays(today, -cfg.days), out = {}, book = {};
+  var put = function (key) { if (!key) return null; if (!out[key]) out[key] = { key: key, owners: [], rows: [], ev: [], next: [] }; return out[key]; };
+  _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Status', 'Status Note', 'Status Updated At', 'Next Step', 'Next Step Date', 'Archived At', 'Tier']).forEach(function (r) {
+    if (r['Archived At']) return;
+    var c = put(_cdKey(r['Company']));
+    if (!c) return;
+    var owner = String(r['Owner'] || '').trim(), no = String(r['Client No'] || '').trim();
+    if (no) book[no] = c.key;
+    if (owner && c.owners.indexOf(owner) < 0) c.owners.push(owner);
+    c.rows.push({ clientNo: no, owner: owner, tier: String(r['Tier'] || '').trim() });
+    var st = String(r['Status'] || '').trim(), sd = _lgDayOf(r['Status Updated At']), note = String(r['Status Note'] || '').trim();
+    if (st && sd) c.ev.push({ day: sd, kind: 'Status', by: owner, text: 'Client Book status: ' + st + (note ? ' · ' + note : ''), stage: st, rank: 9 });
+    var nd = _lgDayOf(r['Next Step Date']), ns = String(r['Next Step'] || '').trim();
+    if (nd) c.next.push({ day: nd, text: ns || 'Next step', by: owner, from: '' });
+  });
+  var links = {}, prs = {}, qmeta = {}, quotedPr = {};
+  _sbRows('ClientBookLinks').forEach(function (r) { links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
+  var prRows = _fugCols('PricingRequests', ['PR No', 'Date', 'Requested By', 'Customer', 'Status', 'Created At', 'Salesperson', 'Client Book No']);
+  prRows.forEach(function (r) { var no = String(r['PR No'] || '').trim(); if (no) prs[no] = { clientNo: String(r['Client Book No'] || '').trim() }; });
+  var quotes = _fugCols('Quotations', ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Created By', 'Subject', 'Discount %', 'PR No', 'Sent At', 'Salesperson',
+                                       'Result', 'Result At', 'Result Reason', 'Last Follow Up']);
+  quotes.forEach(function (q) { var no = String(q['Quotation No'] || '').trim(), pr = String(q['PR No'] || '').trim(); if (no) qmeta[no] = { prNo: pr }; if (pr) quotedPr[pr] = true; });
+  var m = { links: links, prs: prs, quotes: qmeta };
+  var keyOf = function (kind, no, customer) { var cn = no ? _cbLinkOf(m, kind, no) : ''; return (cn && book[cn]) || _cdKey(customer); };
+  var sos = _fugCols('SalesOrders', ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Client PO No']), soOf = {}, qBy = {};
+  quotes.forEach(function (q) { var no = String(q['Quotation No'] || '').trim(); if (no) qBy[no] = q; });
+  sos.forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q && !/cancel|void/i.test(String(r['Status'] || ''))) soOf[q] = String(r['SO No'] || ''); });
+  quotes.forEach(function (q) {
+    var no = String(q['Quotation No'] || '').trim(), c = no ? put(keyOf('quotation', no, q['Customer'])) : null;
+    if (!c) return;
+    var st = String(q['Status'] || ''), res = String(q['Result'] || ''), day = _lgDayOf(q['Date']), sent = _lgDayOf(q['Sent At']), by = _quoOwner(q);
+    var resAt = _lgDayOf(q['Result At']), why = String(q['Result Reason'] || '').trim(), subj = String(q['Subject'] || '').trim();
+    var disc = Math.max(0, Math.min(100, _num(q['Discount %']))), val = Math.round(_num(q['Total']) * (1 - disc / 100) * 100) / 100;
+    var name = 'quotation ' + no + (subj ? ' (' + subj.slice(0, 80) + ')' : '');
+    var closed = FLOW_Q_CLOSED_STATUSES_GS.indexOf(st) >= 0, lost = st === 'Lost' || res === 'Lost', won = !!soOf[no] || (res === 'Won' && !closed);
+    var out1 = sent || st === 'Sent' || won || res === 'Pending';
+    if (out1) c.ev.push({ day: sent || day, kind: 'Quotation', by: by, text: 'Sent ' + name + ' · ' + _chsPeso(val), ref: no, stage: 'Quotation sent', rank: 4 });
+    else if (day && !closed) c.ev.push({ day: day, kind: 'Quotation', by: by, text: 'Preparing ' + name + (st ? ' · ' + st : ''), ref: no, stage: 'RFQ received', rank: 3 });
+    var lf = _lgDayOf(q['Last Follow Up']);
+    if (lf && out1) c.ev.push({ day: lf, kind: 'Follow-up', by: by, text: 'Followed up ' + name, ref: no, stage: 'Following up', rank: 5 });
+    if (res === 'Pending' && resAt && resAt !== lf) c.ev.push({ day: resAt, kind: 'Follow-up', by: by, text: 'Followed up ' + name + (why ? ' · ' + why : ''), ref: no, stage: 'Following up', rank: 5 });
+    if (won && !soOf[no]) c.ev.push({ day: resAt || sent || day, kind: 'Won', by: by, text: 'Won ' + name, ref: no, stage: 'PO received', rank: 6 });
+    if (closed || lost) c.ev.push({ day: resAt || day, kind: lost ? 'Lost' : st, by: by, text: (lost ? 'Lost ' : st + ': ') + name + (why ? ' · ' + why : ''), ref: no, stage: lost ? 'Lost' : '', rank: 1 });
+  });
+  prRows.forEach(function (r) {
+    var no = String(r['PR No'] || '').trim(), c = no ? put(keyOf('pr', no, r['Customer'])) : null;
+    if (!c) return;
+    var st = String(r['Status'] || ''), open = !quotedPr[no] && ['Quoted', 'Migrated', 'Cancelled', 'Closed'].indexOf(st) < 0;
+    c.ev.push({ day: _lgDayOf(r['Date']) || _lgDayOf(r['Created At']), kind: 'Request', by: _prOwner(r), text: 'Purchase request ' + no + (st ? ' · ' + st : ''), ref: no,
+                stage: open ? 'RFQ received' : '', rank: 3 });
+  });
+  sos.forEach(function (r) {
+    var no = String(r['SO No'] || '').trim(), st = String(r['Status'] || ''), qno = String(r['Quotation No'] || '').trim();
+    if (!no || /cancel|void/i.test(st)) return;
+    var c = put(qno ? keyOf('quotation', qno, r['Customer']) : _cdKey(r['Customer']));
+    if (!c) return;
+    var q = qno ? qBy[qno] : null;
+    c.ev.push({ day: _lgDayOf(r['Date']), kind: 'Order', by: q ? _quoOwner(q) : '', text: 'Sales order ' + no + ' · ' + _chsPeso(r['Total']) + (String(r['Client PO No'] || '').trim() ? ' · their PO ' + String(r['Client PO No']).trim() : ''),
+                ref: no, stage: 'PO received', rank: 6 });
+  });
+  var sh = _ss().getSheetByName('ProofReports');
+  if (sh && sh.getLastRow() >= 2) {
+    var reps = _fugCols('ProofReports', ['Date', 'User', 'Updated At', 'Kind']).filter(function (r) {
+      return _powKind(r['Kind']) === 'sales' && (_lgDayOf(r['Updated At']) || _lgDayOf(r['Date']) || '') >= since;
+    });
+    if (reps.length) {
+      var col = SCHEMA.ProofReports.indexOf('Report JSON') + 1, lo = reps[0].rowIndex, hi = reps[reps.length - 1].rowIndex;
+      var json = sh.getRange(lo, col, hi - lo + 1, 1).getValues();
+      reps.forEach(function (r) {
+        var rep = {};
+        try { rep = JSON.parse(String(json[r.rowIndex - lo][0] || '{}')) || {}; } catch (e) { rep = {}; }
+        var user = String(r['User'] || '').trim(), rday = _lgDayOf(r['Date']);
+        (rep.lines || []).forEach(function (l) {
+          if (!l || l.voidedAt) return;
+          var lt = String(l.linkType || ''), lid = String(l.linkId || '').trim();
+          var key = lt === 'client' && book[lid] ? book[lid] : lt === 'quotation' || lt === 'pr' ? keyOf(lt, lid, l.company) : _cdKey(l.company);
+          var c = put(key), day = rday || _lgDayOf(l.loggedAt);
+          if (!c || !day) return;
+          var res = String(l.result || '').trim(), type = String(l.type || 'Call');
+          c.ev.push({ day: day, kind: type, by: user, text: [String(l.person || '').trim(), res, String(l.note || '').trim()].filter(Boolean).join(' · ').slice(0, 220) || type,
+                      stage: res === 'RFQ promised' ? 'RFQ pending' : res === 'No need' ? 'No requirement now' : '', rank: res === 'RFQ promised' ? 2 : 1,
+                      contact: !!res && res !== 'No answer', attempt: res === 'No answer' });
+          var nx = _lgDayOf(l.nextDate);
+          if (nx) c.next.push({ day: nx, text: String(l.nextAction || '').trim() || 'Next ' + type.toLowerCase(), by: user, from: day });
+        });
+      });
+    }
+  }
+  _fugCols('VisitPlans', ['Visit Plan No', 'Date', 'User', 'Client No', 'Company', 'Status', 'Done At']).forEach(function (r) {
+    var no = String(r['Client No'] || '').trim(), c = put((no && book[no]) || _cdKey(r['Company']));
+    if (!c) return;
+    var st = String(r['Status'] || ''), day = _lgDayOf(r['Date']), by = String(r['User'] || '').trim();
+    if (st === 'Done') {
+      var dd = _lgDayOf(r['Done At']) || day;
+      if (dd && !c.ev.some(function (e) { return e.day === dd && /visit|survey/i.test(e.kind); })) c.ev.push({ day: dd, kind: 'Visit', by: by, text: 'Visited', ref: String(r['Visit Plan No'] || ''), contact: true, rank: 1 });
+    } else if (['Draft', 'Pending Director', 'Approved'].indexOf(st) >= 0 && day >= today) c.next.push({ day: day, text: 'Visit', by: by, from: '' });
+  });
+  return Object.keys(out).map(function (k) { return _chsOne(out[k], cfg, today); }).filter(function (c) { return c.owners.length || c.latest; });
+}
+/** One client: the status, the latest update, the next thing promised, how long it has been quiet, and the last ten updates. */
+function _chsOne(c, cfg, today) {
+  var ev = c.ev.filter(function (e) { return e.day && e.day <= today; });
+  var asc = ev.slice().sort(function (a, b) { return a.day.localeCompare(b.day) || (a.rank || 0) - (b.rank || 0); });
+  var stage = '', sday = '', why = null;
+  asc.forEach(function (e) {
+    if (e.stage) { stage = e.stage; sday = e.day; why = e; }
+    else if (e.contact) {
+      if (stage === 'Quotation sent') { stage = 'Following up'; sday = e.day; why = e; }
+      else if (!stage || stage === 'Not reached' || _CHS_CLOSED.indexOf(stage) >= 0) { stage = 'Contacted'; sday = e.day; why = e; }
+    } else if (e.attempt && !stage) { stage = 'Not reached'; sday = e.day; why = e; }
+  });
+  var desc = asc.slice().reverse(), seen = {}, updates = [];
+  desc.forEach(function (e) {
+    var k = e.day + '|' + e.kind + '|' + e.text;
+    if (seen[k] || updates.length >= 10) return;
+    seen[k] = 1;
+    updates.push({ day: e.day, kind: e.kind, by: e.by || '', text: e.text, ref: e.ref || '' });
+  });
+  var latest = updates[0] || null;
+  var ahead = c.next.filter(function (n) { return n.day >= today; }).sort(function (a, b) { return a.day.localeCompare(b.day); })[0] || null;
+  var late = !ahead && latest ? c.next.filter(function (n) { return n.day < today && n.from && n.from >= latest.day; }).sort(function (a, b) { return b.day.localeCompare(a.day); })[0] || null : null;
+  var next = ahead || late;
+  return { key: c.key, owners: c.owners, rows: c.rows, tier: c.rows.length ? _chsTierOf(c.rows) : '', stage: stage, stageDay: sday,
+           stageWhy: why ? { kind: why.kind, text: why.text, ref: why.ref || '', by: why.by || '' } : null, latest: latest,
+           quiet: latest ? _lgDaysBetween(latest.day, today) : null, next: next ? { day: next.day, text: next.text, by: next.by, overdue: next.day < today } : null,
+           updates: updates };
+}
+/** getClientHubSales() — every client's sales picture for the director and management (clientHubSalesRoles). */
+function getClientHubSales(p) {
+  p = p || {};
+  var hub = _chCfg(), cfg = _chsCfg(), no = _chsDenied(p, hub, cfg.sales, 'The client hub\'s sales view is for');
+  if (no) return { success: false, message: no };
+  var today = _lgDay(_now());
+  return { success: true, today: today, quietDays: cfg.quiet, salesDays: cfg.days, clients: _chsBuild(cfg, today), tiers: CB_TIERS,
+           may: { tier: cfg.tier.indexOf(_ibRole(p)) >= 0 } };
+}
+/** saveClientHubTier({key | company, tier: 'Major' | 'Minor' | '', ifTier?, rows?}) — the client's Major / Minor on every live
+ *  Client Book row it has (each rep's), for clientHubTierRoles. '' clears it. ifTier is the label the page showed ('' none,
+ *  'mixed' when the reps' rows differ): a change since then is refused. `rows` ([{clientNo, tier}], the Undo) puts each row
+ *  back to its own label instead, so undoing a change to a client whose reps disagreed restores both labels exactly. */
+function saveClientHubTier(p) {
+  p = p || {};
+  var hub = _chCfg(), cfg = _chsCfg(), no = _chsDenied(p, hub, cfg.tier, 'Major and Minor in the client hub are set by');
+  if (no) return { success: false, message: no };
+  var norm = function (v) { var t = String(v == null ? '' : v).trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : ''; };
+  var tier = norm(p.tier), want = null;
+  if (p.rows !== undefined && p.rows !== null && p.rows !== '') {
+    var list = p.rows;
+    if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = null; } }
+    if (!Array.isArray(list) || !list.length || list.length > 20) return { success: false, message: 'The labels to put back are not readable.' };
+    want = {};
+    for (var i = 0; i < list.length; i++) {
+      var t = norm(list[i] && list[i].tier);
+      if (t && CB_TIERS.indexOf(t) < 0) return { success: false, message: 'A client is Major or Minor.' };
+      want[String((list[i] && list[i].clientNo) || '').trim()] = t;
+    }
+  }
+  if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: 'A client is Major or Minor.' };
+  var key = _cdKey(p.key || p.company);
+  if (!key) return { success: false, message: 'Say which client.' };
+  var rows = _rows('ClientBook').filter(function (r) { return !r['Archived At'] && _cdKey(r['Company']) === key; });
+  if (!rows.length) return { success: false, message: 'No rep has this client in their Client Book, so there is nowhere to keep the label. Ask a rep to add it first.' };
+  var now = _chsTierOf(rows.map(function (r) { return { tier: String(r['Tier'] || '').trim() }; }));
+  if (Object.prototype.hasOwnProperty.call(p, 'ifTier') && String(p.ifTier == null ? '' : p.ifTier) !== now)
+    return { success: false, stale: true, tier: now, message: 'Someone changed this client\'s label just now (it is ' + (now === 'mixed' ? 'different per rep' : now || 'not set') + '). Look again before changing it.' };
+  var by = String(p.actorName).trim(), at = _now(), changed = 0;
+  rows.forEach(function (r) {
+    var was = String(r['Tier'] || '').trim(), to = want ? want[String(r['Client No'])] : tier;
+    if (to === undefined || was === to) return;
+    var obj = {};
+    SCHEMA.ClientBook.forEach(function (h) { obj[h] = r[h]; });
+    obj['Tier'] = to; obj['Updated By'] = by; obj['Updated At'] = at;
+    _cbPut(r, obj);
+    _cbLog(String(r['Client No']), 'details', '', '', 'Changed the label ' + (was || 'not set') + ' to ' + (to || 'not set') + ' (in the client hub).', '', by);
+    changed++;
+  });
+  var company = _webCell(p.company).slice(0, 160) || String(rows[0]['Company'] || key), after = _chsTierOf(rows.map(function (r) { return { tier: want ? (want[String(r['Client No'])] !== undefined ? want[String(r['Client No'])] : String(r['Tier'] || '').trim()) : tier }; }));
+  return { success: true, key: key, tier: after, was: now, changed: changed, unchanged: !changed, refNo: company,
+           message: !changed ? 'Nothing changed.' : want ? 'Put back.' : tier ? company + ' is ' + tier + ' now.' : company + ' has no label now.' };
+}
+/* ═══ end A404 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 /* ═══ A400 — recruitment evaluation forms (FlowAPI 201) ═════════════════════════════════════════════
    Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard.
@@ -15102,7 +15326,10 @@ var _FLOW_SETTING_DEFAULTS = {
      order that an account stays Active. */
   salesPlan: 'on', salesPlanRoles: 'sales,director,management', salesPlanTargetRoles: 'director,management', salesPlanCostRoles: 'director,management',
   salesPlanDefaultTarget: 25000000, salesPlanTierTargets: 'A 1000000; B 600000; C 240000', salesPlanTierRanks: '10,25,50',
-  salesPipelineOdds: 'Lead 10; Qualified 20; Technical Review 30; Quotation 40; Negotiation 60', salesPipelineCloseDays: 30, salesPlanDormantDays: 365
+  salesPipelineOdds: 'Lead 10; Qualified 20; Technical Review 30; Quotation 40; Negotiation 60', salesPipelineCloseDays: 30, salesPlanDormantDays: 365,
+  /* A404 — the client hub's sales view: who sees it, who sets Major / Minor there, the days without an update that read
+     Quiet, and how many days of daily reports it reads. */
+  clientHubSalesRoles: 'director,management', clientHubTierRoles: 'director,management', clientHubQuietDays: 30, clientHubSalesDays: 180
 };
 function getFlowSettings() {
   var out = {};
@@ -17968,6 +18195,7 @@ var _MODULE_MAP = {
   saveCandidateEval: ['Recruitment', 'Evaluation form added'], archiveCandidateEval: ['Recruitment', 'Evaluation form archived'],   // A400
   saveSalesPlanTarget: ['Sales plan', 'Target set'], saveSalesPlanAccount: ['Sales plan', 'Account updated'], saveSalesOpp: ['Sales plan', 'Pipeline updated'],
   archiveSalesOpp: ['Sales plan', 'Lead archived'],   // A403
+  saveClientHubTier: ['Client hub', 'Major / Minor set'],   // A404
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -23372,6 +23600,7 @@ var HANDLERS = {
   archiveCandidateEval: archiveCandidateEval,   // A400
   getSalesPlan: getSalesPlan, getSalesActivity: getSalesActivity, saveSalesPlanTarget: saveSalesPlanTarget, saveSalesPlanAccount: saveSalesPlanAccount,
   saveSalesOpp: saveSalesOpp, archiveSalesOpp: archiveSalesOpp,   // A403
+  getClientHubSales: getClientHubSales, saveClientHubTier: saveClientHubTier,   // A404
   savePfInquiry: savePfInquiry, getPfInquiries: getPfInquiries,
   getPricingRequests: getPricingRequests, createPricingRequest: createPricingRequest,
   updatePRSourcing: updatePRSourcing, submitForPricing: submitForPricing, setMgmtPricing: setMgmtPricing,
@@ -23494,6 +23723,7 @@ var MUTATIONS = {
   saveClientAccred: 1, saveClientAccredFile: 1, archiveClientAccredFile: 1,   // A396 — the client hub's accreditation dates and files
   saveCandidateEval: 1, archiveCandidateEval: 1,   // A400 — recruitment evaluation forms
   saveSalesPlanTarget: 1, saveSalesPlanAccount: 1, saveSalesOpp: 1, archiveSalesOpp: 1,   // A403 — the Sales plan
+  saveClientHubTier: 1,   // A404 — Major / Minor from the client hub (the Client Book rows)
   savePfInquiry: 1,
   createPricingRequest: 1, updatePRSourcing: 1, submitForPricing: 1, setMgmtPricing: 1,
   rejectMgmtPricing: 1,
@@ -23522,6 +23752,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A404 THE CLIENT HUB'S SALES VIEW (203; it carries 202; A327 takes 204 or later). Neil, 23 Nov 2026: in the client hub, for the director and management, each client's update status from the latest sales activity, who owns it, and Major / Minor. getClientHubSales (secured read, clientHubSalesRoles): per _cdKey the live Client Book owners and their rows' Major / Minor, a status worked out from the records newest first (sales order or won quotation → PO received; quotation sent → Quotation sent, a follow-up or a call after it → Following up; purchase request not yet quoted → RFQ received; RFQ promised → RFQ pending; No need → No requirement now; lost → Lost; a call after a closed status → Contacted; calls only → Contacted / Not reached; the rep's own Client Book status counts as that day's newest record), the latest update, the next date promised (daily report next date, visit plan, Client Book next step; overdue when nothing happened since), the days since the last update and the last ten updates; daily reports read for clientHubSalesDays (180). saveClientHubTier (clientHubTierRoles): Major / Minor / '' on every live Client Book row of the client, whole rows via _cbPut, each change in ClientBookLog; ifTier refuses a change made meanwhile. getClientHub's may gains sales and tier. FlowSettings clientHubSalesRoles, clientHubTierRoles, clientHubQuietDays, clientHubSalesDays. No new tab, no Script Property.
 A403 THE SALES PLAN (202; A327 takes 203 or later). Neil, 23 Nov 2026: his 2027 Individual Sales Strategy Workbook (50 customer accounts, a ₱25M year) in the portal, filled in by itself wherever the portal knows. New tabs SalesPlan (a rep's year target, month split and tier targets; director and management), SalesPlanAccounts (an account's tier, target, focus and status where the rep changed the automatic one) and SalesOpps (typed leads, and the rep's own stage / odds / close / decision maker / next action on a quotation or purchase request). getSalesPlan (secured read; a rep their own, the director and management any rep or `all` with the orders credited to nobody): accounts from the live Client Book in follow-up rank order (1-10 A, 11-25 B, 26-50 C; target by tier), main contact, last and next visit, status (On hold / Active within 365 days of an order / Dormant / Prospect) and the year's orders; sales = every sales order of the year (its total as recorded: before VAT) credited to the quotation's owner, else the one Client Book owner of the customer, with invoices, products and payment status, and cost / gross profit only for salesPlanCostRoles (left out of anyone else's reply); pipeline = open quotations net of discount, live purchase requests not yet quoted and typed leads, stage, odds, expected close and the next follow-up by default; the year's quotations; month by month. saveSalesPlanTarget, saveSalesPlanAccount, saveSalesOpp, archiveSalesOpp (+ restore); getSalesActivity (secured read, at most 92 days): the daily report's lines and sent-email counts, visits done, the old call log. FlowSettings salesPlan*, salesPipelineOdds, salesPipelineCloseDays. No Script Property.
 A400 RECRUITMENT EVALUATION FORMS (201; A327 takes 202 or later). Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard. New tab CandidateEvals; getCandidateEvals (every form on file, archived ones left out), saveCandidateEval (one file per call: a private Drive file under _Internal/Recruitment evaluations/<candidate>, the bulletin's allow-list and 10 MB), archiveCandidateEval (off the list, kept in Drive; restore is the Undo) and getCandidateEvalFile (base64; the type checked again on the way out). The candidates live in Code.gs and are addressed by a row number that shifts on a delete, so a form is filed under the candidate's key: C + the yyyyMMddHHmmss they were added (Created At, never edited; distinct for all 159 live candidates); the name, position and stage go with each form. Every action is secured: FlowSettings candidateEvalRoles (hr, admin, management, director) see the forms, candidateEvalEditRoles (hr, management) add and archive them, candidateEvals off closes it.
 A397 HR READS THE NEW DAILY REPORTS (200; A327 takes 201 or later). Neil, 10 Nov 2026: "in the hr dashboard can you show or display also the new team daily report". proofReportRoles' default gains hr; getProofReports lets hr read every person's report of every kind like management (_powReadsEvery; _powReadsAll is unchanged, so the follow-up guide's oversight stays the director's and management's); HR has no report of its own, so saves and submits stay refused. getVisitPlans reads for hr too (read only), so a rep's report shows HR the visits it planned.

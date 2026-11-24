@@ -48,7 +48,7 @@ const list = (c, a) => call(c, 'getCandidateEvals', a || HR);
 sec('1 · the version, and who may see and add forms');
 {
   const { c, store } = world();
-  ok('getVersion = 202', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 202);
+  ok('getVersion = 203', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 203);
   [HR, ANA, LARRY, NEIL].forEach(a => ok(a.actorRole + ' sees the forms', list(c, a).success));
   [KIM, ACCT, who('marketing', 'M', 'm1'), who('leadgen', 'L', 'l1'), who('warehouse', 'W', 'w1')].forEach(a => ok(a.actorRole + ' is refused', !list(c, a).success));
   ok('the read is secured (no secret, no answer)', !call(c, 'getCandidateEvals', Object.assign({ flowSecret: '' }, HR)).success);
@@ -152,7 +152,7 @@ sec('6 · no Script Property; every action registered');
     ok(a + ' is secured in FlowAPI, Flask and the browser', new RegExp('\\b' + a + ': 1').test(SRC) && FL.indexOf('"' + a + '"') >= 0 && FA.indexOf("'" + a + "'") >= 0);
   });
   ok('the two writes are mutations and logged under Recruitment', /saveCandidateEval: 1, archiveCandidateEval: 1,/.test(SRC) && /saveCandidateEval: \['Recruitment', 'Evaluation form added'\]/.test(SRC));
-  ok('FLOW_VERSION 202 with the A400 CHANGELOG line', /^var FLOW_VERSION = 202;/m.test(SRC) && /^A400 RECRUITMENT EVALUATION FORMS \(201/m.test(SRC));
+  ok('FLOW_VERSION 203 with the A400 CHANGELOG line', /^var FLOW_VERSION = 203;/m.test(SRC) && /^A400 RECRUITMENT EVALUATION FORMS \(201/m.test(SRC));
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILED' : 'all ok'));

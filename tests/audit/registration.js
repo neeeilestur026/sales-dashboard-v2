@@ -170,6 +170,7 @@ const EXCEPTIONS = {
     getCandidateEvalFile:          'A400 — a secured READ (an evaluation form file)',
     getSalesPlan:                  'A403 — a secured READ (a rep\'s sales plan: sales, costs, pipeline)',
     getSalesActivity:              'A403 — a secured READ (a rep\'s daily activity)',
+    getClientHubSales:             'A404 — a secured READ (every client\'s sales activity, director and management)',
     collectWebsiteRequestsNow:     'A338 — fetches from the website first, then takes its own short tryLock to file; holding the 20 s mutation lock across a network call would stall every user action',
     peGetTables:                   'A340 — a secured READ (the director\'s pricing tables)',
     peListRecords:                 'A340 — a secured READ (the director\'s priced quotations)',
