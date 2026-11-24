@@ -279,3 +279,68 @@ html[data-motion="off"] .ch-sheet.ch-enter, html[data-motion="off"] .ch-skrow sp
 html[data-motion="off"] .ch-thumb { transition: none; }
 @media (prefers-contrast: more) { .ch-reqs, .ch-labels, .ch-status { border-color: var(--hx-ink-3); } .ch-thumb { box-shadow: 0 0 0 1px var(--hx-ink-2); } }
 @media print { .ch-bar, .ch-listcol, .ch-actions, .ch-tabs, .ch-up, .ch-fx, .ch-panelbar, .ch-close { display: none; } .ch-panel[hidden] { display: block; } .ch-split { display: block; height: auto; } .ch-pane { display: block; border: 0; } }
+
+/* A404 — the sales view (the director and management): Sales | Accreditation, the rep, Major / Minor, the updates */
+.ch-lensrow { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: center; margin: 0 0 .625rem; }
+.ch-lensrow[hidden], .ch-rep[hidden] { display: none; }
+.ch-lens { position: relative; display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--hx-inset); }
+.ch-lthumb { position: absolute; top: 2px; bottom: 2px; left: 2px; width: 0; border-radius: 8px; background: var(--hx-card); box-shadow: var(--hx-sh-1), 0 0 0 .5px var(--hx-hair);
+  transition: transform .32s cubic-bezier(.2, .8, .2, 1), width .32s cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
+.ch-lthumb.now { transition: none; }
+.ch-lbtn { position: relative; z-index: 1; min-width: 7.5rem; padding: .4rem 1rem; border: 0; border-radius: 8px; background: transparent; color: var(--hx-ink-2);
+  font: 600 .8125rem/1.3 var(--hx-text); white-space: nowrap; cursor: pointer; transition: transform 100ms ease-out; }
+.ch-lbtn[aria-pressed="true"] { color: var(--hx-ink); }
+.ch-lbtn:active { transform: scale(.97); }
+.ch-lbtn:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: -2px; }
+.ch-rep { display: flex; flex: 0 1 15rem; min-width: 0; }
+.ch-lensrow .ch-rep select { width: 100%; box-sizing: border-box; padding: .45rem .625rem; font: 500 .8125rem/1.35 var(--hx-text); color: var(--hx-ink); background: var(--hx-glass-solid);
+  border: 1px solid var(--hx-hair); border-radius: var(--hx-r-sm); }
+.ch-lensrow .ch-rep select:focus { outline: none; border-color: var(--hx-cyan); box-shadow: 0 0 0 3px var(--hx-cyan-ring); }
+/* Major / Minor: Major carries the colour, Minor stays quiet, a missing label is only an outline */
+.ch-tier { flex: none; display: inline-block; padding: .05rem .5rem; border-radius: var(--hx-r-pill); border: 1px solid var(--hx-hair-2); font: 700 .66rem/1.5 var(--hx-text);
+  letter-spacing: .01em; white-space: nowrap; color: var(--hx-ink-2); background: var(--hx-inset); }
+.ch-tier.major { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
+.ch-tier.mixed { background: var(--hx-warn-soft); border-color: var(--hx-warn-line); color: var(--hx-ink); }
+.ch-tier.none { background: transparent; border-style: dashed; color: var(--hx-ink-3); font-weight: 600; }
+.ch-r1 .ch-tier { align-self: center; }
+.ch-dhead .ch-sub .ch-tier { font: 700 .69rem/1.5 var(--hx-text); color: var(--hx-ink-2); }
+.ch-dhead .ch-sub .ch-tier.major { color: var(--hx-card); }
+.ch-dhead .ch-sub .ch-tier.mixed { color: var(--hx-ink); }
+.ch-dhead .ch-sub .ch-tier.none { color: var(--hx-ink-3); }
+/* the status card's next step, and an overdue one */
+.ch-next { margin: .5rem 0 0; padding-top: .5rem; border-top: 1px solid var(--hx-hair-2); font: 600 .8125rem/1.4 var(--hx-text); color: var(--hx-ink); }
+.ch-next.late { color: var(--hx-red); }
+.ch-status.off .ch-sline { color: var(--hx-ink-2); }
+/* the reps, each with its sales plan */
+.ch-repline { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+.ch-repline + .ch-repline { margin-top: .3rem; }
+.ch-repline a { font: 600 .78rem/1.4 var(--hx-text); color: var(--hx-navy-text); }
+/* Major | Minor, a small segmented control that saves on the press */
+.ch-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--hx-inset); }
+.ch-segbtn { min-width: 5rem; min-height: 2rem; padding: .3rem .875rem; border: 0; border-radius: 7px; background: transparent; color: var(--hx-ink-2); font: 600 .8125rem/1.2 var(--hx-text);
+  cursor: pointer; transition: transform 100ms ease-out, background-color .2s ease-out, color .2s ease-out; }
+.ch-segbtn[aria-pressed="true"] { background: var(--hx-card); color: var(--hx-ink); box-shadow: var(--hx-sh-1), 0 0 0 .5px var(--hx-hair); }
+.ch-segbtn:active { transform: scale(.97); }
+.ch-segbtn:focus-visible { outline: 2px solid var(--hx-cyan); outline-offset: 1px; }
+.ch-tmsg:empty { display: none; }
+/* the latest updates: the day in its own column, then what happened */
+.ch-upd { list-style: none; margin: 0; padding: 0; }
+.ch-upd li { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); gap: .75rem; padding: .625rem .875rem; border-bottom: 1px solid var(--hx-hair-2); }
+.ch-upd li:last-child { border-bottom: 0; }
+.ch-uday { font: 600 .78rem/1.45 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ch-umain { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.ch-ukind { font: 600 .8125rem/1.4 var(--hx-text); color: var(--hx-ink); }
+.ch-utext { font: 400 .8125rem/1.45 var(--hx-text); color: var(--hx-ink-2); overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .ch-lensrow { align-items: stretch; }
+  .ch-lens { flex: 1 1 100%; }
+  .ch-lbtn { flex: 1; min-width: 0; min-height: 2.5rem; }
+  .ch-rep { flex: 1 1 100%; }
+  .ch-segbtn { min-height: 2.5rem; flex: 1; }
+  .ch-seg { display: flex; }
+  .ch-upd li { grid-template-columns: minmax(0, 1fr); gap: .125rem; }
+}
+@media (prefers-reduced-motion: reduce) { .ch-lthumb, .ch-segbtn { transition: none; } .ch-lbtn:active, .ch-segbtn:active { transform: none; } }
+html[data-motion="off"] .ch-lthumb { transition: none; }
+@media (prefers-contrast: more) { .ch-lthumb, .ch-segbtn[aria-pressed="true"] { box-shadow: 0 0 0 1px var(--hx-ink-2); } .ch-upd, .ch-tier { border-color: var(--hx-ink-3); } }
+@media print { .ch-lensrow, .ch-seg { display: none; } }

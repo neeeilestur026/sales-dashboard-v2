@@ -9,12 +9,21 @@
  * Laid out like Collection details (and Contacts on a Mac): the list on the left, the client on the right, each scrolling
  * on its own; on a tablet or phone the client opens as a sheet. The client has four tabs in a segmented control that keeps
  * its indicator (it slides, it never jumps). Built to the apple-design skill: feedback on press, Undo instead of a confirm,
- * the last copy drawn at once while the fresh read runs. The labels and the checklist are js/client-hub-model.js. */
+ * the last copy drawn at once while the fresh read runs. The labels and the checklist are js/client-hub-model.js.
+ *
+ * A404 (Neil, 23 Nov 2026): for the director and management only, a Sales view beside Accreditation — each client's status
+ * from the latest sales activity, its reps, and Major / Minor, which they set here (on the reps' Client Book rows, with
+ * Undo). A second read (getClientHubSales, FlowAPI 203) after the cards, so the list is never held up by it; admin and HR
+ * never see it (the server says so in `may.sales`). */
 
 const CH = { me: '', role: '', may: { edit: false, collection: false }, ok: true, okMsg: '', cards: [], lists: { requirements: [] }, today: '', renewDays: 60,
              open: '', back: null, tab: 'overview', year: '', built: false, wasSplit: null, editing: false, stale: false, key: '',
-             f: { q: '', seg: 'all' } };
+             f: { q: '', seg: 'all', sseg: 'all', rep: '' },
+             // A404 — the sales view: the map of the hub's keys, the read's numbers, its state, and which view the list shows
+             sales: null, sq: { quietDays: 30, salesDays: 180, tier: false }, sOk: true, sMsg: '', sStale: false, skey: '', lens: 'accred', lensBuilt: false };
 const CH_TABS = [['overview', 'Overview'], ['contacts', 'Contacts'], ['billing', 'Billing & collection'], ['accred', 'Accreditation']];
+/** The client's tabs: Sales after Overview for the director and management (A404). */
+function chTabList() { return CH.may.sales ? [CH_TABS[0], ['sales', 'Sales']].concat(CH_TABS.slice(1)) : CH_TABS; }
 
 function _chE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function _chId(id) { return document.getElementById(id); }
@@ -29,14 +38,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   CH.me = String(s.name || s.username || '').trim();
   CH.role = String(s.role || '').toLowerCase();
   CH.key = 'hx_ch1:' + (s.username || s.name);
+  CH.skey = 'hx_chs1:' + (s.username || s.name);
+  CH.lens = chLensAsked();
   _chId('chExport').addEventListener('click', chExport);
-  _chId('chChips').addEventListener('click', (e) => { const b = e.target.closest('[data-seg]'); if (b) { CH.f.seg = b.getAttribute('data-seg'); chRender(); } });
-  _chId('chTable').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) chDetail(b.getAttribute('data-open'), b); });
+  _chId('chChips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-seg]');
+    if (!b) return;
+    if (chInSales()) CH.f.sseg = b.getAttribute('data-seg'); else CH.f.seg = b.getAttribute('data-seg');
+    chRender();
+  });
+  _chId('chTable').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) { CH.auto = false; chDetail(b.getAttribute('data-open'), b); } });
   _chId('chTable').addEventListener('keydown', chListKeys);
   if (typeof window.addEventListener === 'function') window.addEventListener('resize', chOnResize);
   const c = chFromCache();
   if (c) { chTake(c); CH.stale = true; chAfterLoad(); }
+  const early = CH.may.sales ? chLoadSales() : null;   // A404 — both reads at once when this browser already knows
   await chLoad();
+  if (CH.may.sales && !early) await chLoadSales();
+  else if (early) await early;
 });
 
 /* ── load: one read, drawn at once from this browser's last copy (today's only) ─────────────────── */
@@ -71,12 +90,14 @@ async function chLoad() {
   if (first) chAfterLoad(); else { chRender(); if (CH.open && CH.cards.some(c => c.key === CH.open)) chDetail(CH.open, CH.back); }
 }
 function chAfterLoad() {
+  if (!CH.may.sales) { CH.lens = 'accred'; if (CH.tab === 'sales') CH.tab = 'overview'; }
+  else if (CH.lens === 'sales' && CH.tab === 'overview' && !CH.open) CH.tab = 'sales';
   chRender();
   let ask = '';
   try { ask = new URLSearchParams(location.search || '').get('client') || ''; } catch (e) { ask = ''; }
   const hit = ask ? CH.cards.find(c => c.key === ask || c.company.toLowerCase() === ask.toLowerCase()) : null;
   if (hit) chDetail(hit.key, null);
-  else if (chSplit()) { const f = chFilter(CH.cards, CH.f)[0]; if (f) chDetail(f.key, null); else chPaneEmpty(); }
+  else if (chSplit()) { const f = chList()[0]; if (f) { chDetail(f.key, null); CH.auto = true; } else chPaneEmpty(); }
   CH.wasSplit = chSplit();
   chFit();
 }
@@ -129,26 +150,34 @@ function chRender() {
   if (!CH.ok) notes.push('<div class="ch-notice' + (old ? '' : ' bad') + '">' + (old
     ? 'The client hub opens once the FlowAPI update (version 199) is pasted.'
     : 'Could not read the clients: ' + _chE(CH.okMsg)) + '</div>');
+  if (chInSales() && !CH.sOk) notes.push('<div class="ch-notice bad">Could not read the sales updates: ' + _chE(CH.sMsg) + '</div>');
   _chId('chNotice').innerHTML = notes.join('');
-  const sum = chSummary(CH.cards), f = CH.f;
-  _chId('chProgress').innerHTML = CH.cards.length ? '<span class="n">' + sum.accredited + '</span> accredited, <span class="n">' + sum.renew + '</span> to renew soon and <span class="n">' +
-    sum.expired + '</span> expired, of <span class="n">' + sum.all + '</span> clients' + (CH.stale ? ' <span class="ch-sync">Updating…</span>' : '') : '';
-  _chId('chChips').innerHTML = CH_SEGS.filter(s => s[0] === 'all' || sum[s[0]] || f.seg === s[0]).map(s => '<button type="button" class="ch-chip' + (f.seg === s[0] ? ' on' : '') +
-    '" data-seg="' + s[0] + '" aria-pressed="' + (f.seg === s[0]) + '">' + _chE(s[1]) + ' <span class="n">' + sum[s[0]] + '</span></button>').join('');
+  chLensSync();
+  if (chInSales()) { chRenderSalesHead(); }
+  else {
+    const sum = chSummary(CH.cards), f = CH.f;
+    _chId('chProgress').innerHTML = CH.cards.length ? '<span class="n">' + sum.accredited + '</span> accredited, <span class="n">' + sum.renew + '</span> to renew soon and <span class="n">' +
+      sum.expired + '</span> expired, of <span class="n">' + sum.all + '</span> clients' + (CH.stale ? ' <span class="ch-sync">Updating…</span>' : '') : '';
+    _chId('chChips').innerHTML = CH_SEGS.filter(s => s[0] === 'all' || sum[s[0]] || f.seg === s[0]).map(s => '<button type="button" class="ch-chip' + (f.seg === s[0] ? ' on' : '') +
+      '" data-seg="' + s[0] + '" aria-pressed="' + (f.seg === s[0]) + '">' + _chE(s[1]) + ' <span class="n">' + sum[s[0]] + '</span></button>').join('');
+  }
   if (!CH.built) {
     CH.built = true;
     _chId('chFilters').innerHTML = '<label class="ch-search"><span class="ch-sr">Search</span><input type="search" id="chQ" placeholder="Search clients, people, phone numbers or TIN" autocomplete="off"></label>';
     const q = _chId('chQ');
-    if (q) q.addEventListener('input', (e) => { f.q = e.target.value; chRenderTable(); });
+    if (q) q.addEventListener('input', (e) => { CH.f.q = e.target.value; chRenderTable(); });
   }
   chRenderTable();
   chFit();
 }
+/** The clients the list shows, in the current view (A404: the sales view filters, and sorts by the latest update). */
+function chList() { return chInSales() ? chSalesFilter(CH.cards, CH.sales, CH.f, CH.sq.quietDays) : chFilter(CH.cards, CH.f); }
 function chRenderTable() {
-  const rows = chFilter(CH.cards, CH.f), t = _chId('chTable');
+  const rows = chList(), t = _chId('chTable'), sales = chInSales();
   if (!CH.cards.length) { t.innerHTML = CH.ok ? '<p class="ch-empty">No clients yet. They come from the Client master and the reps\' Client Books.</p>' : ''; _chId('chFoot').textContent = ''; return; }
-  t.innerHTML = rows.length ? rows.map(chRow).join('') : '<p class="ch-empty">No client matches.</p>';
-  const of = CH.cards.filter(c => chInSeg(c, CH.f.seg)).length;
+  t.innerHTML = rows.length ? rows.map(sales ? chRowSales : chRow).join('') : '<p class="ch-empty">No client matches.</p>';
+  const of = sales ? CH.cards.filter(c => chSalesInSeg(c, CH.sales && CH.sales[c.key], CH.f.sseg, CH.sq.quietDays) && chRepMatch(c, CH.sales && CH.sales[c.key], CH.f.rep)).length
+    : CH.cards.filter(c => chInSeg(c, CH.f.seg)).length;
   _chId('chFoot').textContent = rows.length === of ? of + (of === 1 ? ' client' : ' clients') : rows.length + ' of ' + of + ' clients';
 }
 function chTag(text, tone) { return '<span class="ch-badge ' + (tone || '') + '">' + _chE(text) + '</span>'; }
@@ -161,7 +190,7 @@ function chRow(c) {
     '<span class="ch-r3">' + chTag(chBadge(a), chTone(a.state)) + (a.mismatch ? chTag('Reps differ', 'warn') : '') + '</span></button></div>';
 }
 function chExport() {
-  const blob = new Blob([chCsv(chFilter(CH.cards, CH.f))], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([chCsv(chList(), CH.may.sales && CH.sales ? CH.sales : null)], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'client-hub-' + CH.today + '.csv';
@@ -303,7 +332,7 @@ function chAccredHtml(c) {
     lead + chChecklistHtml(c);
 }
 function chTabsHtml() {
-  return '<div class="ch-tabs" role="tablist" aria-label="About this client"><span class="ch-thumb now" aria-hidden="true"></span>' + CH_TABS.map(t =>
+  return '<div class="ch-tabs" role="tablist" aria-label="About this client"><span class="ch-thumb now" aria-hidden="true"></span>' + chTabList().map(t =>
     '<button type="button" role="tab" class="ch-tab" id="chTab-' + t[0] + '" data-tab="' + t[0] + '" aria-selected="' + (CH.tab === t[0]) + '" aria-controls="chPanel-' + t[0] + '" tabindex="' +
     (CH.tab === t[0] ? 0 : -1) + '">' + _chE(t[1]) + '</button>').join('') + '</div>';
 }
@@ -321,13 +350,17 @@ function chDetail(key, back) {
   if (!c) return;
   if (CH.open !== key) { CH.editing = false; CH.year = ''; }
   CH.open = key;
-  const a = c.accred || {}, owners = (c.owners || []).join(', ');
+  if (CH.tab === 'sales' && !CH.may.sales) CH.tab = 'overview';
+  const a = c.accred || {}, sv = chInSales(), s = CH.sales && CH.sales[c.key], owners = chOwners(c, sv ? s : null).join(', ');
+  const tags = sv ? chTierTag(s) + (s && s.stage ? chTag(s.stage, chStageTone(s.stage)) : '') +
+      (['Accredited', 'Renew soon', 'Expired', 'On process'].indexOf(a.state) >= 0 ? chTag(chBadge(a), chTone(a.state)) : '')
+    : chTag(a.state, chTone(a.state)) + (c.sector ? chTag(c.sector, '') : '');
   const head = '<header class="ch-dhead"><div class="ch-dtop"><div class="ch-dtitle"><h3 id="chTitle">' + _chE(c.company) + '</h3>' +
-    '<p class="ch-sub">' + chTag(a.state, chTone(a.state)) + (c.sector ? chTag(c.sector, '') : '') + (owners ? '<span>' + _chE(owners) + '</span>' : '') + '</p></div>' +
+    '<p class="ch-sub">' + tags + (owners ? '<span>' + _chE(owners) + '</span>' : '') + '</p></div>' +
     '<button type="button" class="btn btn-secondary ch-close" data-close>Close</button></div>' + chTabsHtml() + '</header>';
   const panel = (k, html) => '<div class="ch-panel" role="tabpanel" id="chPanel-' + k + '" aria-labelledby="chTab-' + k + '"' + (CH.tab === k ? '' : ' hidden') + '>' + html + '</div>';
-  const box = chShow(head + '<div class="ch-body">' + panel('overview', chOverviewHtml(c)) + panel('contacts', chPeopleHtml(c)) + panel('billing', chBillingHtml(c)) +
-    panel('accred', chAccredHtml(c)) + '</div>', back);
+  const box = chShow(head + '<div class="ch-body">' + panel('overview', chOverviewHtml(c)) + (CH.may.sales ? panel('sales', chSalesHtml(c)) : '') + panel('contacts', chPeopleHtml(c)) +
+    panel('billing', chBillingHtml(c)) + panel('accred', chAccredHtml(c)) + '</div>', back);
   chMarkOpen();
   chPlaceThumb(box.querySelector('.ch-tabs'), true);
   chWire(box, c);
@@ -344,10 +377,10 @@ function chSetTab(box, k, focus) {
 function chWire(box, c) {
   const tabs = box.querySelector('.ch-tabs');
   if (tabs) tabs.addEventListener('keydown', (e) => {
-    const i = CH_TABS.findIndex(t => t[0] === CH.tab), n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? CH_TABS.length - 1 : null;
+    const T = chTabList(), i = T.findIndex(t => t[0] === CH.tab), n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? T.length - 1 : null;
     if (n === null) return;
     e.preventDefault();
-    chSetTab(box, CH_TABS[(n + CH_TABS.length) % CH_TABS.length][0], true);
+    chSetTab(box, T[(n + T.length) % T.length][0], true);
   });
   const form = box.querySelector('#chDates'), facts = box.querySelector('#chDateFacts');
   const openDates = (show, preset) => {
@@ -375,6 +408,7 @@ function chWire(box, c) {
     else if (t.hasAttribute('data-file')) chOpenFile(t.getAttribute('data-file'));
     else if (t.hasAttribute('data-archive')) chArchive(t.getAttribute('data-archive'), false);
     else if (t.hasAttribute('data-reuse')) chReuse(t, c);
+    else if (t.hasAttribute('data-tier')) chSetTier(c, t.getAttribute('data-tier'));   // A404
   });
   box.addEventListener('change', (e) => { const inp = e.target; if (inp && inp.hasAttribute && inp.hasAttribute('data-upload')) chUpload(inp, c); });
 }
@@ -453,4 +487,186 @@ async function chOpenFile(no) {
   a.href = url; a.download = r.fileName || 'file';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/* ── A404 · the sales view (the director and management) ──────────────────────────────────────── */
+
+function chInSales() { return !!CH.may.sales && CH.lens === 'sales'; }
+/** The view to open in: ?view=sales|accreditation, else the one this person used last, else Sales (what they open it for). */
+function chLensAsked() {
+  let v = '';
+  try { v = (String(location.search || '').match(/[?&]view=([^&#]*)/) || [])[1] || ''; } catch (e) { v = ''; }
+  if (/^sales$/i.test(v)) return 'sales';
+  if (/^accred/i.test(v)) return 'accred';
+  try { v = localStorage.getItem('hx_ch_lens:' + CH.me) || ''; } catch (e) { v = ''; }
+  return v === 'accred' ? 'accred' : 'sales';
+}
+function chShort(d) { const t = chDay(d); return d && CH.today && String(d).slice(0, 4) === CH.today.slice(0, 4) ? t.replace(/ \d{4}$/, '') : t; }
+function chTierTag(s) {
+  const t = chTierText(s);
+  return t ? '<span class="ch-tier ' + (t === 'Major' ? 'major' : t === 'Minor' ? 'minor' : t === 'Reps differ' ? 'mixed' : 'none') + '">' + _chE(t) + '</span>' : '';
+}
+/** The segmented Accreditation | Sales switch and the rep picker: built once (the select keeps its focus), then kept in step. */
+function chLensSync() {
+  const box = _chId('chLens');
+  if (!box) return;
+  if (!CH.may.sales) { box.hidden = true; return; }
+  box.hidden = false;
+  if (!CH.lensBuilt) {
+    CH.lensBuilt = true;
+    box.innerHTML = '<div class="ch-lens" role="group" aria-label="Show the clients by"><span class="ch-lthumb now" aria-hidden="true"></span>' +
+      '<button type="button" class="ch-lbtn" data-lens="sales">Sales</button><button type="button" class="ch-lbtn" data-lens="accred">Accreditation</button></div>' +
+      '<label class="ch-rep"><span class="ch-sr">Rep</span><select id="chRep"></select></label>';
+    box.addEventListener('click', (e) => { const b = e.target.closest('[data-lens]'); if (b) chSetLens(b.getAttribute('data-lens')); });
+    box.addEventListener('keydown', (e) => {
+      if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || !e.target.closest('.ch-lens')) return;
+      e.preventDefault();
+      chSetLens(CH.lens === 'sales' ? 'accred' : 'sales');
+      const on = box.querySelector('[data-lens="' + CH.lens + '"]');
+      if (on && on.focus) on.focus();
+    });
+    const r0 = _chId('chRep');
+    if (r0) r0.addEventListener('change', (e) => { CH.f.rep = e.target.value; chRender(); });
+  }
+  box.querySelectorAll('[data-lens]').forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-lens') === CH.lens)));
+  const lede = document.querySelector && document.querySelector('.ch-lede');
+  if (lede) lede.textContent = CH.lens === 'sales' ? 'Every client in one place: who has it, where it stands, and the latest from the reps.'
+    : 'Every client\'s details in one place, and where each one stands with its accreditation.';
+  const sel = _chId('chRep'), reps = chReps(CH.cards, CH.sales), sig = reps.join('|');
+  if (sel) {
+    if (sel.getAttribute('data-sig') !== sig) {
+      sel.setAttribute('data-sig', sig);
+      sel.innerHTML = '<option value="">Every rep</option>' + reps.map(r => '<option value="' + _chE(r) + '">' + _chE(r) + '</option>').join('') + '<option value="-">No rep</option>';
+    }
+    if (sel.value !== CH.f.rep) sel.value = CH.f.rep;
+    const lab = sel.closest && sel.closest('.ch-rep');
+    if (lab) lab.hidden = CH.lens !== 'sales';
+  }
+  chLensThumb(box);
+}
+function chLensThumb(box, slide) {
+  const th = box.querySelector('.ch-lthumb'), on = box.querySelector('[aria-pressed="true"]');
+  if (!th || !on || typeof on.offsetLeft !== 'number') return;
+  if (!slide) th.classList.add('now');
+  th.style.width = on.offsetWidth + 'px'; th.style.transform = 'translateX(' + (on.offsetLeft - 2) + 'px)';
+  if (!slide) { void th.offsetWidth; th.classList.remove('now'); }
+}
+function chSetLens(v) {
+  if (v === CH.lens || !CH.may.sales) return;
+  CH.lens = v;
+  try { localStorage.setItem('hx_ch_lens:' + CH.me, v); } catch (e) { /* a convenience */ }
+  if (v === 'sales') CH.tab = 'sales'; else if (CH.tab === 'sales') CH.tab = 'accred';
+  chRender();
+  const box = _chId('chLens');
+  if (box) chLensThumb(box, true);
+  if (CH.open && CH.cards.some(c => c.key === CH.open)) chDetail(CH.open, CH.back);
+}
+function chRenderSalesHead() {
+  const f = CH.f, sum = chSalesSummary(CH.cards, CH.sales, CH.sq.quietDays), qd = CH.sq.quietDays;
+  _chId('chProgress').innerHTML = !CH.cards.length ? '' : !CH.sales ? (CH.sOk ? 'Reading the sales updates…' : '')
+    : '<span class="n">' + sum.fresh + '</span> of the reps\' <span class="n">' + sum.owned + '</span> clients updated in the last ' + qd + ' days, <span class="n">' + sum.quiet +
+      '</span> quiet and <span class="n">' + sum.nolabel + '</span> without Major or Minor' + (CH.sStale || CH.stale ? ' <span class="ch-sync">Updating…</span>' : '');
+  _chId('chChips').innerHTML = CH_SALES_SEGS.filter(s => s[0] === 'all' || sum[s[0]] || f.sseg === s[0]).map(s => '<button type="button" class="ch-chip' + (f.sseg === s[0] ? ' on' : '') +
+    '" data-seg="' + s[0] + '" aria-pressed="' + (f.sseg === s[0]) + '"' + (s[0] === 'quiet' ? ' title="No update in ' + qd + ' days or more"' : '') + '>' + _chE(s[0] === 'quiet' ? 'Quiet ' + qd + '+ days' : s[1]) +
+    ' <span class="n">' + sum[s[0]] + '</span></button>').join('');
+}
+/** One client in the sales view: the name and its label; the reps and the sector; the status and the last update. */
+function chRowSales(c) {
+  const s = CH.sales && CH.sales[c.key], owners = chOwners(c, s), l = s && s.latest;
+  const meta = [owners.length ? owners.map(chFirst).join(', ') : 'No rep', c.sector].filter(Boolean).join(' · ');
+  const last = l ? '<span>' + _chE(l.kind + ' ' + chShort(l.day) + (l.by ? ' · ' + chFirst(l.by) : '')) + '</span>' : '';
+  const quiet = chIsQuiet(s, CH.sq.quietDays) ? chTag(s.quiet === null ? 'No update' : 'Quiet ' + s.quiet + ' days', 'warn') : '';
+  const r3 = !CH.sales ? '<span class="ch-dim">Reading…</span>' : (s && s.stage ? chTag(s.stage, chStageTone(s.stage)) : '') + quiet + last || '<span class="ch-dim">No sales update</span>';
+  return '<div class="ch-item" role="listitem"><button type="button" class="ch-open' + (CH.open === c.key ? ' on" aria-current="true' : '') + '" data-open="' + _chE(c.key) + '">' +
+    '<span class="ch-r1"><span class="ch-name">' + _chE(c.company) + '</span>' + chTierTag(s) + '</span>' +
+    '<span class="ch-r2">' + _chE(meta) + '</span><span class="ch-r3">' + r3 + '</span></button></div>';
+}
+
+/* the read: drawn at once from this browser's copy of today, then the fresh one */
+function chSalesFromCache() {
+  try { const c = JSON.parse(localStorage.getItem(CH.skey) || 'null'); return c && c.success && Array.isArray(c.clients) && c.today === (typeof flowToday === 'function' ? flowToday() : '') ? c : null; } catch (e) { return null; }
+}
+function chSalesToCache(r) { try { localStorage.setItem(CH.skey, JSON.stringify(r)); } catch (e) { /* storage full or blocked: fine */ } }
+function chSalesTake(r) {
+  CH.sales = chSalesMap(r);
+  CH.sq = { quietDays: r.quietDays || 30, salesDays: r.salesDays || 180, tier: !!(r.may && r.may.tier) };
+  CH.sRaw = r;
+}
+async function chLoadSales() {
+  const c = chSalesFromCache();
+  if (c && !CH.sales) { chSalesTake(c); CH.sStale = true; chSalesDrawn(); }
+  const r = await postFlow('getClientHubSales', {}).catch(_chFail);
+  CH.sStale = false;
+  if (r && r.success) { CH.sOk = true; CH.sMsg = ''; chSalesTake(r); chSalesToCache(r); }
+  else if (!CH.sales) { CH.sOk = false; CH.sMsg = (r && r.message) || 'no reply'; }
+  chSalesDrawn();
+}
+function chSalesDrawn() {
+  chRender();
+  const first = chSplit() && chInSales() && (CH.auto || !CH.open) ? chList()[0] : null;   // the client opened for them follows the new order
+  if (first) { chDetail(first.key, null); CH.auto = true; }
+  else if (CH.open && CH.cards.some(c => c.key === CH.open)) chDetail(CH.open, CH.back);
+}
+
+/* the client's Sales tab */
+function chUpdKind(k) { return { 'Status': 'Client Book status', 'Follow-up': 'Follow-up', 'Request': 'Purchase request', 'Order': 'Sales order' }[k] || k; }
+function chSalesHtml(c) {
+  if (!CH.sales) return CH.sOk ? '<p class="ch-none" role="status">Reading the sales updates…</p>' : '<p class="ch-none">Could not read the sales updates: ' + _chE(CH.sMsg) + '</p>';
+  const s = CH.sales[c.key], owners = chOwners(c, s), owned = !!s && (s.rows || []).length > 0, qd = CH.sq.quietDays;
+  const w = s && s.stageWhy;
+  const from = w ? 'From ' + (w.by ? chFirst(w.by) + '\'s ' : 'the ') + chUpdKind(w.kind).toLowerCase() + ' on ' + chDay(s.stageDay) : '';
+  const tone = !s || !s.stage ? 'off' : chIsQuiet(s, qd) ? 'warn' : chStageTone(s.stage);
+  const head = '<div class="ch-status ' + tone + '"><p class="ch-sline">' + _chE(s && s.stage ? s.stage : 'No sales update yet') + '</p>' +
+    '<p class="ch-sub">' + _chE([chQuietText(s, qd, CH.sq.salesDays) + (s && s.latest && s.latest.by ? ', by ' + chFirst(s.latest.by) : ''), from].filter(Boolean).join(' · ')) + '</p>' +
+    (s && s.next ? '<p class="ch-next' + (s.next.overdue ? ' late' : '') + '">' + _chE((s.next.overdue ? '' : 'Next: ') + chNextText(s.next) + (s.next.by ? ' · ' + chFirst(s.next.by) : '')) + '</p>' : '') + '</div>';
+  const reps = owners.length ? owners.map(o => '<span class="ch-repline"><span>' + _chE(o) + '</span><a href="sales-plan.html?user=' + encodeURIComponent(o) + '&amp;tab=accounts">Sales plan</a></span>').join('')
+    : '<span class="ch-dim">No rep has this client in their Client Book.</span>';
+  let label;
+  if (!owned) label = '<span class="ch-dim">Add it to a rep\'s Client Book to label it.</span>';
+  else if (CH.sq.tier) {
+    label = '<div class="ch-seg" role="group" aria-label="Major or minor client">' + ['Major', 'Minor'].map(t => '<button type="button" class="ch-segbtn" data-tier="' + t + '" aria-pressed="' +
+      (s.tier === t) + '">' + t + '</button>').join('') + '</div>' +
+      (s.tier === 'mixed' ? '<span class="ch-fsub">' + _chE(s.rows.map(r => chFirst(r.owner) + ': ' + (r.tier || 'not set')).join(' · ')) + '. Choosing one sets it for every rep.</span>'
+        : !s.tier ? '<span class="ch-fsub">Not labelled yet. It saves to the reps\' Client Book.</span>' : '');
+  } else label = _chE(chTierText(s)) + (s.tier === 'mixed' ? '<span class="ch-fsub">' + _chE(s.rows.map(r => chFirst(r.owner) + ': ' + (r.tier || 'not set')).join(' · ')) + '</span>' : '');
+  const who = '<div class="ch-fact"><dt class="ch-fk">' + (owners.length === 1 ? 'Rep' : 'Reps') + '</dt><dd class="ch-fv">' + reps + '</dd></div>' +
+    '<div class="ch-fact"><dt class="ch-fk">Major or minor</dt><dd class="ch-fv">' + label + '<span class="ch-tmsg" role="status" aria-live="polite"></span></dd></div>';
+  const ups = s && s.updates && s.updates.length ? '<ul class="ch-upd">' + s.updates.map(u => '<li><span class="ch-uday">' + _chE(chShort(u.day)) + '</span><span class="ch-umain">' +
+    '<span class="ch-ukind">' + _chE(chUpdKind(u.kind)) + (u.by ? ' <span class="ch-dim">· ' + _chE(u.by) + '</span>' : '') + '</span><span class="ch-utext">' + _chE(u.text) + '</span></span></li>').join('') + '</ul>'
+    : '<p class="ch-none">Nothing in the sales records or the last ' + Math.round(CH.sq.salesDays / 30) + ' months of daily reports.</p>';
+  return head + chGroup('Who has it', who, '') + '<section class="ch-group"><h4 class="ch-gh">Latest updates</h4><div class="ch-facts">' + ups + '</div>' +
+    '<p class="ch-sub">The newest ten: orders, quotations, purchase requests, visits and the reps\' daily reports.</p></section>';
+}
+
+/* Major / Minor: at once on the page, then saved; Undo puts each rep's own label back */
+function chRedraw(key) {
+  chRenderTable();
+  if (CH.open === key) chDetail(key, CH.back);
+}
+async function chSetTier(c, tier) {
+  const s = CH.sales && CH.sales[c.key];
+  if (!s || !CH.sq.tier || s.tier === tier || CH.tierBusy) return;
+  const before = s, undo = chTierUndo(s), keepTier = c.tier;
+  CH.tierBusy = true;
+  CH.sales[c.key] = chTierApplied(s, tier); c.tier = tier;
+  chRedraw(c.key);
+  const r = await postFlow('saveClientHubTier', { key: c.key, company: c.company, tier: tier, ifTier: before.tier || '' }).catch(_chFail);
+  CH.tierBusy = false;
+  if (!(r && r.success)) {
+    CH.sales[c.key] = before; c.tier = keepTier;
+    chRedraw(c.key);
+    _chToast((r && r.message) || 'Not saved.', 'bad');
+    return;
+  }
+  if (CH.sRaw) chSalesToCache(Object.assign({}, CH.sRaw, { clients: Object.keys(CH.sales).map(k => CH.sales[k]) }));
+  if (typeof hxSnackbar === 'function') hxSnackbar(r.message || 'Saved.', { action: 'Undo', onAction: () => chUndoTier(c, undo, tier, keepTier) });
+  else _chToast(r.message || 'Saved.', 'ok');
+}
+async function chUndoTier(c, rows, nowTier, keepTier) {
+  const r = await postFlow('saveClientHubTier', { key: c.key, company: c.company, rows: JSON.stringify(rows), ifTier: nowTier }).catch(_chFail);
+  if (!(r && r.success)) { _chToast((r && r.message) || 'Not put back.', 'bad'); return; }
+  if (CH.sales && CH.sales[c.key]) CH.sales[c.key] = chTierApplied(CH.sales[c.key], '', rows);
+  c.tier = keepTier;
+  chRedraw(c.key);
+  _chToast('Put back.', 'ok');
 }
