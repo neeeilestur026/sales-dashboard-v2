@@ -48,6 +48,11 @@ body.dh .sr-tile.s-watch .st { color:var(--dh-amber); }
 body.dh .sr-tile.s-red { border-color:var(--dh-red-line); }
 body.dh .sr-tile.s-red .st, body.dh .sr-tile.s-red .v { color:var(--dh-red); }
 body.dh .sr-tile.s-nr .v, body.dh .sr-tile.s-nr .st { color:var(--dh-ink-3); }
+/* A405 — the Emails tile while the Sent folder is read: a quiet breathing value, never 'not counted' */
+body.dh .sr-tile.wait .v, body.dh .sr-tile.wait .st { color:var(--dh-ink-3); }
+body.dh .sr-tile.wait .v { animation:sr-wait 1.6s ease-in-out infinite; }
+@keyframes sr-wait { 50% { opacity:.4; } }
+@media (prefers-reduced-motion: reduce) { body.dh .sr-tile.wait .v { animation:none; } }
 body.dh .sr-bar-track { display:block; height:4px; margin:2px 0; border-radius:var(--dh-r-pill); background:var(--dh-hair-2); overflow:hidden; }
 body.dh .sr-bar-track > i { display:block; width:calc(var(--sr-w, 0) * 100%); height:100%; border-radius:inherit; background:var(--dh-ink-3); }
 body.dh .sr-tile.s-ok .sr-bar-track > i { background:var(--dh-green); }

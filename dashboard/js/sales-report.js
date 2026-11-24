@@ -18,7 +18,7 @@
  *     another person or day. No roster read, no person kept on this computer, no picker. */
 
 const SR_UI = { me: null, self: null, selfRole: '', own: false, view: false, seq: 0, ro: false, people: [], ix: null, day: '', saved: {}, failed: [], backend: true, backendMsg: '', state: null, unsaved: false,
-                sent: null, sentState: '', received: null, receivedState: '', weekEmails: {}, weekOffset: 0, feed: 'all',
+                sent: null, sentState: '', sentWhy: '', sentTry: 0, mailSeq: 0, received: null, receivedState: '', weekEmails: {}, weekOffset: 0, feed: 'all',
                 showVisitForm: false, chain: Promise.resolve(), timer: 0, back: null, nums: null };
 
 function _srE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
@@ -131,24 +131,37 @@ function _srOpenDay(day) {
   const savedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) || 0 : 0;
   SR_UI.state = srFill(draft && draft.t > savedAt ? draft.report : saved ? saved.report : null);
   SR_UI.unsaved = !!(draft && draft.t > savedAt);
-  SR_UI.sent = null; SR_UI.sentState = 'loading'; SR_UI.received = null; SR_UI.receivedState = 'loading';
+  SR_UI.sent = null; SR_UI.sentState = 'loading'; SR_UI.sentWhy = ''; SR_UI.sentTry = 0; SR_UI.received = null; SR_UI.receivedState = 'loading';
   _srRenderDay();
   _srMail(day);
 }
 
 /* ── the mail: the day's sent list, and the inbox for received mail ───────────────────────────── */
 
-async function _srMail(day) {
-  let sent = null, sentState = 'error', received = null, receivedState = 'error';
-  const who = SR_UI.me.name, same = () => SR_UI.day === day && SR_UI.me.name === who;   // A366 — the same day AND person
+/* A405 — a read that fails for any reason but "not connected" is tried again after 2 s and 6 s before the tile says it
+   could not read, with the server's reason and a Try again button. One chain of tries at a time (mailSeq). */
+const SR_MAIL_WAITS = [2000, 6000];
+async function _srMail(day, attempt, tok) {
+  attempt = attempt || 0;
+  if (!attempt) tok = ++SR_UI.mailSeq;
+  let sent = null, sentState = 'error', received = null, receivedState = 'error', why = '';
+  const who = SR_UI.me.name, same = () => SR_UI.day === day && SR_UI.me.name === who && SR_UI.mailSeq === tok;   // A366 — the same day AND person
   try {
     const r = typeof apiFetchEmailLogToday === 'function' ? await apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, day) : null;
     if (r && r.success !== false && !r.needsSetup) { sent = r.emails || []; sentState = 'ok'; }
-    else if (r && r.needsSetup) sentState = 'setup';
-  } catch (e) { sentState = 'error'; }
+    else if (r && r.needsSetup) { sentState = 'setup'; why = String(r.message || ''); }
+    else why = String((r && r.message) || (r ? '' : 'the page could not ask the server'));
+  } catch (e) { sentState = 'error'; why = 'no answer from the server'; }
   if (!same()) return;
-  SR_UI.sent = sent; SR_UI.sentState = sentState;
-  if (sent) SR_UI.weekEmails[day] = sent;
+  if (sentState === 'error' && attempt < SR_MAIL_WAITS.length) {
+    SR_UI.sentTry = attempt + 1; SR_UI.sentWhy = why;
+    _srRefresh();
+    await new Promise(res => setTimeout(res, SR_MAIL_WAITS[attempt]));
+    if (!same()) return;
+    return _srMail(day, attempt + 1, tok);
+  }
+  SR_UI.sent = sent; SR_UI.sentState = sentState; SR_UI.sentWhy = why; SR_UI.sentTry = 0;
+  SR_UI.weekEmails[day] = sent;                            // null: the week table shows "—" for it, and does not read it again
   _srRefresh();
   /* Received mail: the inbox feed (the person's own mailbox, newest first, up to 250 messages and 60 days back),
      narrowed to the day here. TODO: a date-windowed inbox read on the server, so a busy mailbox loses nothing. */
@@ -229,7 +242,8 @@ function _srNums() {
   const ix = SR_UI.ix, me = SR_UI.me, day = SR_UI.day, now = _srNowMin(), st = SR_UI.state;
   const dt = srDayType(ix, me, day, st);
   const saved = SR_UI.saved[day], subMail = saved && saved.submittedAt && saved.snapshot ? saved.snapshot.emailsSent : null;   // A402
-  return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now, subMail), mine: srMineTiles(ix, me, day, st, now, dt),
+  const mail = { state: SR_UI.sentState, attempt: SR_UI.sentTry, why: SR_UI.sentWhy };   // A405
+  return { dt, portal: srPortalTiles(ix, me, day, SR_UI.sent, now, subMail, mail), mine: srMineTiles(ix, me, day, st, now, dt),
            fu: srFollowUps(ix, me, day, st), other: srOtherFollowUps(ix, me, day, st), linked: srLinked(st, day) };
 }
 function _srLiveNumbers() { const n = SR_UI.nums || _srNums(); return srSnapshot(n.portal, n.mine, SR_UI.day, SR_UI.state); }
@@ -345,8 +359,8 @@ function _srRefresh() {
 }
 
 function _srTileHtml(t) {
-  const st = { ok: 'on pace', watch: 'watch', red: 'red', none: '', nr: 'not counted' }[t.status] || '';
-  return '<button type="button" class="sr-tile s-' + t.status + '" data-rec="' + t.key + '">' +
+  const st = t.stText !== undefined ? t.stText : { ok: 'on pace', watch: 'watch', red: 'red', none: '', nr: 'not counted' }[t.status] || '';   // A405
+  return '<button type="button" class="sr-tile s-' + t.status + (t.wait ? ' wait' : '') + '" data-rec="' + t.key + '"' + (t.wait ? ' aria-busy="true"' : '') + '>' +
     '<span class="l">' + _srE(t.label) + '</span><span class="v">' + _srE(t.text) + '</span>' +
     (t.bar !== null && t.bar !== undefined ? '<span class="sr-bar-track" aria-hidden="true"><i data-w="' + Math.max(0, Math.min(1, t.bar)).toFixed(3) + '"></i></span>' : '<span class="sr-bar-none" aria-hidden="true"></span>') +
     '<span class="t">' + _srE(t.target) + '</span>' + (st ? '<span class="st">' + st + '</span>' : '') + '</button>';
@@ -619,9 +633,10 @@ function _srRenderFeed() {
   const items = srPortalFeed(SR_UI.ix, SR_UI.me, SR_UI.day, SR_UI.sent, SR_UI.received).filter(x => SR_UI.feed === 'all' || x.kind === SR_UI.feed);
   const booked = SR_UI.state.bookings || [];
   const whose = SR_UI.ro ? SR_UI.me.first + '\'s' : 'your', Whose = SR_UI.ro ? whose : 'Your';
-  const mailNote = SR_UI.sentState === 'loading' ? 'Reading ' + whose + ' mailbox…'
-    : SR_UI.sentState === 'setup' ? Whose + ' mailbox is not connected to the portal, so emails cannot be listed.'
-    : SR_UI.sentState === 'error' ? 'Could not read ' + whose + ' sent mail just now.'
+  const why = SR_UI.sentWhy ? ' (' + SR_UI.sentWhy.replace(/\s+/g, ' ').slice(0, 160) + ')' : '';   // A405 — the server's reason
+  const mailNote = SR_UI.sentState === 'loading' ? (SR_UI.sentTry ? 'The mailbox did not answer the first time' + why + '; trying again…' : 'Reading ' + whose + ' mailbox…')
+    : SR_UI.sentState === 'setup' ? Whose + ' mailbox is not connected to the portal, so emails cannot be listed' + why + '.'
+    : SR_UI.sentState === 'error' ? 'Could not read ' + whose + ' sent mail just now' + why + '.'
     : SR_UI.receivedState === 'private' ? 'Only sent mail is shown; received mail stays private to ' + SR_UI.me.first + '.'
     : SR_UI.receivedState === 'ok' ? '' : SR_UI.receivedState === 'loading' ? 'Reading received mail…'
     : SR_UI.receivedState === 'old' ? 'Received mail is only read for the last 60 days.' : 'Received mail could not be read; only sent mail is shown.';
@@ -630,7 +645,8 @@ function _srRenderFeed() {
       (x.client ? ' · <a href="director-client-book.html?client=' + encodeURIComponent(x.client.no) + '">' + _srE(x.client.company) + '</a>' : '') + '</span>' +   // A358
       (x.kind === 'email' && x.sent && x.id ? (SR_UI.ro ? (booked.indexOf(x.id) >= 0 ? '<span class="sr-chip ok">Booking</span>' : '<span></span>')
         : '<button type="button" class="sr-mini' + (booked.indexOf(x.id) >= 0 ? ' on' : '') + '" data-book="' + _srE(x.id) + '">' + (booked.indexOf(x.id) >= 0 ? 'Booking ✓' : 'Mark as a booking') + '</button>') : '<span></span>') +
-      '</li>').join('') + '</ul>' : '<p class="dh-empty">Nothing for this filter on this day.</p>') + (mailNote ? '<p class="dh-meta">' + _srE(mailNote) + '</p>' : '');
+      '</li>').join('') + '</ul>' : '<p class="dh-empty">Nothing for this filter on this day.</p>') + (mailNote ? '<p class="dh-meta">' + _srE(mailNote) +
+      (SR_UI.sentState === 'error' ? ' <button type="button" class="sr-mini" data-mailretry>Try again</button>' : '') + '</p>' : '');   // A405
   const o = srOtherActivity(SR_UI.ix, SR_UI.me, SR_UI.day);
   _srId('srOther').textContent = 'Other portal activity today: Inventory ' + o.inventory + ' · PDFs ' + o.pdfs + ' · Tasks ' + o.tasks + ' (not part of the sales report)';
 }
@@ -677,19 +693,26 @@ function _srRenderWeek() {
     td(w.totals.emails === null ? (noMail ? '—' : '…') : w.totals.emails + ' / ' + w.totals.emailsTarget) + td(w.totals.calls + ' / ' + w.totals.callsTarget) +
     td((w.totals.fuDue ? w.totals.fuDone + ' of ' + w.totals.fuDue : w.totals.fuOther ? '' : '—') + (w.totals.fuOther ? (w.totals.fuDue ? ' ' : '') + '+' + w.totals.fuOther : '')) + td(w.totals.quotes + ' / ' + w.totals.quotesTarget) + td(w.totals.booked) +
     td(w.totals.reports + ' of ' + w.totals.reportDays) + '</tr>';
-  _srWeekMail(w.days.filter(d => d <= SR_UI.ix.today && SR_UI.weekEmails[d] === undefined));
+  /* A405 — the open day is _srMail's to read: the week asked for it too, a second GoDaddy login for the same day */
+  _srWeekMail(w.days.filter(d => d <= SR_UI.ix.today && SR_UI.weekEmails[d] === undefined && d !== SR_UI.day));
 }
-/** One sent-mail read per past day of the shown week, three at a time; a day that cannot be read shows "…" no more. */
+/** One sent-mail read per past day of the shown week, two at a time; a day that fails is read once more after 3 s,
+ *  then shows "—" (A405 — it was three at a time with no second try). */
 let _srWeekBusy = false;
 async function _srWeekMail(days) {
   if (_srWeekBusy || !days.length || typeof apiFetchEmailLogToday !== 'function' || SR_UI.sentState === 'setup') return;
   _srWeekBusy = true;
   const who = SR_UI.me.name, box = SR_UI.weekEmails;      // A366 — a week read for an earlier person lands nowhere
-  for (let i = 0; i < days.length; i += 3) {
-    await Promise.all(days.slice(i, i + 3).map(d => apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, d)
-      .then(r => { box[d] = r && r.success !== false && !r.needsSetup ? (r.emails || []) : null; })
-      .catch(() => { box[d] = null; })));
+  const read = (d) => apiFetchEmailLogToday(SR_UI.ro ? SR_UI.me.username : undefined, d)
+    .then(r => (r && r.success !== false && !r.needsSetup ? (r.emails || []) : null)).catch(() => null);
+  const failed = [];
+  for (let i = 0; i < days.length; i += 2) {
+    await Promise.all(days.slice(i, i + 2).map(d => read(d).then(v => { if (v) box[d] = v; else failed.push(d); })));
     if (SR_UI.me.name !== who) break;
+  }
+  if (failed.length && SR_UI.me.name === who) {
+    await new Promise(res => setTimeout(res, 3000));
+    for (const d of failed) { if (SR_UI.me.name !== who) break; box[d] = await read(d); }
   }
   _srWeekBusy = false;
   if (SR_UI.ix && _srId('srWeek')) _srRenderWeek();       // the current person's week (an earlier person's reads went to their own box)
@@ -723,8 +746,9 @@ function _srWire() {
   body.addEventListener('click', ev => {
     const b = ev.target.closest ? ev.target.closest('button') : null;
     if (!b) return;
-    if (SR_UI.ro && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed') && !b.hasAttribute('data-week')) return;   // A363 — reading, not writing
+    if (SR_UI.ro && !b.hasAttribute('data-rec') && !b.hasAttribute('data-feed') && !b.hasAttribute('data-week') && !b.hasAttribute('data-mailretry')) return;   // A363 — reading, not writing
     if (b.hasAttribute('data-rec')) _srRecordsOpen(b.getAttribute('data-rec'), b);
+    else if (b.hasAttribute('data-mailretry')) _srMailRetry();   // A405
     else if (b.hasAttribute('data-logcall')) _srPrefillCall(b.getAttribute('data-logcall'));
     else if (b.hasAttribute('data-new')) _srLineDialog(b.getAttribute('data-new'), null, b);
     else if (b.hasAttribute('data-edit')) _srLineDialog(null, b.getAttribute('data-edit'), b);
@@ -771,7 +795,17 @@ function _srOneLine(input) {
   SR_UI.state.pm.blocker = input.value.trim();
   _srSave();
 }
+/** A405 — Try again: read the open day's Sent folder from the start (the server keeps no failed read). */
+function _srMailRetry() {
+  if (SR_UI.sentState === 'loading') return;
+  SR_UI.sent = null; SR_UI.sentState = 'loading'; SR_UI.sentWhy = ''; SR_UI.sentTry = 0;
+  delete SR_UI.weekEmails[SR_UI.day];
+  _srRefresh();
+  _srMail(SR_UI.day);
+}
 function _srSubmitPm() {
+  /* A405 — the 4:30 report fixes the email count: never while the Sent folder is still being read */
+  if (SR_UI.sentState === 'loading') { _srStatus('Still reading the Sent folder — submit in a few seconds, once Emails sent shows a number.', 'bad'); return; }
   const bl = _srId('srBlocker');
   if (bl) SR_UI.state.pm.blocker = bl.value.trim();
   if (!SR_UI.state.pm.blocker) { if (bl) { bl.focus(); bl.setAttribute('aria-invalid', 'true'); } _srStatus('Type one line of blocker — or "no blocker" — first.', 'bad'); return; }
@@ -1011,7 +1045,10 @@ function _srRecordsOpen(key, back) {
   }).join('');
   _srDialog(t.label, srDayLong(SR_UI.day) + ' — ' + SR_UI.me.name,
     '<div class="sr-rec"><p><span class="sr-chip ' + _srE(t.status) + '">' + _srE(t.text) + '</span> <span class="dh-meta">' + _srE(t.target) + '</span></p>' +
-    (t.note ? '<p class="dh-meta">' + _srE(t.note) + '</p>' : '') + (rows ? '<ul class="sr-items">' + rows + '</ul>' : '<p class="dh-empty">No records.</p>') + '</div>', back, null);
+    (t.note ? '<p class="dh-meta">' + _srE(t.note) + '</p>' : '') + (rows ? '<ul class="sr-items">' + rows + '</ul>' : t.retry || t.wait ? '' : '<p class="dh-empty">No records.</p>') +   // A405
+    (t.retry ? '<div class="sr-formfoot"><span></span><button type="button" class="btn-sm primary" id="srMailRetryDlg">Try again</button></div>' : '') + '</div>', back, null);
+  const rb = _srId('srMailRetryDlg');   // A405
+  if (rb) rb.addEventListener('click', () => { _srClose(); _srMailRetry(); });
 }
 
 /** A record number as a link to its page, when it has one. */

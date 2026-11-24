@@ -13,6 +13,7 @@ import json
 import os
 import re
 import time
+import threading
 import imaplib
 import email as email_pkg
 import logging
@@ -46,6 +47,20 @@ _SENT_TTL_PAST = 3600          # past dates are immutable history — cache 1 h
 _SENT_CACHE_MAX = 500          # bound memory
 _creds_cache: dict[str, dict] = {}     # username -> { enc_blob, _ts }
 _sent_mail_cache: dict = {}            # (username, date) -> { emails, meta, addr, _ts }
+_sent_locks: dict = {}                 # A405 — (username, date) -> Lock: one GoDaddy read per person and day at a time
+_sent_locks_guard = threading.Lock()
+_SENT_LOCK_WAIT = 45                   # seconds a second request waits for the first (gunicorn's timeout is 120)
+
+
+def _sent_lock(key) -> threading.Lock:
+    with _sent_locks_guard:
+        lk = _sent_locks.get(key)
+        if lk is None:
+            if len(_sent_locks) >= _SENT_CACHE_MAX:
+                for k in [k for k, v in list(_sent_locks.items()) if not v.locked()][: _SENT_CACHE_MAX // 2]:
+                    _sent_locks.pop(k, None)
+            lk = _sent_locks[key] = threading.Lock()
+        return lk
 
 # A208 — /api/email/feed had NO cache at all: every page load was a fresh IMAP login + SEARCH +
 # FETCH (2-6s), and render.yaml runs two gunicorn workers behind a 120s timeout, so two concurrent
@@ -147,26 +162,93 @@ def _fernet() -> Optional[Fernet]:
         return None
 
 
-def _get_enc_creds(username: str) -> Optional[str]:
+def _creds_lookup(username: str) -> tuple:
+    """(enc_blob or None, reached). A405 — `reached` False means Code.gs could not be asked (a timeout, a dropped
+    execution, a non-JSON reply), which is NOT the same as "this person never connected a mailbox": the routes used
+    to answer both with needsSetup, so one failed lookup told the page the mailbox was not connected and nothing
+    tried again. One retry here; a lookup that still fails is reported as a failure the page retries."""
     now = time.time()
     cached = _creds_cache.get(username)
     if cached and (now - cached["_ts"]) < _CREDS_CACHE_TTL:
-        return cached["enc_blob"]
-    result = _gs_post({
-        "action": "getEmailCredentialsForBackend",
-        "username": username,
-        "sharedSecret": INTERNAL_SHARED_SECRET,
-    })
-    if not result.get("success"):
+        return cached["enc_blob"], True
+    result = {}
+    for attempt in range(2):
+        result = _gs_post({
+            "action": "getEmailCredentialsForBackend",
+            "username": username,
+            "sharedSecret": INTERNAL_SHARED_SECRET,
+        })
+        if result.get("success"):
+            break
         if str(result.get("message", "")).strip().lower() == "forbidden":
             logger.warning("getEmailCredentialsForBackend Forbidden — INTERNAL_SHARED_SECRET mismatch "
                            "with Code.gs; set the matching Script Property in the Code.gs project.")
-        return None
+            return None, True                      # a configuration problem, not a hiccup: retrying cannot help
+        if attempt == 0:
+            time.sleep(0.8)
+    if not result.get("success"):
+        logger.warning("getEmailCredentialsForBackend failed twice: %s", str(result.get("message", ""))[:120])
+        return None, False
     enc_blob = result.get("encBlob") or ""
     if not enc_blob:
-        return None
+        return None, True
     _creds_cache[username] = {"enc_blob": enc_blob, "_ts": now}
-    return enc_blob
+    return enc_blob, True
+
+
+def _get_enc_creds(username: str) -> Optional[str]:
+    return _creds_lookup(username)[0]
+
+
+# A405 — only a refused password means "connect the mailbox again". Every other IMAP error (GoDaddy's limit on
+# connections open at once, a dropped connection, a busy server) is temporary and is retried, then reported as such.
+_AUTH_ERR_RE = re.compile(r"authenticat|login failed|invalid credentials|password|\[auth", re.I)
+
+
+def _imap_auth_failed(exc) -> bool:
+    if isinstance(exc, imaplib.IMAP4.abort):
+        return False
+    return bool(_AUTH_ERR_RE.search(str(exc)))
+
+
+def _imap_retry(fn, tries: int = 2, wait: float = 1.5):
+    """Run an IMAP read, once more after `wait` seconds when it fails for a temporary reason. A refused
+    password is raised at once (retrying it can only lock the mailbox)."""
+    for attempt in range(tries):
+        try:
+            return fn()
+        except imaplib.IMAP4.error as exc:
+            if _imap_auth_failed(exc) or attempt == tries - 1:
+                raise
+            logger.warning("IMAP read failed (%s), trying again", str(exc)[:120])
+        except (OSError, EOFError) as exc:          # socket timeout, reset, TLS errors
+            if attempt == tries - 1:
+                raise
+            logger.warning("IMAP connection failed (%s), trying again", type(exc).__name__)
+        time.sleep(wait)
+
+
+_LOOKUP_FAILED_MSG = "the portal's records did not answer when asked for the mailbox"
+
+
+def _mail_retry_reply(exc) -> dict:
+    """A405 — the reply for a temporary failure: success False with retry True (HTTP 200), never needsSetup. The
+    message is the reason alone, short, so each page can put it in its own sentence."""
+    why = str(exc).strip() or type(exc).__name__
+    if why.startswith("b'") and why.endswith("'"):
+        why = why[2:-1]
+    if isinstance(exc, imaplib.IMAP4.error):
+        why = "GoDaddy's mail server said: " + why
+    return {"success": False, "retry": True, "message": why[:160]}
+
+
+def _mail_auth_reply(username: str, exc, **extra) -> dict:
+    _creds_cache.pop(username, None)
+    out = {"success": False, "needsSetup": True, "reconnect": True,
+           "message": "GoDaddy did not accept the saved mailbox password (" + str(exc)[:80] + "). "
+                      "Connect the mailbox again with its current password."}
+    out.update(extra)
+    return out
 
 
 def _decrypt(enc_blob: str) -> Optional[tuple[str, str]]:
@@ -635,57 +717,22 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
         if typ != "OK" or not msg_data:
             return []
         out = []
+        skipped = 0
         for part in msg_data:
             if not isinstance(part, tuple) or len(part) < 2:
                 continue
-            envelope = part[0] if isinstance(part[0], (bytes, bytearray)) else b""
-            hdr_bytes = part[1]
-            msg = email_pkg.message_from_bytes(hdr_bytes)
-            subject = _decode_mime(msg.get("Subject", ""))
-            date_hdr = msg.get("Date", "")
-            message_id = _norm_msgid(msg.get("Message-ID", ""))
-            # Prefer the Date header; fall back to the server INTERNALDATE when it's missing/unparseable.
-            sent_dt = None
             try:
-                sent_dt = parsedate_to_datetime(date_hdr) if date_hdr else None
-            except (TypeError, ValueError):
-                sent_dt = None
-            if sent_dt is None:
-                try:
-                    tup = imaplib.Internaldate2tuple(envelope)
-                    if tup:
-                        sent_dt = datetime.fromtimestamp(time.mktime(tup), tz=timezone.utc)
-                except Exception:
-                    sent_dt = None
-            # Keep only messages sent on the target PH date. Undated messages are kept only for "today"
-            # (so a past-date window doesn't leak undated mail).
-            if sent_dt:
-                if sent_dt.astimezone(PH_TZ).date() != target:
-                    continue
-            elif not is_today:
+                row = _sent_row(part, target, is_today)
+            except Exception as exc:          # A405 — one odd message is skipped; it never costs the whole day
+                skipped += 1
+                logger.warning("fetch_sent_today: skipped a message (%s)", type(exc).__name__)
                 continue
-            # Decode MIME-encoded headers BEFORE parsing addresses — otherwise
-            # getaddresses can't extract the email from "=?UTF-8?B?...?= <a@b>"
-            raw_recipients = (
-                _decode_mime(msg.get("To", ""))
-                or _decode_mime(msg.get("Cc", ""))
-                or _decode_mime(msg.get("Bcc", ""))
-            )
-            name, recipient_addr = "", ""
-            for n, a in getaddresses([raw_recipients]) if raw_recipients else []:
-                if a:
-                    name, recipient_addr = n, a
-                    break
-            out.append({
-                "company": _company_from_email(recipient_addr) or (name.split()[-1] if name else ""),
-                "name": name or recipient_addr,
-                "recipient": recipient_addr,
-                "subject": subject,
-                "sentAt": sent_dt.astimezone(PH_TZ).isoformat() if sent_dt else date_hdr,
-                "messageId": message_id,
-            })
+            if row:
+                out.append(row)
         if debug is not None:
             debug["matched"] = len(out)
+            if skipped:
+                debug["skipped"] = skipped
         return out
     finally:
         try:
@@ -696,6 +743,58 @@ def fetch_sent_today(addr: str, pwd: str, target_date: str = None, debug: dict =
             conn.logout()
         except Exception:
             pass
+
+
+def _sent_row(part, target, is_today) -> Optional[dict]:
+    """One FETCH reply part → the sent-mail row, or None when it was not sent on `target` (PH date)."""
+    envelope = part[0] if isinstance(part[0], (bytes, bytearray)) else b""
+    hdr_bytes = part[1]
+    if not isinstance(hdr_bytes, (bytes, bytearray)):
+        return None
+    msg = email_pkg.message_from_bytes(hdr_bytes)
+    subject = _decode_mime(msg.get("Subject", ""))
+    date_hdr = str(msg.get("Date", "") or "")
+    message_id = _norm_msgid(msg.get("Message-ID", ""))
+    # Prefer the Date header; fall back to the server INTERNALDATE when it's missing/unparseable.
+    sent_dt = None
+    try:
+        sent_dt = parsedate_to_datetime(date_hdr) if date_hdr else None
+    except (TypeError, ValueError, AttributeError, IndexError, OverflowError):
+        sent_dt = None
+    if sent_dt is None:
+        try:
+            tup = imaplib.Internaldate2tuple(envelope)
+            if tup:
+                sent_dt = datetime.fromtimestamp(time.mktime(tup), tz=timezone.utc)
+        except Exception:
+            sent_dt = None
+    # Keep only messages sent on the target PH date. Undated messages are kept only for "today"
+    # (so a past-date window doesn't leak undated mail).
+    if sent_dt:
+        if sent_dt.astimezone(PH_TZ).date() != target:
+            return None
+    elif not is_today:
+        return None
+    # Decode MIME-encoded headers BEFORE parsing addresses — otherwise
+    # getaddresses can't extract the email from "=?UTF-8?B?...?= <a@b>"
+    raw_recipients = (
+        _decode_mime(msg.get("To", ""))
+        or _decode_mime(msg.get("Cc", ""))
+        or _decode_mime(msg.get("Bcc", ""))
+    )
+    name, recipient_addr = "", ""
+    for n, a in getaddresses([raw_recipients]) if raw_recipients else []:
+        if a:
+            name, recipient_addr = n, a
+            break
+    return {
+        "company": _company_from_email(recipient_addr) or (name.split()[-1] if name else ""),
+        "name": name or recipient_addr,
+        "recipient": recipient_addr,
+        "subject": subject,
+        "sentAt": sent_dt.astimezone(PH_TZ).isoformat() if sent_dt else date_hdr,
+        "messageId": message_id,
+    }
 
 
 # ── Routes ────────────────────────────────────────────────────────
@@ -817,8 +916,10 @@ def email_today():
             and str(session.get("role", "")).lower() != "director"
             and lookup_user.strip().lower() in _director_usernames()):
         return jsonify({"success": False, "message": "Not permitted."}), 403
-    enc_blob = _get_enc_creds(lookup_user)
+    enc_blob, reached = _creds_lookup(lookup_user)
     if not enc_blob:
+        if not reached:   # A405 — the lookup failed; the mailbox may well be connected
+            return jsonify({"success": False, "retry": True, "user": lookup_user, "message": _LOOKUP_FAILED_MSG})
         return jsonify({"success": True, "needsSetup": True, "emails": [], "user": lookup_user})
     decrypted = _decrypt(enc_blob)
     if not decrypted:
@@ -838,32 +939,53 @@ def email_today():
     ph_today = datetime.now(PH_TZ).date().isoformat()
     eff_date = target_date or ph_today
     cache_key = (lookup_user, eff_date)
-    cached = _sent_mail_cache.get(cache_key)
     ttl = _SENT_TTL_TODAY if eff_date == ph_today else _SENT_TTL_PAST
-    if cached and (time.time() - cached["_ts"]) < ttl:
-        return jsonify({"success": True, "emails": cached["emails"], "godaddyEmail": cached["addr"],
-                        "user": lookup_user, "date": eff_date, "meta": cached["meta"], "cached": True})
 
-    # Always collect a small diagnostic (folder / window / matched) — no PII — so the UI can explain
-    # an empty day ("checked Sent, 0 in window") instead of a bare "no emails".
-    meta = {}
+    def _hit():
+        c = _sent_mail_cache.get(cache_key)
+        if c and (time.time() - c["_ts"]) < ttl:
+            return jsonify({"success": True, "emails": c["emails"], "godaddyEmail": c["addr"],
+                            "user": lookup_user, "date": eff_date, "meta": c["meta"], "cached": True})
+        return None
+
+    hit = _hit()
+    if hit is not None:
+        return hit
+    # A405 — one GoDaddy read per (person, day) at a time. The daily report asks for the open day and the week's days
+    # together (and two tabs ask twice); every one of them was its own IMAP login, and GoDaddy limits how many
+    # connections one mailbox may hold. A second request for the same day now waits for the first and is served its
+    # result from the cache.
+    lock = _sent_lock(cache_key)
+    got = lock.acquire(timeout=_SENT_LOCK_WAIT)
     try:
-        emails = fetch_sent_today(addr, pwd, target_date=target_date, debug=meta)
-        if len(_sent_mail_cache) >= _SENT_CACHE_MAX:
-            _sent_mail_cache.pop(next(iter(_sent_mail_cache), None), None)   # A325 — two threads evicting at once
-        _sent_mail_cache[cache_key] = {"emails": emails, "meta": meta, "addr": addr, "_ts": time.time()}
-        resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user,
-                "date": eff_date, "meta": meta}
-        return jsonify(resp)
-    except imaplib.IMAP4.error as exc:
-        # Likely password changed — invalidate cache so next call re-fetches
-        _creds_cache.pop(lookup_user, None)
-        return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
-    except Exception as exc:
-        # Structured JSON (200) instead of a 500: the client renders the per-user error state either
-        # way, and transient IMAP timeouts stop spamming the console as server errors.
-        logger.error("fetch_sent_today error: %s", exc)
-        return jsonify({"success": False, "message": str(exc)})
+        if got:
+            hit = _hit()
+            if hit is not None:
+                return hit
+        # Always collect a small diagnostic (folder / window / matched) — no PII — so the UI can explain
+        # an empty day ("checked Sent, 0 in window") instead of a bare "no emails".
+        meta = {}
+        try:
+            emails = _imap_retry(lambda: fetch_sent_today(addr, pwd, target_date=target_date, debug=meta))
+            if len(_sent_mail_cache) >= _SENT_CACHE_MAX:
+                _sent_mail_cache.pop(next(iter(_sent_mail_cache), None), None)   # A325 — two threads evicting at once
+            _sent_mail_cache[cache_key] = {"emails": emails, "meta": meta, "addr": addr, "_ts": time.time()}
+            resp = {"success": True, "emails": emails, "godaddyEmail": addr, "user": lookup_user,
+                    "date": eff_date, "meta": meta}
+            return jsonify(resp)
+        except imaplib.IMAP4.error as exc:
+            if _imap_auth_failed(exc):   # the password was changed or refused: the one case that needs a reconnect
+                return jsonify(_mail_auth_reply(lookup_user, exc, emails=[], user=lookup_user)), 400
+            logger.warning("fetch_sent_today IMAP error: %s", str(exc)[:160])
+            return jsonify(dict(_mail_retry_reply(exc), user=lookup_user))
+        except Exception as exc:
+            # Structured JSON (200) instead of a 500: the client renders the per-user error state either
+            # way, and transient IMAP timeouts stop spamming the console as server errors.
+            logger.error("fetch_sent_today error: %s: %s", type(exc).__name__, exc)
+            return jsonify(dict(_mail_retry_reply(exc), user=lookup_user))
+    finally:
+        if got:
+            lock.release()
 
 
 @email_log_bp.route("/api/email/users", methods=["POST"])
@@ -909,8 +1031,10 @@ def email_feed():
         cap = _FEED_SEARCH_CAP
     else:
         days, cap = _feed_window(kind, body.get("days", 14))
-    enc_blob = _get_enc_creds(session["username"])
+    enc_blob, reached = _creds_lookup(session["username"])
     if not enc_blob:
+        if not reached:   # A405 — the lookup failed; not "never connected"
+            return jsonify({"success": False, "retry": True, "folder": kind, "message": _LOOKUP_FAILED_MSG})
         return jsonify({"success": True, "needsSetup": True, "emails": [], "folder": kind})
     decrypted = _decrypt(enc_blob)
     if not decrypted:
@@ -934,7 +1058,7 @@ def email_feed():
             out["fetchedAt"] = hit["fetchedAt"]
             return jsonify(out)
     try:
-        emails = fetch_folder(addr, pwd, kind, days=days, cap=cap, match=match or None)
+        emails = _imap_retry(lambda: fetch_folder(addr, pwd, kind, days=days, cap=cap, match=match or None))   # A405
         # A382 — `truncated`: the cap was reached, so older messages in the window were not read
         payload = {"success": True, "folder": kind, "emails": emails, "godaddyEmail": addr, "days": days,
                    "cap": cap, "truncated": len(emails) >= cap, "match": match}
@@ -947,13 +1071,15 @@ def email_feed():
         out["fetchedAt"] = fetched_at
         return jsonify(out)
     except imaplib.IMAP4.error as exc:
-        _creds_cache.pop(session["username"], None)
-        return jsonify({"success": False, "message": f"IMAP error: {exc}", "needsSetup": True}), 400
+        if _imap_auth_failed(exc):   # A405 — only a refused password asks for a reconnect
+            return jsonify(_mail_auth_reply(session["username"], exc, emails=[], folder=kind)), 400
+        logger.warning("email_feed IMAP error: %s", str(exc)[:160])
+        return jsonify(dict(_mail_retry_reply(exc), folder=kind))
     except Exception as exc:
         # Transient IMAP/network failures are an expected condition, not a server fault —
         # return structured JSON (200) like /api/email/today so the UI shows the message cleanly.
         logger.warning("email_feed error: %s", exc)
-        return jsonify({"success": False, "message": str(exc)})
+        return jsonify(dict(_mail_retry_reply(exc), folder=kind))
 
 
 def fetch_thread_state(addr: str, pwd: str, message_ids, days: int = 60) -> dict:
