@@ -54,7 +54,7 @@ ok("  no match is a plain SINCE", el._sent_criteria("01-Jul-2026", {}) == "SINCE
 print("\n== 3 · the route ==")
 session_auth.validate_session = lambda token: {"username": "sales1", "role": "sales"} if token == "good" else None
 el._email_config_problem = lambda: None
-el._get_enc_creds = lambda u: "blob"
+el._creds_lookup = lambda u: ("blob", True)   # A405 — the routes ask _creds_lookup (blob, reached)
 el._decrypt = lambda b: ("kim@hiescorp.com", "pw")
 seen = []
 

@@ -407,12 +407,28 @@ function srMailGoneNote(mc) {
   return mc.gone + ' of the ' + mc.count + ' were counted when the 4:30 report was submitted and are no longer in the Sent folder (moved to another folder or deleted), so they are not listed here.';
 }
 
+/** A405 — the Emails tile when there is no count: still reading, retrying, not connected, or could not be read (with
+ *  the server's reason). Neil, 24 Nov 2026: the tile said "—" and "not counted" while the mailbox was still being read,
+ *  exactly as when a read failed, and a failed read was never tried again. */
+function srMailWaitTile(c, mail) {
+  const m = mail || {}, why = _srS(m.why).replace(/\s+/g, ' ').trim().slice(0, 160);
+  const base = { value: null, target: c.srEmailsDay + ' a day', bar: null, items: [] };
+  if (m.state === 'loading') return Object.assign(base, { text: '…', status: 'none', stText: m.attempt ? 'trying again…' : 'reading…', wait: true,
+    note: m.attempt ? 'The mailbox did not answer the first time' + (why ? ' (' + why + ')' : '') + '; trying again…' : 'Reading the Sent folder…' });
+  if (m.state === 'setup') return Object.assign(base, { text: '—', status: 'nr', stText: 'not connected',
+    note: (why || 'This work mailbox is not connected to the portal.') + ' Sent emails cannot be counted until it is connected (Emails page, Connect mailbox).' });
+  return Object.assign(base, { text: '—', status: 'nr', stText: 'could not read', retry: true,
+    note: 'The Sent folder could not be read just now' + (why ? ' (' + why + ')' : '') + '. It was tried three times; use Try again.' });
+}
+
 /** Row A — the portal fills these. `emails` is the day's sent list, or null when the mailbox could not be read.
- *  A402 — `submitted` is the day's submitted emailsSent entry, when the 4:30 report went in: see srMailCount. */
-function srPortalTiles(ix, me, day, emails, nowMin, submitted) {
+ *  A402 — `submitted` is the day's submitted emailsSent entry, when the 4:30 report went in: see srMailCount.
+ *  A405 — `mail` is { state: 'loading' | 'ok' | 'setup' | 'error', attempt, why } for the tile without a count. */
+function srPortalTiles(ix, me, day, emails, nowMin, submitted, mail) {
   const c = ix.cfg;
   const em = Array.isArray(emails) ? emails : null;
   const mc = srMailCount(em, submitted);
+  const reading = !em && mail && mail.state === 'loading';
   const rfqs = _srPrsOn(ix, me, day, 'owner'), made = _srPrsOn(ix, me, day, 'made');
   const sent = srQuotesSent(ix, me, day);
   const week = srWeekDays(day).filter(d => d <= day).reduce((a, d) => a.concat(srQuotesSent(ix, me, d)), []);
@@ -427,8 +443,9 @@ function srPortalTiles(ix, me, day, emails, nowMin, submitted) {
       status: _srPace(ix, day, nowMin, mc.count, c.srEmailsDay, c.srEmailsDayRed),
       items: (em || []).map(e => ({ time: srClock(e.sentAt), what: _srS(e.subject) || '(no subject)', client: _srS(e.name || e.recipient) })),
       ids: mc.ids,                                                       // A402 — kept by the 4:30 report
-      note: em ? srMailGoneNote(mc) : 'The work mailbox could not be read just now; this is the count from the 4:30 report.'
-    } : { value: null, text: '—', target: c.srEmailsDay + ' a day', status: 'nr', note: 'The work mailbox could not be read, so sent emails cannot be counted.' }),
+      note: em ? srMailGoneNote(mc) : reading ? 'Reading the Sent folder; this is the count from the 4:30 report.'
+        : 'The work mailbox could not be read just now; this is the count from the 4:30 report.'
+    } : srMailWaitTile(c, mail || { state: 'error' })),
     _srTile('rfqs', 'RFQs received', { value: rfqs.length, text: String(rfqs.length), items: rfqs, note: 'Purchase requests created that day for your clients (one PR is one client RFQ).' }),
     _srTile('prsMade', 'PRs made', { value: made.length, text: String(made.length), items: made, note: 'Purchase requests you created that day.' }),
     _srTile('quotesSent', 'Quotes sent', {
@@ -711,5 +728,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, SR_FOLLOW_THEN, srFollowRule, srFollowStep, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, SR_LINK_KINDS, srLinkItems, srLinkPick, srLinkFind, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
-                     srWeekDays, srShiftWeekend, srAddDays, srMailCount, srMailGoneNote, srMailKey, SR_MAIL_IDS_MAX };
+                     srWeekDays, srShiftWeekend, srAddDays, srMailCount, srMailGoneNote, srMailKey, SR_MAIL_IDS_MAX, srMailWaitTile };
 }

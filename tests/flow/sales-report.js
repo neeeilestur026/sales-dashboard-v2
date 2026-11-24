@@ -334,7 +334,33 @@ eq('  a day not yet read shows the report\'s count at once', JSON.parse(run('JSO
   ok('on the page: the week cell says how many are still in Sent, with the reason in its title',
      /' in Sent now<\/span><\/td>'/.test(SRC) && /counted when the 4:30 report was submitted\. /.test(SRC) && /the others were moved to another folder or deleted\./.test(SRC));
   ok('  and the tiles get the submitted count of that day only once it was submitted',
-     /subMail = saved && saved\.submittedAt && saved\.snapshot \? saved\.snapshot\.emailsSent : null/.test(SRC) && /srPortalTiles\(ix, me, day, SR_UI\.sent, now, subMail\)/.test(SRC));
+     /subMail = saved && saved\.submittedAt && saved\.snapshot \? saved\.snapshot\.emailsSent : null/.test(SRC) && /srPortalTiles\(ix, me, day, SR_UI\.sent, now, subMail, mail\)/.test(SRC));
+}
+{
+  /* A405 — Neil, 24 Nov 2026: "why no email showing". The tile said "—" and "not counted" while the Sent folder was
+     still being read, exactly as when a read failed; a failed read was never tried again. */
+  const T = (mail, sub) => JSON.parse(run('JSON.stringify(srPortalTiles(IX, ME, "2026-10-20", null, 17*60, ' + JSON.stringify(sub || null) + ', ' + JSON.stringify(mail) + ')[0])'));
+  const ld = T({ state: 'loading' });
+  eq('A405: while the Sent folder is read the tile says so — "…", reading…, no status colour', [ld.text, ld.stText, ld.status, ld.wait, ld.note], ['…', 'reading…', 'none', true, 'Reading the Sent folder…']);
+  const rt = T({ state: 'loading', attempt: 1, why: '[UNAVAILABLE] Maximum number of connections' });
+  ok('  a second try says so, with the server\'s reason', rt.stText === 'trying again…' && /did not answer the first time \(\[UNAVAILABLE\] Maximum number of connections\); trying again…/.test(rt.note), rt);
+  const su = T({ state: 'setup', why: '' });
+  ok('  not connected says so and where to connect it', su.text === '—' && su.stText === 'not connected' && su.status === 'nr' && /not connected to the portal/.test(su.note) && /Connect mailbox/.test(su.note), su);
+  const er = T({ state: 'error', why: 'The mailbox did not answer just now (timed out).' });
+  ok('  a failed read: "could not read", the reason, and Try again', er.text === '—' && er.stText === 'could not read' && er.retry === true && /\(The mailbox did not answer just now \(timed out\)\.\)/.test(er.note), er);
+  ok('  no state given (an older caller) is a failed read, not a crash', T(undefined).stText === 'could not read');
+  const ls = T({ state: 'loading' }, { value: 57 });
+  eq('  a submitted day shows its count while the mailbox is read', [ls.text, ls.note], ['57', 'Reading the Sent folder; this is the count from the 4:30 report.']);
+  const th = run('_srTileHtml(srPortalTiles(IX, ME, "2026-10-20", null, 17*60, null, { state: "loading" })[0])');
+  ok('  the reading tile: class wait, aria-busy, "reading…", never "not counted"', /class="sr-tile s-none wait"/.test(th) && /aria-busy="true"/.test(th) && /<span class="st">reading…<\/span>/.test(th) && !/not counted/.test(th), th);
+  ok('  a count still reads as before (no stText, the usual words)', /<span class="st">watch<\/span>/.test(run('_srTileHtml(srPortalTiles(IX, ME, "2026-10-20", __emails45, 17*60, null, { state: "ok" })[0])')));
+  const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
+  ok('  on the page: two more tries after 2 s and 6 s; one chain at a time', /const SR_MAIL_WAITS = \[2000, 6000\];/.test(SRC) && /SR_UI\.mailSeq === tok/.test(SRC));
+  ok('  the week table never reads the open day itself, two days at a time, a failed day once more',
+     /SR_UI\.weekEmails\[d\] === undefined && d !== SR_UI\.day\)\)/.test(SRC) && /i \+= 2\)/.test(SRC) && /setTimeout\(res, 3000\)/.test(SRC));
+  ok('  Try again is open to the director reading a report too', /!b\.hasAttribute\('data-mailretry'\)\) return;/.test(SRC) && /data-mailretry\)\) _srMailRetry\(\)|hasAttribute\('data-mailretry'\)\) _srMailRetry\(\)/.test(SRC));
+  const CSS = fs.readFileSync(path.join(DASH, '../css/daily-report.css'), 'utf8');
+  ok('  the reading value breathes, and stands still under reduced motion', /body\.dh \.sr-tile\.wait \.v \{ animation:sr-wait/.test(CSS) && /prefers-reduced-motion: reduce\) \{ body\.dh \.sr-tile\.wait \.v \{ animation:none; \}/.test(CSS));
 }
 
 sec('8 · the page');
@@ -454,7 +480,7 @@ sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own')
      /<option value="">Me \(my trial\)<\/option>/.test(SRC) && /id="srWho" aria-label="Whose report to read"/.test(SRC) && /SR_UI\.own \|\| !SR_UI\.people\.length \? ''/.test(SRC) && /<span class="sr-chip">Read only<\/span>/.test(SRC));
   ok('  the director reads their sent mail by their login; their received mail stays theirs', /apiFetchEmailLogToday\(SR_UI\.ro \? SR_UI\.me\.username : undefined, day\)/.test(SRC) && /if \(SR_UI\.ro\) receivedState = 'private';/.test(SRC) &&
      /received mail stays private to/.test(SRC));
-  ok('  a click that would write is ignored while reading (only the records, the filters and the week answer)', /if \(SR_UI\.ro && !b\.hasAttribute\('data-rec'\) && !b\.hasAttribute\('data-feed'\) && !b\.hasAttribute\('data-week'\)\) return;/.test(SRC));
+  ok('  a click that would write is ignored while reading (only the records, the filters, the week and A405\'s Try again answer)', /if \(SR_UI\.ro && !b\.hasAttribute\('data-rec'\) && !b\.hasAttribute\('data-feed'\) && !b\.hasAttribute\('data-week'\) && !b\.hasAttribute\('data-mailretry'\)\) return;/.test(SRC));
   ok('a rep\'s own page: "My daily report", in their own words, needing FlowAPI 184', /SR_UI\.own \? 'My daily report'/.test(SRC) && /Your new daily report\. Only you and the director see it, and your old daily report still works as before\./.test(SRC) &&
      /SR_UI\.own \? '184' : '177'/.test(SRC));
 }
@@ -520,6 +546,28 @@ sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own')
     const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8');
     ok('  sent mail is read with the person\'s login, and a late answer for another person or day is dropped', /apiFetchEmailLogToday\(SR_UI\.ro \? SR_UI\.me\.username : undefined, day\)/.test(SRC) &&
        /same = \(\) => SR_UI\.day === day && SR_UI\.me\.name === who/.test(SRC) && /if \(SR_UI\.me\.name !== who\) break;/.test(SRC));
+  }
+
+  /* A405 — the read itself: two more tries, then the reason; not connected is not retried; Submit waits for the count */
+  {
+    run('var __tries = 0, __rf = [], __mode = "flaky", __keepRefresh = _srRefresh; _srRefresh = function () { __rf.push(SR_UI.sentState + ":" + SR_UI.sentTry); };' +
+        'SR_MAIL_WAITS[0] = 5; SR_MAIL_WAITS[1] = 5; SR_UI.ro = false; SR_UI.me = ME; SR_UI.day = "2026-10-20"; SR_UI.ix = IX;' +
+        'apiFetchEmailLogToday = function () { __tries++; return Promise.resolve(__mode === "setup" ? { success: true, needsSetup: true, emails: [] }' +
+        '  : __mode === "down" || __tries < 3 ? { success: false, retry: true, message: "[UNAVAILABLE] Maximum number of connections" }' +
+        '  : { success: true, emails: [{ messageId: "<a@x>", subject: "Quotation" }] }); };');
+    const go = (mode) => { run('__tries = 0; __rf = []; __mode = "' + mode + '"; SR_UI.sentState = "loading"; SR_UI.sentTry = 0; SR_UI.sentWhy = ""; SR_UI.sent = null; SR_UI.weekEmails = {};'); return run('_srMail("2026-10-20")'); };
+    await go('flaky');
+    eq('A405: fails twice, then reads → three tries, the mail, "trying again" shown in between', [run('__tries'), run('SR_UI.sentState'), run('SR_UI.sent.length'), run('__rf.join(" ")')],
+       [3, 'ok', 1, 'loading:1 loading:2 ok:0 ok:0']);
+    await go('down');
+    eq('  down all three times → could not read, with the reason; the week shows "—" for that day', [run('__tries'), run('SR_UI.sentState'), run('SR_UI.sentWhy'), run('SR_UI.weekEmails["2026-10-20"]')],
+       [3, 'error', '[UNAVAILABLE] Maximum number of connections', null]);
+    await go('setup');
+    eq('  not connected is said at once, never retried', [run('__tries'), run('SR_UI.sentState')], [1, 'setup']);
+    run('var __saves = 0, __msgs = [], __keepSave = _srSave, __keepStatus = _srStatus; _srSave = function () { __saves++; }; _srStatus = function (m) { __msgs.push(m); };' +
+        'SR_UI.sentState = "loading"; _srSubmitPm();');
+    ok('  Submit waits while the Sent folder is read, and says why', run('__saves') === 0 && /^Still reading the Sent folder/.test(run('__msgs[0]')), run('__msgs'));
+    run('_srSave = __keepSave; _srStatus = __keepStatus; _srRefresh = __keepRefresh; SR_MAIL_WAITS[0] = 2000; SR_MAIL_WAITS[1] = 6000; delete apiFetchEmailLogToday;');
   }
 
   console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
