@@ -2,8 +2,13 @@
  * (flow-pricing-request.js) and the quotation list (flow-quotations.js), and the grouped sections under them.
  *
  * A page gives it rows (see js/sales-lists-model.js) and a function that draws one group's table; the rows keep every
- * action they already had, so nothing a rep could do before is lost. The view a person picks (chip, grouping, sort, and
- * which sections are folded) is remembered in this browser only.
+ * action they already had, so nothing a rep could do before is lost. The view a person picks (grouping, sort, and which
+ * sections are folded) is remembered in this browser only.
+ *
+ * A408 — the chip is NOT remembered. Neil, 26 Nov 2026: Kimberlyn's new request PR-202611-048 was "missing in portal"; her
+ * My Requests had opened on Archived, picked days before and saved, and a new request is never archived (046/047 were the
+ * same story on For Quotation). Every visit now opens on the page's own default chip, so nothing new hides behind an old
+ * choice; and a search that finds more outside the chip says where, with a button to go there.
  *
  * Built to the apple-design skill: a segmented Group by with a sliding indicator and arrow keys, chips that name the
  * stage in words, sections that fold, feedback on press. Turned off with FlowSettings salesListsOrganizer = off, when the
@@ -12,7 +17,7 @@
 
 function _sl2E(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
 function _sl2Load(id) { try { return JSON.parse(localStorage.getItem('sl2:' + id) || 'null') || null; } catch (e) { return null; } }
-function _sl2Save(id, st) { try { localStorage.setItem('sl2:' + id, JSON.stringify({ chip: st.chip, group: st.group, sort: st.sort, folded: st.folded })); } catch (e) { /* private window: the view is simply not remembered */ } }
+function _sl2Save(id, st) { try { localStorage.setItem('sl2:' + id, JSON.stringify({ group: st.group, sort: st.sort, folded: st.folded })); } catch (e) { /* private window: the view is simply not remembered */ } }
 
 /** Is the organizer on? FlowSettings salesListsOrganizer, 'on' unless it says off (a page with no settings keeps it on). */
 function sl2On(settings) { return String(((settings || {}).salesListsOrganizer) || 'on').trim().toLowerCase() !== 'off'; }
@@ -26,7 +31,7 @@ function sl2On(settings) { return String(((settings || {}).salesListsOrganizer) 
 function sl2Organizer(o) {
   const saved = _sl2Load(o.id) || {}, d = o.defaults || {};
   const valid = (list, v, dflt) => (list || []).some(x => x[0] === v) ? v : dflt;
-  const st = { chip: valid([['all']].concat(o.chips || []), saved.chip, d.chip || 'all'), group: valid(o.groups, saved.group, d.group || 'month'),
+  const st = { chip: valid([['all']].concat(o.chips || []), d.chip, 'all'), group: valid(o.groups, saved.group, d.group || 'month'),   // A408: never a saved chip
                sort: valid(o.sorts, saved.sort, d.sort || 'newest'), folded: saved.folded && typeof saved.folded === 'object' ? saved.folded : {}, q: '' };
   const api = { rows: [], state: st };
   const host = o.host;
@@ -47,6 +52,7 @@ function sl2Organizer(o) {
   $('.sl2-q').addEventListener('input', (e) => { st.q = e.target.value; api.draw(); });
   $('.sl2-sort').addEventListener('change', (e) => { st.sort = e.target.value; _sl2Save(o.id, st); api.draw(); });
   $('.sl2-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-chip]'); if (b) api.pick(b.getAttribute('data-chip')); });
+  $('.sl2-groups').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-chip-go]'); if (b) api.pick(b.getAttribute('data-chip-go')); });   // A408
   const seg = $('.sl2-seg');
   const setGroup = (g, focus) => {
     st.group = g; _sl2Save(o.id, st); api.draw();
@@ -68,7 +74,7 @@ function sl2Organizer(o) {
     _sl2Save(o.id, st);
   }, true);
 
-  api.pick = (chip) => { st.chip = chip; _sl2Save(o.id, st); api.draw(); };
+  api.pick = (chip) => { st.chip = chip; api.draw(); };   // A408: for this visit only
   api.set = (rows) => { api.rows = rows || []; api.draw(); };
   api.draw = () => {
     const counts = slmChipCounts(api.rows, o.chipOf);
@@ -89,13 +95,22 @@ function sl2Organizer(o) {
     }
     const inChip = api.rows.filter(r => { const c = o.chipOf(r); return st.chip === 'all' ? c !== 'archived' : c === st.chip; });
     const shown = slmSearch(inChip, st.q);
+    /* A408 — a search also looks outside the chip: "2 more requests match under All · Show" (All, or Archived when only
+       archived ones match), so a request is never "missing" because the list was on another chip. */
+    const elsewhere = st.q ? slmSearch(api.rows, st.q).filter(r => inChip.indexOf(r) < 0) : [];
+    const goTo = elsewhere.some(r => o.chipOf(r) !== 'archived') ? 'all' : 'archived';
+    const goName = ([['all', 'All']].concat(o.chips || []).find(c => c[0] === goTo) || [goTo, goTo])[1];
+    const noun = o.noun || 'record';
+    const elseLine = elsewhere.length && goTo !== st.chip
+      ? '<p class="sl2-else">' + elsewhere.length + ' ' + (shown.length ? 'more ' : '') + _sl2E(noun) + (elsewhere.length === 1 ? '' : 's') + ' match' + (elsewhere.length === 1 ? 'es' : '') +
+        ' under ' + _sl2E(goName) + '. <button type="button" data-chip-go="' + goTo + '">Show</button></p>' : '';
     const groups = slmGroup(shown, st.group, { today: o.today, sort: st.sort, stages: o.stages, followGroup: o.followGroup, followOrder: o.followOrder, oldestFirst: !!o.oldestFirst });
     const value = shown.reduce((t, r) => t + (Number(r.value) || 0), 0);
     $('.sl2-count').textContent = shown.length ? slmCountLine(shown.length, inChip.length, value, o.noun) : '';
     const money = (v) => v ? ' · ₱' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
     $('.sl2-groups').innerHTML = !shown.length
-      ? '<p class="sl2-empty">' + _sl2E(st.q ? 'Nothing matches “' + st.q + '”.' : (o.empty ? o.empty(st.chip) : 'Nothing here.')) + '</p>'
-      : groups.map((g, i) => {
+      ? '<p class="sl2-empty">' + _sl2E(st.q ? 'Nothing ' + (elseLine ? 'here ' : '') + 'matches “' + st.q + '”.' : (o.empty ? o.empty(st.chip) : 'Nothing here.')) + '</p>' + elseLine
+      : elseLine + groups.map((g, i) => {
           const folded = st.folded[st.group + '|' + g.key] || (st.folded[st.group + '|' + g.key] === undefined && i >= 6 && groups.length > 8);
           return '<details class="sl2-group" data-g="' + _sl2E(g.key) + '"' + (folded ? '' : ' open') + '><summary class="sl2-gh"><span class="sl2-gl">' + _sl2E(g.label) +
             '</span><span class="sl2-gm">' + g.count + ' ' + _sl2E(o.noun || 'record') + (g.count === 1 ? '' : 's') + money(g.value) + '</span></summary>' +

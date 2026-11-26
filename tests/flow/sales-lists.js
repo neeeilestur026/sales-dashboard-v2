@@ -263,6 +263,57 @@ async function prPage(session, settings) {
     const h = read(f); return h.indexOf('<script src="js/sales-lists.js">') > 0 && h.indexOf('<script src="js/sales-lists.js">') < h.indexOf(f === 'flow-quotations.html' ? '<script src="js/flow-quotations.js">' : '<script src="js/flow-pricing-request.js">') &&
       /css\/sales-lists\.css">\s*<link rel="stylesheet" href="css\/ledger\.css">\s*<link rel="stylesheet" href="css\/apple\.css">/.test(h); }));
 
+  sec('8 · A408 — nothing hides behind a chip');
+  /* Neil, 26 Nov 2026: Kimberlyn's new PR-202611-048 (Aboitiz TVI BU) was "missing in portal". Her My Requests had opened on
+     Archived (282 requests), picked on an earlier visit and remembered; a new request is never archived. */
+  {
+    const store = { 'sl2:t2': JSON.stringify({ chip: 'archived', group: 'client', sort: 'newest', folded: {} }) };
+    const c = { console, localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; } }, flowEsc: (s) => String(s), JSON, Math, Number, String, Object, Array, Date };
+    vm.createContext(c); vm.runInContext(read('js/sales-lists-model.js') + '\n' + read('js/sales-lists.js'), c);
+    const host = fakeHost();
+    c.__h = host;
+    c.__rows = [
+      { key: 'A', date: '2026-10-20', client: 'Philcement Corporation', stage: 'ready', hay: 'A Philcement wrench', raw: { key: 'A' } },
+      { key: 'B', date: '2026-10-02', client: 'Philcement Corporation', stage: 'source', hay: 'B Philcement pump', raw: { key: 'B' } },
+      { key: 'D', date: '2026-08-01', client: 'Taganito', stage: 'done', hay: 'D Taganito', raw: { key: 'D' } },
+      { key: 'E', date: '2026-06-01', client: 'Old Co', stage: 'source', archived: true, hay: 'E Old Co', raw: { key: 'E' } }];
+    vm.runInContext(`var org = sl2Organizer({ id: 't2', host: __h, noun: 'request', chips: [['source', 'Waiting'], ['ready', 'For Quotation', 'keep'], ['done', 'Quoted'], ['archived', 'Archived']],
+      chipOf: r => r.archived ? 'archived' : r.stage, groups: [['month', 'Month'], ['client', 'Client']], sorts: [['newest', 'Newest']], defaults: { chip: 'all' }, today: '${T}',
+      table: rows => '<table>' + rows.map(r => '<tr>' + r.key + '</tr>').join('') + '</table>' });
+      org.set(__rows);`, c);
+    const before = store['sl2:t2'];
+    eq('a chip saved on an earlier visit is not restored: the list opens on its default (All); the grouping still is', [c.org.state.chip, c.org.state.group], ['all', 'client']);
+    vm.runInContext(`org.pick('archived')`, c);
+    ok('picking a chip is for this visit only: nothing is written', store['sl2:t2'] === before && c.org.state.chip === 'archived');
+    c._sl2Save('t3', { chip: 'archived', group: 'month', sort: 'newest', folded: {} });
+    ok('  what is saved never holds the chip (group, sort, folded only)', !/chip/.test(store['sl2:t3']) && /"group":"month"/.test(store['sl2:t3']), store['sl2:t3']);
+    const g = () => host.parts['.sl2-groups'].innerHTML;
+    vm.runInContext(`org.pick('done'); org.state.q = 'philcement'; org.draw()`, c);
+    ok('a search with nothing in the chip says where the matches are, with Show', /<p class="sl2-empty">Nothing here matches “philcement”\.<\/p><p class="sl2-else">2 requests match under All\. <button type="button" data-chip-go="all">Show<\/button><\/p>/.test(g()), g());
+    vm.runInContext(`org.pick('ready'); org.draw()`, c);
+    ok('  with some in the chip: how many more, above the list', /^<p class="sl2-else">1 more request matches under All\./.test(g()) && /<tr>A<\/tr>/.test(g()), g().slice(0, 300));
+    vm.runInContext(`org.pick('all'); org.state.q = 'old co'; org.draw()`, c);
+    ok('  only archived ones match: it points at Archived', /1 request matches under Archived\. <button type="button" data-chip-go="archived">Show<\/button>/.test(g()), g());
+    vm.runInContext(`org.pick('archived'); org.draw()`, c);
+    ok('  nothing outside the chip: no line', /<tr>E<\/tr>/.test(g()) && !/sl2-else/.test(g()), g());
+  }
+  {
+    const pa = await prPage();
+    pa.run('prOrg.pick("archived")');
+    ok('on Archived the note says what the list is and that new requests are under All, with Back to All',
+       /These are archived requests — no update in 30 days\. New requests are under All\. <button type="button" data-pr-chip="all">Back to All<\/button>/.test(pa.els.prOrgNote.innerHTML), pa.els.prOrgNote.innerHTML);
+    pa.run('prOrg.pick("all")');
+    ok('  back on All it counts the archived again', /1 request archived — no update in 30 days\. <button type="button" data-pr-chip="archived">See them<\/button>/.test(pa.els.prOrgNote.innerHTML), pa.els.prOrgNote.innerHTML);
+    pa.run('prOrg.pick("archived"); prOrg.state.q = "zzz"; prShowNew("PR-SRC")');
+    ok('after a submit the list leaves Archived for All, clears the search, and marks the new request',
+       pa.run('prOrg.state.chip') === 'all' && pa.run('prOrg.state.q') === '' && /<tr class="pr-new"><td><b>PR-SRC<\/b>/.test(pa.els.prOrgHost.parts['.sl2-groups'].innerHTML), pa.els.prOrgHost.parts['.sl2-groups'].innerHTML.slice(0, 300));
+    const PRJ = read('js/flow-pricing-request.js');
+    ok('  saveRequest marks it before the list is read again, and shows it after', /prJustMade = String\(res\.prNo\);\s*await loadRequests\(\);/.test(PRJ) && /prShowNew\(res\.prNo\);\s*\} catch/.test(PRJ));
+    const CSS8 = read('css/sales-lists.css');
+    ok('  the styles: the search line, a soft wash on the new row, none of it moving with reduced motion',
+       /\.sl2-else \{/.test(CSS8) && /#listContainer tr\.pr-new > td \{ background: var\(--hx-navy-soft\); \}/.test(CSS8) && /prefers-reduced-motion: reduce\) \{ #listContainer tr > td \{ transition: none; \}/.test(CSS8));
+  }
+
   console.log(FAIL ? `\n${FAIL} of ${N} FAILED\n` : `\nall ${N} passed\n`);
   process.exit(FAIL ? 1 : 0);
 })().catch(e => { console.log('  FAIL threw: ' + (e && e.stack || e)); process.exit(1); });
