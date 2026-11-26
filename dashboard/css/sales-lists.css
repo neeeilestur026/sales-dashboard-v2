@@ -123,3 +123,12 @@ html[data-motion="off"] .sl2-gb { animation: none; }
   .sl2-seg { align-self: flex-start; }
   .sl2-gh { flex-wrap: wrap; }
 }
+/* A408 — a search that matches outside the chip says where, with Show (the .sl2-note look, so it reads as the same voice) */
+.sl2-else { margin: 0 0 .6rem; padding: .55rem .8rem; border-radius: var(--hx-r-sm); background: var(--hx-inset); font: 500 .78rem/1.45 var(--hx-text); color: var(--hx-ink-2); }
+.sl2-empty + .sl2-else { margin: 0 auto 1rem; max-width: 32rem; text-align: center; }
+.sl2-else button { padding: 0; border: 0; background: none; color: var(--hx-navy-text); font: 600 .78rem/1.45 var(--hx-text); text-decoration: underline; cursor: pointer; }
+.sl2-else button:active, .sl2-note button:active { opacity: .6; }
+/* A407 — the request just submitted: a soft wash on its row that fades out, so it is found at once */
+#listContainer tr > td { transition: background-color 1.2s ease; }
+#listContainer tr.pr-new > td { background: var(--hx-navy-soft); }
+@media (prefers-reduced-motion: reduce) { #listContainer tr > td { transition: none; } }
