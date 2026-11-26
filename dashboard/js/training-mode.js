@@ -13,7 +13,8 @@
   if (!sess || sess.role !== 'sales' || sess.trainingMode !== true) return;
 
   // Page registry — tooltip callouts and help bullets per page.
-  // Keys are page filenames (last path segment).
+  // Keys are page filenames (last path segment). A407 — performance, report, pending-items and quotation-summary are
+  // redirect stubs now (js/page-moved.js), so their entries are gone.
   var PAGE_REGISTRY = {
     'dashboard.html': {
       title: 'Sales Home — Practice Area',
@@ -25,62 +26,8 @@
       tooltips: [
         { selector: '#quotationLink', title: 'Quotation Generator', text: 'Click to open the quotation tool. Try filling in a sample client and item — saved drafts will be discarded in training mode.' },
         { selector: '#prLink', title: 'PR Generator', text: 'Open this to practice writing Purchase Requests. Submitted PRs will not reach the real records while training is on.' },
-        { selector: 'a[href="report.html"]', title: 'Daily Report', text: 'Submit your daily activities here. Reports from trainees ARE saved so your supervisor can review your day.' },
+        { selector: 'a[href="my-daily-report.html"]', title: 'Daily Report', text: 'Submit your daily activities here. Reports from trainees ARE saved so your supervisor can review your day.' },
         { selector: 'a[href="director-client-book.html"]', title: 'Client Book', text: 'Your clients, their people and what you have sent them. The old Client List is retired (A385).' }
-      ]
-    },
-    'performance.html': {
-      title: 'Performance Tracker — Practice Area',
-      help: [
-        'Search and filter your quotations to learn what statuses look like.',
-        'You can change a quotation status or follow-up date — in training mode these edits are discarded after the toast appears.',
-        'Open the Revision modal to practice submitting a revised price.'
-      ],
-      tooltips: [
-        { selector: '#searchInput', title: 'Search', text: 'Type a client name or quotation number to filter the table.' },
-        { selector: '#statusFilter', title: 'Status Filter', text: 'Use this to view only Pending / Replied / Won / Lost / Closed quotations.' },
-        { selector: '.status-select', title: 'Quick Status Edit', text: 'Change a quotation\'s status inline. In training mode this is for practice only.' }
-      ]
-    },
-    'report.html': {
-      title: 'Daily Report — Trainee Mode',
-      help: [
-        'Walk through each section to learn how a real daily report is filled out.',
-        'Use the "Other Task" field at the bottom of Section 1 to describe what you practiced today.',
-        'When you click Submit, your trainee report WILL be sent so management can review what you worked on.'
-      ],
-      tooltips: [
-        { selector: '#fldOtherTask', title: 'Other Task', text: 'Describe any training task you did today (e.g. "watched onboarding video", "practiced quotation generator"). This is sent with your daily report.' },
-        { selector: '#submitBtn', title: 'Submit Report', text: 'Trainee daily reports ARE recorded. Make sure your activities and Other Task field reflect what you actually did today.' }
-      ]
-    },
-    'pending-items.html': {
-      title: 'Pending Items — Practice Area',
-      help: [
-        'This page shows all Purchase Requests and Quotations still in progress.',
-        'Switch between PR and Quotation tabs to see each list.',
-        'Use the checkboxes to select rows, then "Forward to Pricing" or "Create Quotation" — in training mode these actions are simulated and nothing reaches the live records.',
-        'Search and filter controls let you narrow the list — these are safe to explore.'
-      ],
-      tooltips: [
-        { selector: '#tabPR', title: 'PR Tab', text: 'Click to view pending Purchase Requests waiting for action.' },
-        { selector: '#tabQuotation', title: 'Quotation Tab', text: 'Switch here to see open quotations and their statuses.' },
-        { selector: '#prSearch', title: 'Search', text: 'Filter PRs by company name, PR number, or item keyword.' },
-        { selector: '#btnForwardPricing', title: 'Forward to Pricing', text: 'Forward selected PR(s) to admin for pricing. In training mode this is a practice action — nothing is actually sent.' }
-      ]
-    },
-    'quotation-summary.html': {
-      title: 'Quotation Summary — Practice Area',
-      help: [
-        'KPI cards at the top show totals: quotations sent, total amount, POs received, and PO amount.',
-        'Use the search box, agent filter, and month filter to find specific quotations.',
-        'This page is read-only — no actions to learn here, just review how your numbers are presented.',
-        'In training mode the numbers shown may include practice data and are not authoritative.'
-      ],
-      tooltips: [
-        { selector: '#kpiTotal', title: 'Total Quotations', text: 'How many quotations you (or your team) have sent in the selected period.' },
-        { selector: '#searchInput', title: 'Search', text: 'Filter the quotation list by company, quotation number, or product.' },
-        { selector: '#monthFilter', title: 'Month Filter', text: 'Switch between months to see how performance changed over time.' }
       ]
     },
     'leave-request.html': {

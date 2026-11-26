@@ -1,0 +1,17 @@
+/* management-itinerary.css — A407 · what the week's client visits add to management-itinerary.html. The section reuses
+ * the page's own card, day and table classes (mi-pane, mi-day, mi-table, mi-chip in its <style> block); this is only
+ * the spacing, the narrow-screen scroll and the heading that sets the older weekly itineraries apart. Tokens only. */
+body.flow-screen .mi-visits { margin-bottom: 1.75rem; }
+body.flow-screen .mi-visits .mi-panehead .mi-note { margin-top: .2rem; }
+body.flow-screen .mi-visits .mi-day:last-child { margin-bottom: 0; }
+body.flow-screen .mi-visits .mi-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+body.flow-screen .mi-visits .mi-table { min-width: 620px; }
+body.flow-screen .mi-visits .mi-table td.t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+body.flow-screen .mi-visits .mi-table td.k a { color: var(--hx-navy-text); text-decoration: none; }
+body.flow-screen .mi-visits .mi-table td.k a:hover { text-decoration: underline; text-underline-offset: 2px; }
+body.flow-screen .mi-visits .mi-sub { font-weight: 400; font-size: .72rem; line-height: 1.4; color: var(--hx-ink-3); margin-top: .1rem; }
+body.flow-screen .mi-older { font: 700 15px/1.3 var(--hx-text); letter-spacing: -.01em; color: var(--hx-ink); margin: 0; }
+body.flow-screen .mi-older-note { font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-3); margin: .2rem 0 .9rem; }
+@media print {
+  body.flow-screen .mi-visits .mi-table { min-width: 0; }
+}

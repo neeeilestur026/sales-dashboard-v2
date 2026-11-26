@@ -20,7 +20,8 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u;
 const HEX = /#(?:[0-9a-fA-F]{3}){1,2}\b/g;
 
-const STUBS = ['director-recommender.html', 'clients.html', 'hr-memos.html'];   // A385 — clients.html is a redirect now; A390 — hr-memos.html too
+const STUBS = ['director-recommender.html', 'clients.html', 'hr-memos.html',   // A385 — clients.html is a redirect now; A390 — hr-memos.html too
+  'report.html', 'my-reports.html', 'performance.html', 'quotation-summary.html', 'pending-items.html', 'weekly-itinerary.html'];   // A407 — js/page-moved.js
 const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_') && STUBS.indexOf(f) < 0).sort();
 const read = (f) => fs.readFileSync(D + f, 'utf8');
 
@@ -131,6 +132,21 @@ sec('3 · the shared scripts');
   ok('  the action strip is classed rows on a tone', /class="fa-row" data-tone=/.test(A) && /class="fa-empty"/.test(A) && !/>→</.test(A));
   ok('  action items carry a tone, never a hex colour', /const add = \(icon, tone, text, link(, amt)?\)/.test(A) && !/add\('\w+', '#/.test(A) && !/#ef4444/.test(A));
   ok('  the navbar labels the commission pages "SOON" still (commission-hold.js pins them)', /Commission Requests/.test(A) && /flowSoonTag\(\)/.test(A));
+  /* A407 — the retired sales pages are stubs: no inline script, theme.js first, styles.css only, and js/page-moved.js
+     with the page they moved to (report.html carrying a ?date= day over). */
+  const MOVED = { 'report.html': 'my-daily-report.html', 'my-reports.html': 'my-daily-report.html', 'performance.html': 'director-client-book.html',
+    'quotation-summary.html': 'quotation-status.html', 'pending-items.html': 'flow-quotations.html', 'weekly-itinerary.html': 'client-visits.html' };
+  const badStub = Object.keys(MOVED).filter(f => { const h = read(f); return /<script>/.test(h) || !/<body>\s*<script src="js\/theme\.js"><\/script>/.test(h)
+    || (h.match(/<link rel="stylesheet"/g) || []).length !== 1 || !new RegExp('<script src="js/page-moved\\.js" data-to="' + MOVED[f].replace('.', '\\.') + '"( data-keep="date")?></script>').test(h)
+    || (/data-keep/.test(h) !== (f === 'report.html')); });
+  ok('the six retired sales pages are stubs sending each to its new page', badStub.length === 0, badStub);
+  const PM = read('js/page-moved.js');
+  const go = (attrs, search) => { const loc = { search: search || '', replace(u) { loc.to = u; } };
+    new Function('document', 'window', 'location', PM)({ currentScript: { getAttribute: (k) => attrs[k] || null } }, { location: loc }, loc); return loc.to; };
+  ok('  js/page-moved.js: to data-to, a yyyy-mm-dd ?date= carried over, anything else dropped, a foreign target refused',
+    go({ 'data-to': 'client-visits.html' }) === 'client-visits.html' && go({ 'data-to': 'my-daily-report.html', 'data-keep': 'date' }, '?date=2026-11-20') === 'my-daily-report.html?date=2026-11-20'
+    && go({ 'data-to': 'my-daily-report.html', 'data-keep': 'date' }, '?date=<x>') === 'my-daily-report.html' && go({ 'data-to': 'https://evil.example/x.html' }) === 'index.html',
+    [go({ 'data-to': 'client-visits.html' }), go({ 'data-to': 'my-daily-report.html', 'data-keep': 'date' }, '?date=2026-11-20')]);
   ok('flow-api.js: flowMsg writes classes, flowSoonTag a class, the banners classed', /classList\.add\(ok \? 'ok' : 'bad'\)/.test(X) && /class="soon-tag"/.test(X) && /class="flow-banner bad"/.test(X) && /class="flow-soon"/.test(X));
   ok('  flowComingSoonHtml keeps its wording', /— coming soon/.test(X));
   ok('theme.js sets html and body, validates storage, keeps the director key, wires .theme-toggle by delegation', /setAttr\(document\.documentElement, t\)/.test(TH) && /setAttr\(document\.body, t\)/.test(TH) && /v === 'dark' \|\| v === 'light'/.test(TH) && /'dh_theme'/.test(TH) && /closest\('\.theme-toggle'\)/.test(TH) && /getElementById\('themeToggle'\)/.test(TH));

@@ -46,15 +46,18 @@ async function cbLoad() {
   CB.v180 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(180).catch(() => false) : false;   // A354 — the Major / Minor label saves from 180
   CB.v183 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(183).catch(() => false) : false;   // A360 — connecting past records from 183
   CB.v186 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(186).catch(() => false) : false;   // A369 — the head office address from 186
-  const [book, quotations, prs, salesOrders, clients, activity, users, reports] = await Promise.all([
+  CB.v204 = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(204).catch(() => false) : false;   // A407 — Developing, other spellings, the guide's follow-ups
+  const [book, quotations, prs, salesOrders, clients, activity, users, reports, guide] = await Promise.all([
     postFlow('getClientBook', {}).catch(e => ({ success: false, message: String(e && e.message || e) })),
     read('getQuotations'), read('getPricingRequests'), read('getSalesOrders'), read('getClients'),
     read('getActivityLog', { from, to: today }),
     // A358 — the owner list and the Sales Daily Report trial are the director's; a rep reads neither
     CB.all && typeof apiGetUsers === 'function' ? apiGetUsers().then(r => (r && (r.data || r.users)) || []).catch(() => []) : Promise.resolve([]),
-    CB.all ? postFlow('getProofReports', { from, to: today }).then(r => (r && r.success ? r.data || [] : [])).catch(() => []) : Promise.resolve([])
+    CB.all ? postFlow('getProofReports', { from, to: today }).then(r => (r && r.success ? r.data || [] : [])).catch(() => []) : Promise.resolve([]),
+    /* A407 — a rep's "follow-up due" flags come from their follow-up guide, the one list the home card and the daily report show */
+    !CB.all && CB.v204 ? postFlow('getFollowUpGuide', {}).catch(() => null) : Promise.resolve(null)
   ]);
-  CB.raw = { today, quotations, prs, salesOrders, clients, activity };   // cbTakeBook indexes it with the book's links
+  CB.raw = { today, quotations, prs, salesOrders, clients, activity, fugDue: cbGuideDue(guide) };   // cbTakeBook indexes it with the book's links
   CB.reports = reports;
   CB.roster = (users || []).filter(u => String(u.role || '').toLowerCase() === 'sales').map(u => String(u.fullName || u.name || u.username || '').trim()).filter(Boolean).sort();
   cbTakeBook(book);
@@ -64,6 +67,13 @@ async function cbLoad() {
   else if (cbSplit()) { const first = cbFilter(CB.clients, CB.log, CB.ix, CB.f)[0]; if (first) cbDetail(first.clientNo, null); else cbPaneEmpty(); }
   CB.wasSplit = cbSplit();
   cbFit();
+}
+/** A407 — {quotationNo: step} for the guide's quotation follow-ups due today or still open from earlier; null without a guide. */
+function cbGuideDue(g) {
+  if (!g || !g.success || !Array.isArray(g.days)) return null;
+  const out = {}, td = g.days.find(d => d.today);
+  ((td && td.quotes) || []).concat((td && td.carryQuotes) || []).forEach(x => { if (x && x.status === 'open' && x.quotationNo) out[x.quotationNo] = x.step || 1; });
+  return out;
 }
 function cbTakeBook(book) {
   CB.ok = !!(book && book.success);
@@ -156,6 +166,7 @@ function cbRender() {
   const chip = (key, label, count) => (!count && key !== 'all' && !cbChipOn(key)) ? '' : '<button type="button" class="cb-chip' + (cbChipOn(key) ? ' on' : '') + '" data-chip="' + key + '" aria-pressed="' + cbChipOn(key) + '">' +
     _cbE(label) + ' <span class="n">' + count + '</span></button>';
   _cbId('cbChips').innerHTML = chip('all', 'All clients', sum.total) + chip('t:Major', 'Major', sum.major) + chip('t:Minor', 'Minor', sum.minor) +
+    chip('t:Developing', 'Developing', sum.developing || 0) +   // A407
     (sum.noLabel ? chip('t:none', 'No label', sum.noLabel) : '') +   // A361 — imported clients wait for their Major / Minor label
     chip('a:Accredited', 'Accredited', sum.accredited) + chip('a:On process', 'On process', sum.onProcess) +
     chip('a:Not accredited', 'Not accredited', sum.notAccredited) + chip('f:needsUpdate', 'Needs an update', sum.needsUpdate) +
@@ -215,7 +226,8 @@ function cbBadge(text, tone) { return '<span class="cb-badge ' + (tone || '') + 
 /* A354 — Major / Minor */
 function cbTierBadge(t) { return t ? '<span class="cb-badge tier-' + _cbE(t.toLowerCase()) + '">' + _cbE(t) + '</span>' : '<span class="cb-badge tier-none">No label</span>'; }
 function cbTierPills(cur, required) {
-  return '<fieldset class="cb-pills cb-tier"><legend>Major or minor client</legend>' + CB_TIERS.map(t => '<label class="cb-pill"><input type="radio" name="tier" value="' + t + '"' +
+  const tiers = (_cbLists().tiers || CB_TIERS).filter(t => t !== 'Developing' || CB.v204 || cur === t);   // A407 — Developing saves from 204
+  return '<fieldset class="cb-pills cb-tier"><legend>Label</legend>' + tiers.map(t => '<label class="cb-pill"><input type="radio" name="tier" value="' + t + '"' +
       (cur === t ? ' checked' : '') + (required && CB.v180 ? ' required' : '') + (CB.v180 ? '' : ' disabled') + '><span>' + t + '</span></label>').join('') +
     (CB.v180 ? '' : '<span class="cb-sub">The label is saved once the FlowAPI update (180) is pasted.</span>') + '</fieldset>';
 }
@@ -522,6 +534,8 @@ function cbDetail(no, back) {
         ((main.emails || []).length || (main.phones || []).length ? '<span class="cb-flinks">' + (main.emails || []).slice(0, 1).map(mail).concat((main.phones || []).slice(0, 1).map(tel)).join(' · ') + '</span>' : '')
         : '<span class="cb-dim">No contact yet</span>', goto('contacts', people.length > 1 ? 'All ' + people.length : 'Contacts')) +
       (c.notes ? fact('Notes', '<span class="cb-notes">' + _cbE(c.notes) + '</span>') : '') +
+      ((c.names || []).length || (live && CB.v204) ? fact('Also written as', (c.names || []).length ? '<span class="cb-aliases">' + c.names.map(n => '<span class="cb-alias">' + _cbE(n) + '</span>').join('') + '</span>'
+        : '<span class="cb-dim">No other spellings</span>', live && CB.v204 ? '<button type="button" class="cb-recbtn cb-act" data-edit>Edit</button>' : '') : '') +   // A407
     '</div>' +
     (!CB.all ? '' : '<section class="cb-sec"><h4>From the Sales Daily Report</h4>' +
       (lines.length ? '<ul class="cb-hist">' + lines.map((l, i) => '<li' + (i >= SR_SHOWN ? ' class="cb-more" hidden' : '') + '><span class="tm">' + _cbE(cbDay(l.day)) + '</span><span>' + _cbE(l.type) + ' — ' + _cbE([l.person, l.note].filter(Boolean).join(', ') || l.company) +
@@ -554,6 +568,8 @@ function cbDetail(no, back) {
           '<div class="cb-grid2"><label>Next step<input type="text" class="cb-in" name="nextStep" maxlength="190" value="' + _cbE(c.nextStep) + '"></label>' +
           '<label>Next step date<input type="date" class="cb-in" name="nextStepDate" value="' + _cbE(c.nextStepDate) + '"></label></div>' +
           '<label>Notes<textarea class="cb-in" name="notes" rows="2" maxlength="2000">' + _cbE(c.notes) + '</textarea></label>' +
+          (CB.v204 ? '<label>Also written as <span class="cb-sub">one spelling per line, as it appears on purchase requests, quotations and orders</span>' +
+            '<textarea class="cb-in" name="names" rows="2" maxlength="3000" placeholder="ITOGON SOYUC RESOURCES INC">' + _cbE((c.names || []).join('\n')) + '</textarea></label>' : '') +   // A407
           '<div class="cb-formfoot"><button type="button" class="btn btn-secondary" data-cancel="cbEdit">Cancel</button><span class="cb-msg" role="status"></span><button type="submit" class="btn btn-primary">Save contacts and details</button></div></form>' : '') + '</div>';
 
   const timeline = '<div class="cb-sec cb-flat"><h4>Timeline</h4><ul class="cb-hist">' + log.map(cbLogLi).join('') + '</ul></div>' +
@@ -620,7 +636,15 @@ function cbDetail(no, back) {
     if (CB.v180 && cbTierOf(edit)) params.tier = cbTierOf(edit);
     if (CB.v180) { if (cbSectorOf(edit)) params.sector = cbSectorOf(edit); params.siteAddress = el.siteAddress.value.trim(); }
     if (CB.v186) params.headOfficeAddress = el.headOfficeAddress.value.trim();   // A369
-    cbPost(edit, 'saveClientBookClient', params);
+    /* A407 — the other spellings are saved after the details, only when they changed */
+    const names = el.names ? el.names.value.split('\n').map(x => x.trim()).filter(Boolean) : null;
+    const changed = names && names.join('\n') !== (c.names || []).join('\n');
+    cbPost(edit, 'saveClientBookClient', params).then(async r => {
+      if (!r || !r.success || !changed) return;
+      const n = await postFlow('saveClientBookNames', { clientNo: no, names: JSON.stringify(names) }).catch(e => ({ success: false, message: String(e && e.message || e) }));
+      if (n && n.success) await cbReload();
+      else if (typeof window.hxToast === 'function') window.hxToast((n && n.message) || 'The other spellings could not be saved.', { tone: 'error' });
+    });
   });
   const arch = box.querySelector('#cbArchive');
   if (arch) arch.addEventListener('submit', (ev) => {

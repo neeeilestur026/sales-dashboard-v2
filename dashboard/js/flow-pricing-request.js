@@ -17,6 +17,7 @@ let prIsRequester = false;
 let prSettings = null;    // A385 — FlowSettings (the salesListsOrganizer switch, the archive age)
 let prQuotes = {};        // A385 — quotationNo → quotation, so a request can say what its quotation is doing
 let prOrg = null;         // A385 — the organizer (js/sales-lists.js), once it is mounted
+let prJustMade = '';      // A407 — the request just submitted, pointed at in the list for a few seconds
 let canSource = false;    // may run sourcing + verification
 let canPrice = false;     // may run management pricing
 
@@ -169,6 +170,7 @@ async function prLoadFromInquiry(id) {
   if (rows) rows.innerHTML = '';
   const cust = document.getElementById('customer');
   if (cust && inq.client) { cust.value = inq.client; prFillContacts(); }   // fills blanks from the client master
+  if (typeof prPick !== 'undefined' && prPick && inq.client) prPick.suggest(inq.client);   // A407 — the book's client when the name is exactly one of them
   items.forEach(it => addRow({
     itemNo: it.model || 'N/A',              // A333: a Power Team model is a real order number; family picks are not
     itemName: it.name,
@@ -299,19 +301,21 @@ async function loadClientBook() {
   prBook = [];
   const row = document.getElementById('prClientBookRow'), sel = document.getElementById('prClientBook');
   if (!row || !sel || typeof postFlow !== 'function') return;
+  let r = null;
   try {
     if (typeof flowVersionAtLeast === 'function' && !(await flowVersionAtLeast(182))) return;
-    const r = await postFlow('getClientBook', {});
+    r = await postFlow('getClientBook', {});
     if (!r || !r.success) return;
     prBook = (r.clients || []).filter(c => !c.archivedAt && c.company).sort((a, b) => String(a.company).localeCompare(String(b.company)));
   } catch (e) { return; }
+  if (await prMountPick(r)) return;                     // A407 — a sales rep: the shared picker, even with an empty book
   if (!prBook.length) return;
   sel.innerHTML = '<option value="">— not linked —</option>' + prBook.map(c => '<option value="' + flowEsc(c.clientNo) + '">' +
     flowEsc(c.company + (c.siteAddress || c.headOfficeAddress ? ' — ' + (c.siteAddress || c.headOfficeAddress) : '') + (c.tier ? ' · ' + c.tier : '')) + '</option>').join('');
   row.hidden = false;
 }
-function prPickClientBook() {
-  const sel = document.getElementById('prClientBook'), c = prBook.find(x => x.clientNo === (sel && sel.value));
+function prPickClientBook(picked) {
+  const sel = document.getElementById('prClientBook'), c = (picked && picked.clientNo) ? picked : prBook.find(x => x.clientNo === (sel && sel.value));
   if (!c) return;
   const cust = document.getElementById('customer');
   if (cust) cust.value = c.company;
@@ -322,6 +326,32 @@ function prPickClientBook() {
   fill('prContact', p.name); fill('prDesignation', p.position); fill('prEmail', (p.emails || [])[0]); fill('prPhone', (p.phones || [])[0]);
   fill('prAddress', c.siteAddress || c.headOfficeAddress);   // A369 — the plant, or the head office when there is no plant
   prFillContacts();
+}
+
+/* A407 — Neil, 25 Nov 2026: "New purchase requests and quotations must pick the client from the rep's book; a new client
+   can be added there in place." On FlowAPI 204 a sales rep gets the shared picker (js/client-pick.js) in the row above:
+   required (FlowSettings requireClientPick 'off' = optional), searchable, with Add a client in a sheet. Picking fills
+   the customer as the book spells it, through prPickClientBook above; the Client No sits in a hidden #prClientBook, so
+   the request reads it as before. Every other role keeps the optional A358 select; an older FlowAPI, or a book that
+   cannot be read, keeps the form as it was and says nothing. */
+let prPick = null;
+async function prMountPick(r) {
+  if (prRole !== 'sales' || typeof cpMount !== 'function') return false;
+  try { if (typeof flowVersionAtLeast === 'function' && !(await flowVersionAtLeast(204))) return false; } catch (e) { return false; }
+  const row = document.getElementById('prClientBookRow');
+  if (!row) return false;
+  if (!prSettings) { try { const s = await fetchFlow('getFlowSettings'); prSettings = (s && s.data) || null; } catch (e) { /* the default: required */ } }
+  prPick = cpMount(row, { inputId: 'prClientBook', required: cpRequired(prRole, prSettings || {}), clients: prBook, lists: r && r.lists,
+    what: 'request', onPick: prPickClientBook, submitId: 'saveBtn', whyId: 'prSaveWhy' });
+  if (!prPick) return false;
+  row.hidden = false;
+  return true;
+}
+/** The server still asked for the client (needClient): say it at the picker — reading the book again if it had not loaded. */
+async function prNeedClient(message) {
+  if (!prPick && prRole === 'sales') await loadClientBook();
+  if (prPick) { prPick.showError(message, true); return; }
+  flowMsg('formMsg', message, false);
 }
 
 // ─── Sales: request form ─────────────────────────
@@ -438,6 +468,7 @@ async function saveRequest() {
     return true;
   });
   const droppedDupes = before - items.length;
+  if (prPick && !prPick.check()) return;               // A407 — the client first: the picker says what to do, the button's note too
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
@@ -466,6 +497,7 @@ async function saveRequest() {
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
     const res = await postFlow('createPricingRequest', payload);
+    if (res && !res.success && res.needClient) { await prNeedClient(res.message); return; }   // A407 — inline, at the picker
     if (!res.success) throw new Error(res.message);
     // A169: close the loop — stamp the PR number back on the Product Finder inquiry so the rep can
     // see which searches became real business. Never allowed to break the request that just saved.
@@ -543,6 +575,7 @@ async function saveRequest() {
       : ' · ⚠ PDF not saved' + (lastErr ? ' (' + lastErr + ')' : '') + ' — use “Generate PR PDF” on the row';
     if (droppedDupes) extra += ` · ${droppedDupes} duplicate line(s) removed`;
     flowMsg('formMsg', `${res.message} (${res.prNo})${extra}`, true);
+    prJustMade = String(res.prNo);
     await loadRequests();
     // The PDF Link cell was just written; a re-read can be momentarily stale (empty), so the "View PDF"
     // link wouldn't show until a later refresh. We already have the link in memory — patch the row now.
@@ -550,6 +583,7 @@ async function saveRequest() {
       const row = prList.find(x => String(x.prNo) === String(res.prNo));
       if (row && !row.pdfLink) { row.pdfLink = savedLink; renderList(); }
     }
+    prShowNew(res.prNo);
   } catch (e) { flowMsg('formMsg', e.message, false); }
   finally { btn.disabled = false; btn.textContent = 'Submit to Admin'; }
 }
@@ -561,12 +595,34 @@ function resetForm() {
   document.getElementById('date').value = flowToday();
   ['prContact', 'prDesignation', 'prEmail', 'prPhone', 'prAddress', 'prDateNeeded', 'prUrgency', 'prClientNo', 'prClientBook']
     .forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; if (el.dataset) el.dataset.cbfill = ''; } });
+  if (prPick) prPick.clear();                           // A407
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
   prFromInquiry = '';                                   // A169: a second Save must not re-stamp the inquiry
   const banner = document.getElementById('prInquiryBanner');
   if (banner) banner.style.display = 'none';
   addRow();
+}
+
+/* A407 — Neil, 26 Nov 2026: Kimberlyn submitted PR-202611-046, did not see it in My Requests and sent it again (047): her list
+   was on a chip a new request is never in ("For Quotation" lists only priced requests). After a submit the list shows All,
+   clears the search, opens the request's group and points at the row. (A408: no chip is remembered between visits either.) */
+function prShowNew(prNo) {
+  prJustMade = String(prNo || '');
+  if (!prJustMade) return;
+  if (prOrg && prOrg.state) {
+    prOrg.state.q = '';
+    const q = document.querySelector('#prOrgHost .sl2-q'); if (q) q.value = '';
+    prOrg.state.chip = 'all';
+  }
+  renderList();
+  const row = document.querySelector('tr.pr-new');
+  if (row) {
+    const det = row.closest('details'); if (det && !det.open) det.open = true;
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    try { row.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' }); } catch (e) { /* old browser: no scroll */ }
+  }
+  setTimeout(() => { if (prJustMade !== String(prNo)) return; prJustMade = ''; document.querySelectorAll('tr.pr-new').forEach(r => r.classList.remove('pr-new')); }, 6000);
 }
 
 // ─── List / queue ────────────────────────────────
@@ -613,7 +669,7 @@ function filteredList() {
 
 function prRowHtml(r) {
   const incl = r.items.filter(i => i.included).length;
-  return `<tr><td>${flowEsc(r.prNo)}</td><td>${flowDate(r.date)}</td><td>${flowEsc(r.customer)}</td>
+  return `<tr${String(r.prNo) === prJustMade ? ' class="pr-new"' : ''}><td>${flowEsc(r.prNo)}</td><td>${flowDate(r.date)}</td><td>${flowEsc(r.customer)}</td>
     <td>${flowEsc(r.requestedBy)}${prOwnerDiffers(r) ? `<div class="fc-dim">for ${flowEsc(r.salesperson)}</div>` : ''}</td><td class="num">${incl}/${r.items.length}</td>
     <td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span></td>
     <td style="white-space:nowrap;">${rowActions(r)}</td></tr>`;
@@ -749,19 +805,25 @@ function prRenderOrganized() {
     prOrg = sl2Organizer({ id: 'pr-' + (prIsRequester ? 'mine' : prRole), host: document.getElementById('prOrgHost'), noun: 'request',
       chips, chipOf: prChipOf, groups, defaults: Object.assign({ sort: 'newest' }, dflt), stages: PR_STAGES, today: flowToday(),
       sorts: [['newest', 'Newest first'], ['oldest', 'Oldest first'], ['biggest', 'Biggest first'], ['client', 'By client']],
-      placeholder: 'Search requests, clients, items or quotations', table: prOrgTable,
+      placeholder: 'Search requests, clients, items or quotations', table: prOrgTable, onDraw: prOrgNoteDraw,
       empty: (chip) => chip === 'ready' ? 'Nothing is priced and waiting for a quotation.' : chip === 'archived' ? 'Nothing is archived.'
         : chip === 'waiting' ? 'Nothing is waiting for a price.' : 'No purchase requests here.' });
   }
-  const rows = prList.map(prOrgRow);
-  prOrg.set(rows);
-  const old = rows.filter(r => r.archived).length, days = flowNum((prSettings || {}).prArchiveDays);
+  prOrg.set(prList.map(prOrgRow));
+}
+/** The line above the list, redrawn with every chip, search or regroup (the organizer's onDraw). Off Archived: how many
+ *  are archived, with See them. A408 — on Archived: what this list is, that new requests are never here, and Back to All. */
+function prOrgNoteDraw() {
   const note = document.getElementById('prOrgNote');
-  if (note) note.innerHTML = old && prOrg.state.chip !== 'archived'
-    ? '<p class="sl2-note">' + old + ' request' + (old === 1 ? '' : 's') + ' archived — no update in ' + (days || 30) + ' days. ' +
-      '<button type="button" data-pr-archived>See them</button></p>' : '';
-  const see = note && note.querySelector('[data-pr-archived]');
-  if (see) see.addEventListener('click', () => { prOrg.pick('archived'); prRenderOrganized(); });
+  if (!note || !prOrg) return;
+  const old = (prOrg.rows || []).filter(r => r.archived).length, days = flowNum((prSettings || {}).prArchiveDays) || 30;
+  note.innerHTML = prOrg.state.chip === 'archived'
+    ? '<p class="sl2-note">These are archived requests — no update in ' + days + ' days. New requests are under All. ' +
+      '<button type="button" data-pr-chip="all">Back to All</button></p>'
+    : old ? '<p class="sl2-note">' + old + ' request' + (old === 1 ? '' : 's') + ' archived — no update in ' + days + ' days. ' +
+      '<button type="button" data-pr-chip="archived">See them</button></p>' : '';
+  const b = note.querySelector('[data-pr-chip]');
+  if (b) b.addEventListener('click', () => prOrg.pick(b.getAttribute('data-pr-chip')));
 }
 function prOrgTable(rows) {
   const owner = !prIsRequester;
@@ -779,7 +841,7 @@ function prOrgTable(rows) {
       const back = r.archived ? `<button type="button" class="sl2-act quiet" onclick='prBringBack("${flowEsc(r.prNo)}")'>Bring back</button>` : '';
       /* A386 — the item's short name on two lines at most; the whole description is on hover and in Open */
       const more = items.length > 1 ? `<span class="sl2-more">+${items.length - 1} more</span>` : '';
-      return `<tr><td><b>${flowEsc(r.prNo)}</b><span class="sl2-item" title="${flowEsc(String(first).replace(/\s+/g, ' ').trim())}">${flowEsc(slmShortItem(first))}</span>${more}</td>` +
+      return `<tr${String(r.prNo) === prJustMade ? ' class="pr-new"' : ''}><td><b>${flowEsc(r.prNo)}</b><span class="sl2-item" title="${flowEsc(String(first).replace(/\s+/g, ' ').trim())}">${flowEsc(slmShortItem(first))}</span>${more}</td>` +
         `<td>${flowEsc(r.customer)}<span class="sl2-sub">${flowDate(r.date)}</span></td>` +
         (owner ? `<td>${flowEsc(r.salesperson || r.requestedBy)}</td>` : '') +
         `<td><span class="flow-badge ${BADGE[r.status] || 'b-open'}">${flowEsc(prStatusLabel(r.status))}</span>` +

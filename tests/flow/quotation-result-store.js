@@ -58,11 +58,11 @@ const set = (c, who, params) => call(c, 'setQuotationResult', Object.assign({}, 
 sec('1 · the version, the width, both writers');
 {
   const c = load(GS, store());
-  eq('getVersion', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version, 203);
+  eq('getVersion', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version, 204);
   eq('Quotations is 38 wide', c.SCHEMA.Quotations.length, 38);
   eq('the nine columns, in order, after Service Kind', c.SCHEMA.Quotations.slice(28),
      ['Service Kind', 'Result', 'Result At', 'Result By', 'Result Reason', 'Result Note', 'Last Follow Up', 'Follow Up Via', 'Follow Up Status', 'Closed From']);
-  const st = { ActivityLog: [], Quotations: [], QuotationItems: [], Inventory: [], FlowSettings: [], SalesOrders: [], PricingRequests: [] };
+  const st = { ActivityLog: [], Quotations: [], QuotationItems: [], Inventory: [], FlowSettings: [{ Key: 'requireClientPick', Value: 'off' }], SalesOrders: [], PricingRequests: [] };   // A407 — naming the client is pinned in sales-cleanup-store.js
   const c2 = load(GS, st);
   const r = call(c2, 'createQuotation', Object.assign({ customer: 'Acme', date: '2026-10-01', items: JSON.stringify([{ itemNo: 'X1', itemName: 'Pump', qty: 1, price: 100 }]), createdBy: 'Gerald Lucena' }, GERALD));
   ok('createQuotation appends a row exactly 38 values wide', r.success && st.Quotations.length === 1 && st.Quotations[0].__arity === 38, [r, st.Quotations[0] && st.Quotations[0].__arity]);

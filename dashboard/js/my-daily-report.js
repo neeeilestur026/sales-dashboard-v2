@@ -5,7 +5,8 @@
  * role's report (js/team-report.js) — each the person's own day, saved under their name. FlowAPI 184 is what lets them
  * save and read their own report (and nobody else's); until it is pasted the page says so and shows no form. */
 const MDR_KIND = { sales: 'sales', accounting: 'accounting', leadgen: 'leadgen', admin: 'admin' };
-const MDR_OLD = { sales: 'report.html', accounting: 'accounting-daily-report.html', leadgen: 'leadgen-daily-report.html', admin: 'admin-daily-report.html' };
+/* A407 — a rep has one daily report now (the old report.html only forwards here), so a rep gets no "Old daily report" button */
+const MDR_OLD = { accounting: 'accounting-daily-report.html', leadgen: 'leadgen-daily-report.html', admin: 'admin-daily-report.html' };
 
 document.addEventListener('DOMContentLoaded', async () => {
   const s = typeof requireNewDailyReportAccess === 'function' ? requireNewDailyReportAccess() : null;
@@ -14,6 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const kind = MDR_KIND[String(s.role || '').toLowerCase()];
   const old = document.getElementById('mdrOld'), note = document.getElementById('mdrNotice');
   if (old && MDR_OLD[kind]) { old.href = MDR_OLD[kind]; old.hidden = false; }
+  if (kind === 'sales') {   // A407 — the rep's only daily report: no "new", no old one beside it
+    const h = document.getElementById('mdrTitle'), p = document.getElementById('mdrLede');
+    if (h) h.textContent = 'Daily report';
+    if (p) p.textContent = 'Your day as the portal counts it, and the lines you log.';
+    document.title = 'Daily report';
+  }
   const ready = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(184).catch(() => false) : false;
   if (!ready) {
     note.innerHTML = '<div class="dh-banner warn">Your new daily report opens with the next FlowAPI update (version 184). Your old daily report works as before meanwhile.</div>';

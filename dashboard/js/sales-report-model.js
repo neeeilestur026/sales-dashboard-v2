@@ -132,7 +132,8 @@ function srIndex(raw) {
     activity: r.activity || [], calls: r.calls || [], visits: r.visits || [], itins: r.itineraries || [],
     plans: r.visitPlans || [],   // A369 — client visits, the new itinerary (FlowAPI 186)
     hasSO: {}, links: {}, qByNo: {}, prs: {}, prCreated: {}, qSent: {},
-    book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [], links: (r.book && r.book.links) || [] }   // A350 — the Client Book trial, when FlowAPI 178 is in; A360 its links
+    book: { clients: (r.book && r.book.clients) || [], log: (r.book && r.book.log) || [], links: (r.book && r.book.links) || [] },   // A350 — the Client Book trial, when FlowAPI 178 is in; A360 its links
+    guide: r.guide && r.guide.success && Array.isArray(r.guide.days) ? r.guide : null   // A407 — the person's follow-up guide (FlowAPI 204), the one list
   };
   ix.sos.forEach(s => { if (s.quotationNo) ix.hasSO[_srS(s.quotationNo)] = true; });
   ix.quotations.forEach(q => { ix.qByNo[_srS(q.quotationNo)] = q; });
@@ -255,9 +256,36 @@ function srOpenQuotes(ix, me, day) {
 
 /** Follow-ups due on `day`: day 3, 5, 7 and 14 after the sent date, then every 7 (A393), a weekend moved to Monday, while still Sent.
  *  Done when a Call line linked to that quotation is logged that day, or a follow-up email is linked to it that day. */
+/** A407 — the follow-up guide's quotation follow-ups on `day` (that day's checkpoints, and today also the ones still open
+ *  from earlier), or null when the guide does not cover the day (another week, no guide, FlowAPI before 204). */
+function srGuideDay(ix, day) {
+  const g = ix && ix.guide;
+  if (!g || !Array.isArray(g.days)) return null;
+  const d = g.days.find(x => x.date === day);
+  if (!d) return null;
+  const seen = {};
+  return (d.quotes || []).concat(d.today ? (d.carryQuotes || []) : []).filter(x => x && x.quotationNo && !seen[x.quotationNo] && (seen[x.quotationNo] = 1));
+}
 function srFollowUps(ix, me, day, report) {
   const lines = _srLive(report).filter(_srOn(day));
   const out = [];
+  /* A407 — Neil, 25 Nov 2026: the follow-up guide and this list showed different quotations. When the guide covers the day the
+     list IS the guide's (the same checkpoints, a missed one carried until done), and a call or follow-up email logged here
+     that day marks it done at once, before the guide has read the saved report. */
+  const gd = srGuideDay(ix, day);
+  if (gd) {
+    gd.forEach(x => {
+      const no = _srS(x.quotationNo), q = ix.qByNo && ix.qByNo[no];
+      const call = lines.find(l => l.type === 'Call' && l.linkType === 'quotation' && l.linkId === no);
+      const mail = (ix.links[no] || []).find(l => _srS(l.status || 'Active') === 'Active' && _srS(l.kind) !== 'Initial' && _srDate(l.sentAt) === day);
+      const g = x.status === 'done' && x.by ? x.by : null;
+      out.push({ ref: no, client: _srS(x.company), value: q ? _srNet(q) : _srNum(x.value), step: x.step, sent: _srS(x.sent), since: x.date < day ? _srS(x.date) : '',
+                 done: !!(call || mail || g), by: call ? { kind: 'Call', result: call.result, time: srClock(call.loggedAt), id: call.id }
+                                                : mail ? { kind: 'Email', result: _srS(mail.subject), time: srClock(mail.sentAt) }
+                                                : g ? { kind: _srS(g.kind), result: '', time: _srS(g.time) } : null });
+    });
+    return out.sort((a, b) => (a.done - b.done) || b.value - a.value);
+  }
   srOpenQuotes(ix, me, day).forEach(q => {
     const sent = _srDate(q.sentAt);
     if (!sent) return;
@@ -725,7 +753,7 @@ function srWeek(ix, me, day, reports, emailsByDay) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SR_TARGETS, SR_FOLLOW_DAYS, SR_FOLLOW_THEN, srFollowRule, srFollowStep, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
+  module.exports = { srGuideDay, SR_TARGETS, SR_FOLLOW_DAYS, SR_FOLLOW_THEN, srFollowRule, srFollowStep, srCfg, srIndex, srBlank, srFill, srNewLine, srEditLine, srAddLink, srVoidLine, srLinked,
                      srPlanned, srDayType, srOpenQuotes, SR_LINK_KINDS, srLinkItems, srLinkPick, srLinkFind, srFollowUps, srOtherFollowUps, srFollowUpChoices, srDaysBetween, srQuotesSent, srWithin48, srPortalTiles, srMineTiles,
                      srSnapshot, srPortalFeed, srClientBookText, srOtherActivity, srLinkOptions, srBookClients, srContactLabel, srCallLookup, srWeek, srCallLog, srVisitLog, srClock, srMoney, srDow, srDayLong,
                      srWeekDays, srShiftWeekend, srAddDays, srMailCount, srMailGoneNote, srMailKey, SR_MAIL_IDS_MAX, srMailWaitTile };

@@ -34,7 +34,8 @@
         </div>
 
         <!-- The slab: quotations this month, the daily report's state, the target ring, the facts.
-             dashboard.js writes the figures by id; sales-home-page.js derives the ring and the tag. -->
+             dashboard.js writes the figures by id; new-daily-report-card.js writes the tag (A407: the daily report on
+             my-daily-report.html); sales-home-page.js derives the ring and the tag's tone. -->
         <section class="hx-slab" id="spot">
           <div class="cap"><span class="l">Quotations this month</span><span class="tag" id="reportPill"><span id="reportStatus">Loading…</span></span></div>
           <div class="v" id="monthQuotations">—</div>
@@ -53,7 +54,6 @@
             <div><dt>Purchase requests today</dt><dd id="prToday">—</dd></div>
             <div><dt>Purchase requests this month</dt><dd id="monthPRs">—</dd></div>
             <div><dt>Clients</dt><dd id="clientCount">—</dd></div>
-            <div class="wide"><dt>Pending items</dt><dd class="accent" id="pendingCount">—</dd></div>
           </dl>
         </section>
 
@@ -61,7 +61,6 @@
           <a href="#inbox">Needs you <span class="hx-count" id="inboxCount">0</span></a>
           <a href="#today">Today</a>
           <a href="#targetSection" id="navTargets" hidden>Targets</a>
-          <a href="#overdueSection" id="navOverdue" hidden>Follow-ups <span class="hx-count bad" id="navOverdueCount">0</span></a>
           <a href="#leadsForYou" id="navLeads" hidden>Leads</a>
         </nav>
       </aside>
@@ -73,7 +72,7 @@
             <h1 id="greeting">Good morning!</h1>
             <p id="todayLabel">Here's your sales hub overview.</p>
           </div>
-          <a href="report.html" class="btn btn-primary">
+          <a href="my-daily-report.html" class="btn btn-primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
             Submit daily report
           </a>
@@ -118,7 +117,7 @@
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span>
               <span class="t"><b>New pricing request</b><span>Ask pricing to cost the items</span></span>
             </a>
-            <a href="report.html" class="sl-link">
+            <a href="my-daily-report.html" class="sl-link">   <!-- A407: the daily report (the old report.html is retired) -->
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
               <span class="t"><b>Daily report</b><span>Log the day for management</span></span>
             </a>
@@ -130,25 +129,17 @@
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
               <span class="t"><b>Client Book</b><span>Your accounts and contacts</span></span>
             </a>
-            <a href="pending-items.html" class="sl-link">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-              <span class="t"><b>Pending items</b><span>Requests and quotes still open</span></span>
-            </a>
-            <a href="quotation-summary.html" class="sl-link">
+            <a href="quotation-status.html" class="sl-link">   <!-- A407: My quotations took the place of Pending items, the Quotation summary and the client tracker -->
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-              <span class="t"><b>Quotation summary</b><span>Every quotation, by status</span></span>
-            </a>
-            <a href="performance.html" class="sl-link">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
-              <span class="t"><b>Client tracker</b><span>Follow-ups and outcomes</span></span>
+              <span class="t"><b>My quotations</b><span>Every quotation you sent, by status</span></span>
             </a>
             <a href="flow-inventory.html" class="sl-link">
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
               <span class="t"><b>Inventory</b><span>What is in stock right now</span></span>
             </a>
-            <a href="weekly-itinerary.html" class="sl-link">
+            <a href="client-visits.html" class="sl-link">   <!-- A407: client visits replaced the weekly itinerary -->
               <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
-              <span class="t"><b>Weekly itinerary</b><span>Plan the week's field visits</span></span>
+              <span class="t"><b>Client visits</b><span>Plan your visits for the director</span></span>
             </a>
           </div>
           <div class="sl-stages" aria-label="The stages a request moves through">
@@ -163,34 +154,18 @@
           </div>
         </section>
 
-        <!-- Targets beside overdue follow-ups. dashboard.js shows each when it has something to say;
-             the quiet card stays until one of them does. -->
+        <!-- The month's target. dashboard.js shows it when a target is set; the quiet card stays until then.
+             A407: the old "Overdue follow-ups" card (the frozen per-rep quotation sheet) is gone — the follow-up
+             guide card above is the one follow-up list. -->
         <div class="sl-pair">
           <section class="hx-glass" id="targetSection" style="display:none;">
             <div class="hx-head"><h2>Monthly target</h2><span class="hx-meta">Where the month stands against what was set.</span></div>
             <div id="targetBars"></div>
           </section>
 
-          <section class="hx-glass" id="overdueSection" style="display:none;">
-            <div class="hx-head">
-              <h2>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Overdue follow-ups
-              </h2>
-              <span class="hx-count bad" id="overdueCount"></span>
-            </div>
-            <div id="overdueList"></div>
-            <a href="performance.html" class="btn btn-danger btn-block">Open the client tracker</a>
-          </section>
-
           <section class="hx-glass" id="quietState">
-            <div class="hx-head">
-              <h2>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                All caught up
-              </h2>
-            </div>
-            <p id="quietMsg">No overdue follow-ups. Targets and progress will appear here once set.</p>
+            <div class="hx-head"><h2>Monthly target</h2></div>
+            <p id="quietMsg">No target is set for this month yet. Your progress shows here once one is.</p>
           </section>
         </div>
       </div>

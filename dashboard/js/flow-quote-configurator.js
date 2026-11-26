@@ -136,6 +136,7 @@ function qcToggleCreate(open) {
   const btn = document.getElementById('qcToggleBtn');
   if (btn) btn.textContent = show ? '▲ Hide' : '+ New Quotation';
   if (show) {
+    qcEnsureClientPick();       // A407 — the rep's Client Book, read the first time the builder opens
     qcRenderItems();            // re-measure now that the section is laid out
     qcSchedulePreview();
     try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* older browsers */ }
@@ -169,6 +170,7 @@ function qcResetForm() {
   set('qcNo', ''); set('qcCustomer', ''); set('qcSubject', ''); set('qcDiscount', 0);
   set('qcDate', (typeof flowToday === 'function') ? flowToday() : hxToday());
   set('qcNote', ''); set('qcPlantSite', '');
+  qcResetClientPick();          // A407 — no client chosen, and the details a pick filled are cleared
   qcFillSalespeople();
   /* A178 — these three selects are RESTORED by qcLoadExisting but were never reset, so they leaked
      into the next quotation: after viewing one saved with photos off, every later save silently
@@ -263,6 +265,7 @@ function qcLoadExisting(q) {
   qcMode = mode;
   qcQuotationNo = String(q.quotationNo || '');
   qcEditPrNo = String(q.prNo || '');                      // A251
+  qcSyncClientPick();                                     // A407 — a saved quotation keeps its client: no picker
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
   set('qcNo', q.quotationNo);
   set('qcDate', dt(q.date));
@@ -543,10 +546,14 @@ async function qcLoadFromPR(prNo) {
   qcPrResult = null;
   qcMode = 'edit';          // the rep still contributes the number, subject, discount and layout
   qcLocked = true;          // ...but every line is management's, rebuilt server-side
+  qcPrClientNo = null;      // A407 — not known until the request is read: the picker waits
   qcSyncLock();
+  qcSyncClientPick();
   try {
     const pr = await qcFetchPr(qcFromPr);
     if (!pr) { qcMsg('Purchase Request ' + qcFromPr + ' was not found, or is not returned to you.', false); return; }
+    qcPrClientNo = String(pr.clientNo || '');               // A407 — a request on no client may be put on one here
+    qcSyncClientPick();
 
     document.getElementById('qcCustomer').value = pr.customer || '';
     qcPrCustomer = pr.customer || '';
@@ -1819,6 +1826,80 @@ async function qcSendForApproval(no) {
     : ' It is saved as a Draft — send it for approval from the list (' + ((r && r.message) || 'the submit did not go through') + ').';
 }
 
+/* ── A407 · the client named from the rep's Client Book ──────────────────────────────────────────────────────────────
+   Neil, 25 Nov 2026: "New purchase requests and quotations must pick the client from the rep's book; a new client can be
+   added there in place." A sales rep on FlowAPI 204 gets the shared picker (js/client-pick.js) above Customer:
+     · a quotation typed by hand (no request): required (FlowSettings requireClientPick 'off' = optional). Picking fills
+       the customer as the book spells it, and the address, attention, designation, email and plant site where they are
+       empty (or were filled by an earlier pick); createQuotation carries clientNo and the server links the quotation;
+     · a quotation from a request that is on no client: optional, "Put this request on a client", sent as clientNo with
+       createQuotationFromPR, which links the request (the customer and the lines stay the request's);
+     · editing or re-filing a saved quotation, or a request already on a client: no picker.
+   Another role, an older FlowAPI, or a book that cannot be read: the builder is exactly as it was. */
+let qcPick = null;              // the picker, once mounted
+let qcPickFor = '';             // 'new' (by hand) · 'pr' (a request on no client) · '' (hidden)
+let qcPrClientNo = null;        // the request's own client on the ?fromPR path; null until the request is read
+let qcPickLoading = null;
+const QC_PICK_FILLS = ['qcAddress', 'qcAttention', 'qcDesignation', 'qcEmail', 'qcPlantSite'];
+function qcEnsureClientPick() {
+  if (!qcPickLoading) qcPickLoading = qcLoadClientPick().catch(() => { /* the builder stays as it was */ });
+  return qcPickLoading;
+}
+async function qcLoadClientPick() {
+  if (qcPick || qcRole !== 'sales' || typeof cpMount !== 'function' || typeof cpLoadBook !== 'function') return;
+  const row = document.getElementById('qcClientPickRow');
+  if (!row) return;
+  const book = await cpLoadBook();
+  if (!book.ok || qcPick) return;
+  qcPick = cpMount(row, { inputId: 'qcClientNo', clients: book.clients, lists: book.lists, what: 'quotation',
+    onPick: qcClientPicked, submitId: 'qcFinalizeBtn', whyId: 'qcClientWhy' });
+  qcSyncClientPick();
+}
+/** What the picker does for the quotation on screen now. */
+function qcSyncClientPick() {
+  if (!qcPick) return;
+  const fresh = !qcQuotationNo && qcMode !== 'document';
+  const cfg = (typeof qCfg !== 'undefined' && qCfg) || {};
+  qcPickFor = !fresh ? '' : !qcFromPr ? 'new' : (qcPrClientNo === '' ? 'pr' : '');
+  if (qcPickFor === 'new') qcPick.setMode({ hidden: false, required: cpRequired(qcRole, cfg), label: 'Client', hint: '' });
+  else if (qcPickFor === 'pr') qcPick.setMode({ hidden: false, required: false, label: 'Put this request on a client',
+    hint: qcFromPr + ' is not on a client in your Client Book yet. Choosing one keeps the request and this quotation with it.' });
+  else qcPick.setMode({ hidden: true, required: false });
+}
+function qcResetClientPick() {
+  QC_PICK_FILLS.forEach(id => { const el = document.getElementById(id); if (el && el.dataset && el.dataset.cbfill === '1') { el.value = ''; el.dataset.cbfill = ''; } });
+  qcPrClientNo = null;
+  if (qcPick) qcPick.clear();
+  qcSyncClientPick();
+}
+/** A client picked for a quotation typed by hand: the customer as the book spells it, and the details it has. */
+function qcClientPicked(c) {
+  if (!c || qcPickFor !== 'new') return;                  // on a request's quotation the pick only links the request
+  const fill = (id, v, always) => {
+    const el = document.getElementById(id);
+    if (!el || (!always && el.value && el.dataset.cbfill !== '1')) return;   // a box the rep typed in is never touched
+    el.value = v || ''; if (el.dataset) el.dataset.cbfill = v ? '1' : '';
+  };
+  const p = (c.contacts || []).find(x => x.primary) || (c.contacts || [])[0] || {};
+  fill('qcCustomer', c.company, true);
+  fill('qcAddress', c.headOfficeAddress || c.siteAddress);
+  fill('qcPlantSite', c.siteAddress);
+  fill('qcAttention', p.name); fill('qcDesignation', p.position); fill('qcEmail', (p.emails || [])[0]);
+  qcOnChange();
+  try { const h = qcReadyPrHint(); if (h && h.catch) h.catch(() => {}); } catch (e) { /* a hint, never a failure */ }   // a priced request waiting? say so
+}
+/** The clientNo a create carries: the picked client, while the picker is in use. */
+function qcClientParam() {
+  const v = qcPick && qcPickFor ? qcPick.value() : '';
+  return v ? { clientNo: v } : {};
+}
+/** The server still asked for the client (needClient): say it at the picker, and at the top of the builder. */
+async function qcNeedClient(message) {
+  await qcEnsureClientPick();
+  if (qcPick) { qcPickFor = 'new'; qcPick.showError(message, true); }
+  qcMsg(message, false);
+}
+
 async function qcFinalize() {
   // A176 — document mode never writes the record; it only rebuilds and refiles the PDF.
   if (qcMode === 'document') return qcRegenerateOnly();
@@ -1828,6 +1909,7 @@ async function qcFinalize() {
   const btn = document.getElementById('qcFinalizeBtn');
   if (!val('qcNo').trim()) { qcMsg('Quotation No is required — it is your own code' + (qcNoSuggestOn() ? ' (a suggestion is filled in when the server can make one).' : ', not auto-generated.'), false); return; }
   if (!val('qcSubject').trim()) { qcMsg('Subject is required — it prints on the document.', false); return; }
+  if (!qcQuotationNo && qcPick && !qcPick.check()) { qcMsg(CP_MISSING, false); return; }   // A407 — the client, from the rep's book
   if (!qcFromPr && !val('qcCustomer').trim()) { qcMsg('Customer is required.', false); return; }
   const priced = qcItems.filter(i => (i.itemNo || i.itemName));
   if (!priced.length) { qcMsg('Add at least one item.', false); return; }
@@ -1866,13 +1948,14 @@ async function qcFinalize() {
       /* The process-flow path. Exactly five keys — the server rebuilds every line from
          PricingRequestItems at management's Final Price and carries itemId / uom / vat /
          origItemNo / origItemName / plantSite / the client RFQ, then flips the PR to Quoted.
-         Sending items here would be ignored, so we don't pretend otherwise. */
-      const base = {
+         Sending items here would be ignored, so we don't pretend otherwise. A407 — plus clientNo
+         when the rep put a request that was on no client on one (FlowAPI 204 links the request). */
+      const base = Object.assign({
         prNo: qcFromPr, quotationNo: val('qcNo').trim(), subject: val('qcSubject').trim(),
         layoutJson: qcLayoutJson(),
         discountPct: Math.min(100, Math.max(0, num(val('qcDiscount')))),
         clientRef: (typeof flowClientRef === 'function') ? flowClientRef() : ('QC-' + Date.now())
-      };
+      }, qcClientParam());
       /* A242 — WHICH lines. Sent only when the backend understands it (qcPartialUI); an older one
          ignores the key and quotes everything still open, which is why the checkboxes are hidden in
          that case rather than shown and silently disregarded. The server re-derives availability and
@@ -1953,8 +2036,12 @@ async function qcFinalize() {
         res = await postFlow('createQuotation', Object.assign({ quotationNo: val('qcNo').trim(),
           createdBy: qcSession.name,
           clientRef: (typeof flowClientRef === 'function') ? flowClientRef() : ('QC-' + Date.now())
-        }, common));
+        }, common, qcClientParam()));                     // A407 — the client from the rep's book; the server links it
         newNo = val('qcNo').trim();
+        if (res && !res.success && res.needClient) {
+          await qcNeedClient(res.message);
+          btn.disabled = false; btn.textContent = qcFinalizeLabel(); return;
+        }
       }
       if (!res || !res.success) throw new Error((res && res.message) || 'Save failed.');
       // A63: an item the rep typed that isn't in inventory becomes a Catalog record at balance 0.

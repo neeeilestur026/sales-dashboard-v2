@@ -504,7 +504,7 @@ function chLensAsked() {
 function chShort(d) { const t = chDay(d); return d && CH.today && String(d).slice(0, 4) === CH.today.slice(0, 4) ? t.replace(/ \d{4}$/, '') : t; }
 function chTierTag(s) {
   const t = chTierText(s);
-  return t ? '<span class="ch-tier ' + (t === 'Major' ? 'major' : t === 'Minor' ? 'minor' : t === 'Reps differ' ? 'mixed' : 'none') + '">' + _chE(t) + '</span>' : '';
+  return t ? '<span class="ch-tier ' + (t === 'Major' ? 'major' : t === 'Minor' ? 'minor' : t === 'Developing' ? 'developing' : t === 'Reps differ' ? 'mixed' : 'none') + '">' + _chE(t) + '</span>' : '';
 }
 /** The segmented Accreditation | Sales switch and the rep picker: built once (the select keeps its focus), then kept in step. */
 function chLensSync() {
@@ -565,7 +565,7 @@ function chRenderSalesHead() {
   const f = CH.f, sum = chSalesSummary(CH.cards, CH.sales, CH.sq.quietDays), qd = CH.sq.quietDays;
   _chId('chProgress').innerHTML = !CH.cards.length ? '' : !CH.sales ? (CH.sOk ? 'Reading the sales updates…' : '')
     : '<span class="n">' + sum.fresh + '</span> of the reps\' <span class="n">' + sum.owned + '</span> clients updated in the last ' + qd + ' days, <span class="n">' + sum.quiet +
-      '</span> quiet and <span class="n">' + sum.nolabel + '</span> without Major or Minor' + (CH.sStale || CH.stale ? ' <span class="ch-sync">Updating…</span>' : '');
+      '</span> quiet and <span class="n">' + sum.nolabel + '</span> without a label' + (CH.sStale || CH.stale ? ' <span class="ch-sync">Updating…</span>' : '');
   _chId('chChips').innerHTML = CH_SALES_SEGS.filter(s => s[0] === 'all' || sum[s[0]] || f.sseg === s[0]).map(s => '<button type="button" class="ch-chip' + (f.sseg === s[0] ? ' on' : '') +
     '" data-seg="' + s[0] + '" aria-pressed="' + (f.sseg === s[0]) + '"' + (s[0] === 'quiet' ? ' title="No update in ' + qd + ' days or more"' : '') + '>' + _chE(s[0] === 'quiet' ? 'Quiet ' + qd + '+ days' : s[1]) +
     ' <span class="n">' + sum[s[0]] + '</span></button>').join('');
@@ -589,7 +589,7 @@ function chSalesFromCache() {
 function chSalesToCache(r) { try { localStorage.setItem(CH.skey, JSON.stringify(r)); } catch (e) { /* storage full or blocked: fine */ } }
 function chSalesTake(r) {
   CH.sales = chSalesMap(r);
-  CH.sq = { quietDays: r.quietDays || 30, salesDays: r.salesDays || 180, tier: !!(r.may && r.may.tier) };
+  CH.sq = { quietDays: r.quietDays || 30, salesDays: r.salesDays || 180, tier: !!(r.may && r.may.tier), tiers: Array.isArray(r.tiers) && r.tiers.length ? r.tiers : ['Major', 'Minor'] };   // A407 — the server's labels (Developing from 204)
   CH.sRaw = r;
 }
 async function chLoadSales() {
@@ -624,13 +624,13 @@ function chSalesHtml(c) {
   let label;
   if (!owned) label = '<span class="ch-dim">Add it to a rep\'s Client Book to label it.</span>';
   else if (CH.sq.tier) {
-    label = '<div class="ch-seg" role="group" aria-label="Major or minor client">' + ['Major', 'Minor'].map(t => '<button type="button" class="ch-segbtn" data-tier="' + t + '" aria-pressed="' +
+    label = '<div class="ch-seg" role="group" aria-label="The client\'s label">' + (CH.sq.tiers || ['Major', 'Minor']).map(t => '<button type="button" class="ch-segbtn" data-tier="' + t + '" aria-pressed="' +
       (s.tier === t) + '">' + t + '</button>').join('') + '</div>' +
       (s.tier === 'mixed' ? '<span class="ch-fsub">' + _chE(s.rows.map(r => chFirst(r.owner) + ': ' + (r.tier || 'not set')).join(' · ')) + '. Choosing one sets it for every rep.</span>'
         : !s.tier ? '<span class="ch-fsub">Not labelled yet. It saves to the reps\' Client Book.</span>' : '');
   } else label = _chE(chTierText(s)) + (s.tier === 'mixed' ? '<span class="ch-fsub">' + _chE(s.rows.map(r => chFirst(r.owner) + ': ' + (r.tier || 'not set')).join(' · ')) + '</span>' : '');
   const who = '<div class="ch-fact"><dt class="ch-fk">' + (owners.length === 1 ? 'Rep' : 'Reps') + '</dt><dd class="ch-fv">' + reps + '</dd></div>' +
-    '<div class="ch-fact"><dt class="ch-fk">Major or minor</dt><dd class="ch-fv">' + label + '<span class="ch-tmsg" role="status" aria-live="polite"></span></dd></div>';
+    '<div class="ch-fact"><dt class="ch-fk">Label</dt><dd class="ch-fv">' + label + '<span class="ch-tmsg" role="status" aria-live="polite"></span></dd></div>';
   const ups = s && s.updates && s.updates.length ? '<ul class="ch-upd">' + s.updates.map(u => '<li><span class="ch-uday">' + _chE(chShort(u.day)) + '</span><span class="ch-umain">' +
     '<span class="ch-ukind">' + _chE(chUpdKind(u.kind)) + (u.by ? ' <span class="ch-dim">· ' + _chE(u.by) + '</span>' : '') + '</span><span class="ch-utext">' + _chE(u.text) + '</span></span></li>').join('') + '</ul>'
     : '<p class="ch-none">Nothing in the sales records or the last ' + Math.round(CH.sq.salesDays / 30) + ' months of daily reports.</p>';

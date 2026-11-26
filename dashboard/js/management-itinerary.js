@@ -17,6 +17,10 @@
    quietly lie, so it is pure and table-tested. Read the header there before changing what "matched"
    means. The short version — an exact link is a fact, a name match is a guess, and the two are never
    added together.
+
+   A407 (Neil, 25 Nov 2026) — client visits (VisitPlans, A369) replaced the weekly itinerary for reps. The page now
+   opens on the same week's client visits (one read, getVisitPlans for the week), with the way into client-visits.html
+   where they are decided; everything above stays below it as the older weekly itineraries, so they stay readable.
    ═══════════════════════════════════════════════ */
 
 let miSession = null;
@@ -58,6 +62,7 @@ async function miLoad(fresh) {
   const week = miWeek();
   if (!week.length) return;
   document.getElementById('miRange').textContent = `${week[0]} – ${week[6]}`;
+  miLoadVisits(week, seq);   // A407 — the week's client visits, on their own: a failed itinerary read does not hide them
   document.getElementById('miPane').innerHTML =
     '<div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>';
   document.getElementById('miRail').innerHTML = '';
@@ -105,6 +110,78 @@ async function miLoad(fresh) {
   miRenderKpis();
   miRenderRail();
   miRenderPane();
+}
+
+/* ── A407 · the week's client visits, first ─────────────────────────────────────────────────── */
+
+/* A visit's status in words and the page's own bucket colours (the b-* classes the rail and the chips already use). A
+   draft is the rep's own unsent work, so it is left out, as it is from the director's queue. */
+const MI_VISIT = { 'Pending Director': ['With the director', 'pending'], Approved: ['Approved', 'approved'], Done: ['Done', 'approved'],
+                   Rejected: ['Sent back', 'rejected'], Cancelled: ['Cancelled', 'idle'] };
+const MI_VISIT_READ = ['director', 'management', 'hr'];   // the roles of this page that getVisitPlans answers (not admin)
+const MI_VISIT_OPEN = ['director', 'management'];         // the ones client-visits.html lets in
+const _MI_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], _MI_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function _miDay(ymd) { const d = new Date(String(ymd) + 'T00:00:00Z'); return isNaN(d) ? null : d; }
+function _miClock(t) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim()); if (!m) return ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' AM' : ' PM'); }
+function _miTown(a) { return String(a || '').split(',').map(x => x.trim()).filter(Boolean).slice(-2).join(', '); }
+
+async function miLoadVisits(week, seq) {
+  const host = document.getElementById('miVisits');
+  if (!host) return;
+  if (MI_VISIT_READ.indexOf(miRole()) < 0 || typeof postFlow !== 'function') { host.hidden = true; return; }
+  host.hidden = false;
+  host.innerHTML = miVisitsHead(week, null) + '<div class="mi-empty">Loading the client visits…</div>';
+  let r = null;
+  try { r = await postFlow('getVisitPlans', { from: week[0], to: week[6] }); } catch (e) { r = null; }
+  if (seq !== miSeq) return;
+  if (!r || !r.success) {
+    host.innerHTML = miVisitsHead(week, null) + '<div class="mi-banner bad">Could not read the client visits. Press Refresh.</div>';
+    return;
+  }
+  const list = (r.data || []).filter(v => MI_VISIT[v.status] && v.date >= week[0] && v.date <= week[6])
+    .sort((a, b) => (a.date === b.date ? (String(a.user).localeCompare(String(b.user)) || String(a.time || '99').localeCompare(String(b.time || '99'))) : (a.date < b.date ? -1 : 1)));
+  host.innerHTML = miVisitsHead(week, list) + (list.length ? miVisitDays(list) : '<div class="mi-empty">No client visits sent for this week.</div>');
+}
+
+/** The head: what the section is, the week in numbers, and the way into client-visits.html. */
+function miVisitsHead(week, list) {
+  const open = MI_VISIT_OPEN.indexOf(miRole()) >= 0;
+  const waiting = (list || []).filter(v => v.status === 'Pending Director').length;
+  const act = !open ? '' : (miRole() === 'director' && waiting
+    ? `<a class="btn btn-sm btn-primary" href="client-visits.html">Review ${waiting} waiting</a>`
+    : '<a class="btn btn-sm btn-secondary" href="client-visits.html">Open client visits</a>');
+  let note = 'The visits the reps sent for this week.';
+  if (list) {
+    const reps = new Set(list.map(v => String(v.user || '').toLowerCase())).size;
+    const by = Object.keys(MI_VISIT).map(k => [k, list.filter(v => v.status === k).length]).filter(x => x[1])
+      .map(x => `${x[1]} ${MI_VISIT[x[0]][0].toLowerCase()}`);
+    note = list.length ? `${list.length} visit${list.length === 1 ? '' : 's'} from ${reps} rep${reps === 1 ? '' : 's'}: ${by.join(', ')}.` : note;
+  }
+  return `<div class="mi-panehead"><div><h2 id="miVisitsH">Client visits</h2><div class="mi-note">${_mie(note)}</div></div>` +
+         (act ? `<div class="acts no-print">${act}</div>` : '') + '</div>';
+}
+
+/** One block per day that has visits: rep, time, company (and what for), where, who, status. */
+function miVisitDays(list) {
+  const open = MI_VISIT_OPEN.indexOf(miRole()) >= 0, days = [];
+  list.forEach(v => { const last = days[days.length - 1]; if (last && last.day === v.date) last.items.push(v); else days.push({ day: v.date, items: [v] }); });
+  return days.map(g => {
+    const d = _miDay(g.day);
+    const rows = g.items.map(v => {
+      const st = MI_VISIT[v.status];
+      const co = open ? `<a href="client-visits.html?visit=${encodeURIComponent(v.visitPlanNo)}">${_mie(v.company || v.visitPlanNo)}</a>` : _mie(v.company || v.visitPlanNo);
+      const where = [v.location, _miTown(v.address)].filter(Boolean).join(' · ');
+      const who = (v.contacts || []).map(c => c && c.name).concat(v.someoneElse).filter(Boolean).join(', ');
+      return `<tr><td>${_mie(v.user)}</td><td class="t">${_mie(_miClock(v.time) || '—')}</td>
+        <td class="k">${co}${v.purpose ? `<div class="mi-sub">${_mie(v.purpose)}</div>` : ''}</td>
+        <td>${_mie(where || '—')}</td><td>${_mie(who || '—')}</td><td><span class="mi-chip b-${st[1]}">${_mie(st[0])}</span></td></tr>`;
+    }).join('');
+    return `<div class="mi-day"><div class="mi-dayhead"><span class="d">${d ? _MI_DOW[d.getUTCDay()] : ''}</span>
+        <span class="dt">${d ? d.getUTCDate() + ' ' + _MI_MON[d.getUTCMonth()] : _mie(g.day)}</span>
+        <span class="n">${g.items.length} visit${g.items.length === 1 ? '' : 's'}</span></div>
+      <div class="mi-scroll"><table class="mi-table"><thead><tr><th>Rep</th><th>Time</th><th>Company</th><th>Where</th><th>Who</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  }).join('');
 }
 
 /* ── the top of the page ────────────────────────────────────────────────────────────────────── */

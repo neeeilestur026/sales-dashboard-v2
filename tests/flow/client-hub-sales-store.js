@@ -75,7 +75,7 @@ const of = (r, key) => r.clients.find(x => x.key === key);
 sec('1 · the version, and who may read it');
 {
   const { c, store } = world();
-  ok('getVersion = 203', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 203);
+  ok('getVersion = 204', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 204);
   [NEIL, LARRY].forEach(a => ok(a.actorRole + ' reads it', sales(c, a).success));
   [ANA, HR, KIM, who('accounting', 'X', 'acc1')].forEach(a => ok(a.actorRole + ' is refused', !sales(c, a).success && /director, management/.test(sales(c, a).message)));
   ok('the read is secured', !call(c, 'getClientHubSales', Object.assign({ flowSecret: '' }, NEIL)).success);
@@ -94,7 +94,7 @@ sec('1 · the version, and who may read it');
 sec('2 · the status, worked out from the records');
 {
   const { c } = world(), r = sales(c);
-  ok('the reply carries the quiet days and the labels', r.quietDays === 30 && r.salesDays === 180 && r.tiers.join() === 'Major,Minor' && r.may.tier === true && r.today === '2026-11-24');
+  ok('the reply carries the quiet days and the labels', r.quietDays === 30 && r.salesDays === 180 && r.tiers.join() === 'Major,Minor,Developing' && r.may.tier === true && r.today === '2026-11-24');
   const t = of(r, 'therma south');
   ok('Therma South: quotation sent 2 Nov, a call after it on 20 Nov → Following up', t && t.stage === 'Following up' && t.stageDay === '2026-11-20', t);
   ok('  both reps own it; their labels differ (Major / none) → mixed', t.owners.join() === 'Kimberlyn Blones,Gerald Lucena' && t.tier === 'mixed' && t.rows.length === 2, t.rows);
@@ -131,7 +131,7 @@ sec('3 · Major / Minor from the hub');
 {
   const { c, store } = world();
   [ANA, HR, KIM].forEach(a => ok(a.actorRole + ' may not set it', !call(c, 'saveClientHubTier', Object.assign({ key: 'therma south', tier: 'Major' }, a)).success));
-  ok('a label that is not Major or Minor is refused', /Major or Minor/.test(call(c, 'saveClientHubTier', Object.assign({ key: 'therma south', tier: 'Big' }, NEIL)).message));
+  ok('a label that is not Major, Minor or Developing is refused', /Major, Minor or Developing/.test(call(c, 'saveClientHubTier', Object.assign({ key: 'therma south', tier: 'Big' }, NEIL)).message));
   ok('a client no rep has is refused, saying why', /nowhere to keep/.test(call(c, 'saveClientHubTier', Object.assign({ key: 'aboitiz power tsi bu', tier: 'Major' }, NEIL)).message));
   ok('a change made meanwhile is refused (the page showed none; it is mixed)', call(c, 'saveClientHubTier', Object.assign({ key: 'therma south', tier: 'Major', ifTier: '' }, NEIL)).stale === true);
   const width = store.ClientBook[0] && Object.keys(store.ClientBook[1]).length;

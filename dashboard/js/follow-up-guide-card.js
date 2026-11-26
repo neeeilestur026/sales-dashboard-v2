@@ -48,12 +48,13 @@
   }
 
   function tableHtml() {
-    const g = S.g, rows = (g.clients || []).map(c => {
+    const g = S.g, book = g.planFrom === 'book', rows = (g.clients || []).map(c => {
       const day = c.quoted ? 'Quoted' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][c.bucket];
       const st = c.done ? 'Done · ' + fugHow(c.done, g.today) : c.quoted ? 'Followed by its quotation' : 'Not yet';
-      return '<tr class="' + (c.done ? 'done' : '') + '"><td class="n">' + c.rank + '</td><td>' + fugEsc(c.company) + '</td><td>' + day + '</td><td>' + fugEsc(st) + '</td></tr>';
+      return '<tr class="' + (c.done ? 'done' : '') + '"><td class="n">' + (book ? fugTag(c) : c.rank) + '</td><td>' + fugEsc(c.company) + '</td><td>' + day + '</td><td>' + fugEsc(st) + '</td></tr>';
     }).join('');
-    return '<section class="fg-top"><h3>The top ' + (g.planSize || 0) + ' this week</h3><div class="fg-tablewrap"><table class="fg-table"><thead><tr><th class="n">#</th><th>Client</th><th>Day</th><th>This week</th></tr></thead><tbody>' +
+    /* A407 — from the Client Book: every labelled client, Major first */
+    return '<section class="fg-top"><h3>' + (book ? 'All ' + (g.planSize || 0) + ' clients this week' : 'The top ' + (g.planSize || 0) + ' this week') + '</h3><div class="fg-tablewrap"><table class="fg-table"><thead><tr><th class="n">' + (book ? 'Label' : '#') + '</th><th>Client</th><th>Day</th><th>This week</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>' + (g.notLive && g.notLive.length ? '<p class="fg-note">' + g.notLive.length + ' in the plan ' + (g.notLive.length === 1 ? 'is' : 'are') + ' no longer a live client: ' +
       g.notLive.map(x => fugEsc(x.company)).join(', ') + '.</p>' : '') + '</section>';
   }

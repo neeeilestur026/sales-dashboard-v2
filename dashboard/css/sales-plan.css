@@ -130,6 +130,9 @@ body .sp-table th, body .sp-table td { padding: .6rem .75rem; border-bottom: 1px
 .sp-tier { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 6px; font: 700 .75rem/1 var(--hx-text); background: var(--hx-inset); color: var(--hx-ink-2); }
 .sp-tier.tA { background: var(--hx-navy); color: var(--hx-card); }
 .sp-tier.tB { background: var(--hx-navy-soft); color: var(--hx-navy-text); }
+/* A407 — the Client Book's label as a word (Major, Minor, Developing): a pill, not a letter square */
+.sp-tier.word { width: auto; height: auto; padding: .125rem .5rem; border-radius: 999px; font: 600 .6875rem/1.4 var(--hx-text); }
+.sp-tier.word.tC { background: transparent; box-shadow: inset 0 0 0 1px var(--hx-hair-2); }
 .sp-stagechip { font-weight: 600; white-space: nowrap; }
 .sp-stages { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; margin: 0 0 1rem; padding: 0; list-style: none; }
 .sp-stage { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; width: 100%; height: 100%; padding: .75rem .8rem; border: 1px solid var(--hx-hair-2); border-radius: 12px; background: var(--hx-card);
@@ -165,6 +168,20 @@ body .sp-table th, body .sp-table td { padding: .6rem .75rem; border-bottom: 1px
 .sp-plain { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hx-hair-2); border-radius: 12px; overflow: hidden; }
 .sp-plain li { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem .875rem; border-bottom: 1px solid var(--hx-hair-2); font: 400 .8125rem/1.4 var(--hx-text); }
 .sp-plain li:last-child { border-bottom: 0; }
+/* A407 — orders and their quotations: the order on one line, the likely quotations as buttons under it */
+.sp-teamlinks { display: inline-flex; flex-wrap: wrap; gap: .25rem 1rem; }
+.sp-links li { flex-wrap: wrap; }
+.sp-links .sp-linkq, .sp-links .sp-cands { flex: 1 0 100%; }
+.sp-cands { display: flex; flex-wrap: wrap; gap: .375rem; }
+.sp-cand { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: .375rem .625rem; border: 1px solid var(--hx-hair-2); border-radius: 10px;
+  background: var(--hx-card); color: var(--hx-ink); font: 400 .75rem/1.35 var(--hx-text); text-align: left; cursor: pointer; transition: transform 100ms ease-out, background-color 150ms ease; }
+.sp-cand b { font-weight: 600; }
+.sp-cand span { color: var(--hx-ink-3); }
+.sp-cand:hover { background: var(--hx-inset); }
+.sp-cand:active { transform: scale(.97); }
+.sp-cand:focus-visible { outline: 2px solid var(--hx-navy); outline-offset: 2px; }
+.sp-cand:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .sp-cand { transition: none; } .sp-cand:active { transform: none; } }
 
 /* loading: shapes like the page */
 .sp-skel { display: flex; flex-direction: column; gap: .625rem; }

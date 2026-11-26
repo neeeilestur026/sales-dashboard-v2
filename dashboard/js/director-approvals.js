@@ -11,6 +11,9 @@
 
    It shows only what is genuinely the director's to act on right now — a record sitting at another
    tier's stage is somebody else's queue, and listing it here would train people to ignore the list.
+
+   A407 — client visits (VisitPlans, A369) replaced the weekly itinerary, and the director approves them first too:
+   the visits waiting on him are listed here, one row per rep, and decided on client-visits.html.
    ═══════════════════════════════════════════════ */
 
 let daItinByNo = {};
@@ -23,6 +26,12 @@ function _daCommLive() {
 
 function _dae(s) { return hxEsc(s); }
 function _dam(v) { return (typeof flowMoney === 'function') ? flowMoney(v, 'PHP') : '₱' + Number(v || 0).toFixed(2); }
+/** A407 — "Wed 26 Nov" from a yyyy-mm-dd day (the visit's own day, not a moment, so read in UTC). */
+const _DA_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], _DA_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function _daDay(ymd) {
+  const d = new Date(String(ymd || '') + 'T00:00:00Z');
+  return isNaN(d) ? String(ymd || '') : _DA_DOW[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + _DA_MON[d.getUTCMonth()];
+}
 /** A288 — how long a record has waited: "today", "1 d", "3 d"; empty when the date is unknown. */
 function _daAge(iso) {
   const t = Date.parse(iso || '');
@@ -44,13 +53,16 @@ async function daLoad() {
   if (!c) return;
   c.innerHTML = '<div class="da-empty">Loading…</div>';
   try {
-    const [itn, pr, cm] = await Promise.all([
+    const [itn, pr, cm, vp] = await Promise.all([
       fetchFlow('getWeeklyItineraries').catch(() => ({ data: [] })),
       fetchFlow('getPaymentRequests').catch(() => ({ data: [] })),
       /* A209 — commissions are not open yet, so do not even ask. Returns the same empty shape the
          .catch would, which keeps everything downstream on one code path. */
       (_daCommLive() ? postFlow('getCommissionRequests', { status: 'Pending Director' }).catch(() => ({ data: [] }))
                      : Promise.resolve({ data: [] })),
+      /* A407 — client visits replaced the weekly itinerary; the director approves them first, so the ones waiting on him
+         belong in this queue too. The deciding happens on client-visits.html, where he can read each stop. */
+      postFlow('getVisitPlans', {}).catch(() => ({ data: [] })),
     ]);
 
     // The director is the FIRST approver on an itinerary and the LAST on a payment request — hence
@@ -60,10 +72,11 @@ async function daLoad() {
     const prs = ((pr && pr.data) || []).filter(x => x.status === 'Pending Director');
     // A207 — the director is the FIRST approver on a commission too, same as an itinerary.
     const comms = _daCommLive() ? ((cm && cm.data) || []).filter(x => x.status === 'Pending Director') : [];
+    const visits = ((vp && vp.success && vp.data) || []).filter(x => x.status === 'Pending Director');
     daItinByNo = {}; itins.forEach(x => { daItinByNo[String(x.itineraryNo)] = x; });
     daCommByNo = {}; comms.forEach(x => { daCommByNo[String(x.commNo)] = x; });
 
-    if (!itins.length && !prs.length && !comms.length) {
+    if (!itins.length && !prs.length && !comms.length && !visits.length) {
       c.innerHTML = '<div class="da-empty">Nothing waiting on you.</div>';
       return;
     }
@@ -78,6 +91,26 @@ async function daLoad() {
         <button class="link-btn" onclick="daViewItinerary('${_dae(x.itineraryNo)}')">View plan</button>
         <button class="link-btn" onclick="daApprove('approveWeeklyItinerary','${_dae(x.itineraryNo)}','itineraryNo')">Approve</button>
         <button class="link-btn del-btn" onclick="daReject('rejectWeeklyItinerary','${_dae(x.itineraryNo)}','itineraryNo')">Reject</button></td></tr>`).join('');
+
+    /* A407 — one row per rep: how many visits, the companies, the days, and one way in. A single visit opens on its own
+       detail (client-visits.html?visit=), several on the page's Waiting list, grouped by rep the same way. */
+    const vByRep = {};
+    visits.forEach(x => { const k = String(x.user || '').trim(); (vByRep[k] = vByRep[k] || []).push(x); });
+    const vRows = Object.keys(vByRep).sort().map(rep => {
+      const list = vByRep[rep].slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.time || '').localeCompare(String(b.time || '')));
+      const n = list.length, first = list[0], last = list[n - 1];
+      const cos = list.map(x => String(x.company || '').trim()).filter((c, i, all) => c && all.indexOf(c) === i);
+      const days = first.date === last.date ? _daDay(first.date) : _daDay(first.date) + ' to ' + _daDay(last.date);
+      const since = list.map(x => x.submittedAt || x.updatedAt || x.createdAt).filter(Boolean).sort()[0];
+      const href = n === 1 ? 'client-visits.html?visit=' + encodeURIComponent(first.visitPlanNo) : 'client-visits.html';
+      return `<tr>
+      <td class="da-type"><span class="flow-badge b-pending">Client visit${n === 1 ? '' : 's'}</span></td>
+      <td class="da-no">${n === 1 ? _dae(first.visitPlanNo) : n + ' visits'}</td>
+      <td class="da-who">${_dae(rep)}</td>
+      <td class="da-amt da-n">${_dae(cos.slice(0, 3).join(', '))}${cos.length > 3 ? ' and ' + (cos.length - 3) + ' more' : ''}<div class="da-sub">${_dae(days)}</div></td>
+      <td class="da-age">${_daAge(since)}</td>
+      <td class="da-act"><a class="link-btn" href="${_dae(href)}">Review</a></td></tr>`;
+    }).join('');
 
     const pRows = prs.map(x => `<tr>
       <td class="da-type"><span class="flow-badge b-pending">Payment Req</span></td>
@@ -107,7 +140,7 @@ async function daLoad() {
 
     c.innerHTML = `<div class="da-wrap"><table class="flow-table">
       <thead><tr><th>Type</th><th>No</th><th>Who</th><th>Detail</th><th>Waiting</th><th>Decide</th></tr></thead>
-      <tbody>${iRows}${pRows}${cRows}</tbody></table></div>`;
+      <tbody>${iRows}${vRows}${pRows}${cRows}</tbody></table></div>`;
   } catch (e) {
     c.innerHTML = `<div class="da-error">${_dae(e.message)}</div>`;
   }

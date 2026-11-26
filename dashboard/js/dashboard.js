@@ -55,22 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('quotationToday').textContent = '—';
   }
 
-  // Check report submission status
-  try {
-    const reportResult = await apiGetTodayCounts(
-      session.name,
-      session.quotationSheetId || '',
-      session.prSheetId || ''
-    );
-    const statusEl = document.getElementById('reportStatus');
-    if (statusEl) {
-      // Plain text: the page script reads it and tones the tag (css/sales-home.css).
-      statusEl.textContent = (reportResult.success && reportResult.alreadySubmitted) ? 'Submitted today' : 'Not yet submitted';
-    }
-  } catch (e) {
-    const statusEl = document.getElementById('reportStatus');
-    if (statusEl) statusEl.textContent = '—';
-  }
+  // A407 — the report tag in the slab says where today's daily report (my-daily-report.html) stands; the one read of
+  // it is js/new-daily-report-card.js, which writes #reportStatus. The old report.html is retired.
 
   // Load client count
   try {
@@ -110,41 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     // Target not set — no progress bars shown
   }
-
-  // Check for overdue follow-ups
-  try {
-    const trackerResult = await apiGetClientTracker(session.name, {
-      quotationSheetId: session.quotationSheetId
-    });
-    if (trackerResult.success && trackerResult.data) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const overdue = trackerResult.data.filter(r => {
-        if (!r.followUpDate) return false;
-        const status = (r.status || '').toLowerCase();
-        if (status === 'won' || status === 'lost' || status === 'closed') return false;
-        const fDate = new Date(r.followUpDate);
-        fDate.setHours(0, 0, 0, 0);
-        return fDate <= today;
-      });
-      if (overdue.length > 0) {
-        document.getElementById('overdueCount').textContent = overdue.length;
-        // Classed rows; css/sales-home.css paints them.
-        // A325 — escaped: these are typed sheet values going into innerHTML.
-        const listHtml = overdue.slice(0, 5).map(r =>
-          `<div class="overdue-item">
-            <span class="name">${hxEsc(r.clientName)}</span>
-            <span class="meta">${hxEsc(r.type)} — ${hxEsc(r.documentNumber)}</span>
-            <span class="due">Due ${hxEsc(r.followUpDate)}</span>
-          </div>`
-        ).join('') + (overdue.length > 5 ? `<div class="overdue-more">and ${overdue.length - 5} more</div>` : '');
-        document.getElementById('overdueList').innerHTML = listHtml;
-        document.getElementById('overdueSection').style.display = 'block';
-      }
-    }
-  } catch (e) {
-    // Silently ignore
-  }
+  // A407 — the old "Overdue follow-ups" card read the per-rep quotation sheet nothing writes any more; the follow-up
+  // guide card (js/follow-up-guide-card.js) is the one follow-up list.
 });
 
 /**

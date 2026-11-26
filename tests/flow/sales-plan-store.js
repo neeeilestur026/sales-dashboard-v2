@@ -103,7 +103,7 @@ function world() {
       { 'Report No': 'PR26-4', 'Date': '2026-11-19', 'User': 'Neil', 'Role': 'director', 'Kind': '', 'Updated At': T(11, 19, 17), 'Report JSON': '{}' }
     ],
     SalesCalls: [{ 'Call No': 'C-1', 'Date': '2026-11-05', 'User': 'Gerald Lucena', 'Contact': 'Mr. Tan', 'Company': 'Holcim Davao', 'Outcome': 'Reached', 'Notes': 'Intro call', 'Created At': T(11, 5) }],
-    ClientBookLinks: [], FlowSettings: []
+    ClientBookLinks: [], FlowSettings: [{ Key: 'salesPlanTierFrom', Value: 'rank' }]   // A407: this suite is the A403 tiers (the switch back); the book's labels are in sales-cleanup-store.js
   };
   const c = load(GS, store);
   c._now = () => T(11, 23, 10);
@@ -117,7 +117,7 @@ const opp = (r, no) => r.pipeline.find(x => x.recordNo === no);
 sec('1 · the version, and who may open it');
 {
   const { c } = world();
-  ok('getVersion = 203', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 203);
+  ok('getVersion = 204', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 204);
   [GERALD, KIM, NEIL, LARRY].forEach(a => ok(a.actorRole + ' (' + a.actorName + ') opens it', plan(c, a).success));
   [ANA, ACCT, who('hr', 'H', 'hr1'), who('marketing', 'M', 'mk1')].forEach(a => ok(a.actorRole + ' is refused', !plan(c, a).success));
   ok('a call with no name is refused', !plan(c, who('sales', '', 'x')).success);
@@ -333,7 +333,7 @@ sec('11 · no Script Property; every action registered');
     ok(a + ' is secured in FlowAPI, Flask and the browser', new RegExp('\\b' + a + ': 1').test(SRC) && FL.indexOf('"' + a + '"') >= 0 && FA.indexOf("'" + a + "'") >= 0);
   });
   ok('the four writes are mutations and logged under Sales plan', /saveSalesPlanTarget: 1, saveSalesPlanAccount: 1, saveSalesOpp: 1, archiveSalesOpp: 1,/.test(SRC) && /saveSalesOpp: \['Sales plan', 'Pipeline updated'\]/.test(SRC));
-  ok('FLOW_VERSION 203 with the A403 CHANGELOG line', /^var FLOW_VERSION = 203;/m.test(SRC) && /^A403 THE SALES PLAN \(202/m.test(SRC));
+  ok('FLOW_VERSION 204 with the A403 CHANGELOG line', /^var FLOW_VERSION = 204;/m.test(SRC) && /^A403 THE SALES PLAN \(202/m.test(SRC));
 }
 
 console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILED' : 'all ok'));

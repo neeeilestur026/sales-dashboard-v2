@@ -301,6 +301,7 @@ html[data-motion="off"] .ch-thumb { transition: none; }
   letter-spacing: .01em; white-space: nowrap; color: var(--hx-ink-2); background: var(--hx-inset); }
 .ch-tier.major { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
 .ch-tier.mixed { background: var(--hx-warn-soft); border-color: var(--hx-warn-line); color: var(--hx-ink); }
+.ch-tier.developing { background: transparent; border-style: dashed; color: var(--hx-ink-2); }   /* A407 */
 .ch-tier.none { background: transparent; border-style: dashed; color: var(--hx-ink-3); font-weight: 600; }
 .ch-r1 .ch-tier { align-self: center; }
 .ch-dhead .ch-sub .ch-tier { font: 700 .69rem/1.5 var(--hx-text); color: var(--hx-ink-2); }

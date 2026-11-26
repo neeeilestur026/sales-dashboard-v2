@@ -43,6 +43,9 @@
 .fg .fg-l1 { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
 .fg .fg-l1 b { font: 600 13.5px/1.35 var(--hx-text); color: var(--hx-ink); overflow-wrap: anywhere; }
 .fg .fg-rank { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--hx-inset); font: 600 11px/1.5 var(--hx-text); color: var(--hx-ink-2); text-align: center; font-variant-numeric: tabular-nums; }
+/* A407 — the Client Book's label in place of a rank: Major solid, Minor quiet, Developing outlined */
+.fg .fg-tag.t-major { background: var(--hx-navy); color: var(--hx-card); }
+.fg .fg-tag.t-developing { background: transparent; box-shadow: inset 0 0 0 1px var(--hx-hair-2); }
 .fg .fg-ref { font: 500 11.5px/1.4 var(--hx-text); color: var(--hx-ink-3); font-variant-numeric: tabular-nums; }
 .fg .fg-l2 { margin-top: 1px; font: 400 12.5px/1.45 var(--hx-text); color: var(--hx-ink-3); overflow-wrap: anywhere; }
 .fg .fg-row.open .fg-l2 { color: var(--hx-ink-2); }

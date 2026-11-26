@@ -26,6 +26,9 @@ function _spToday() { return (SP.data && SP.data.today) || (typeof flowToday ===
 function _spQs(k) { try { return new URLSearchParams(location.search || '').get(k) || ''; } catch (e) { return ''; } }
 function _spFirst(name) { return String(name || '').split(' ')[0] || name; }
 function _spOwn() { return !SP.user || SP.user.toLowerCase() === SP.me.toLowerCase(); }
+/* A407 — one ranking: from FlowAPI 204 the tiers are the Client Book's labels (Major A, Minor B, Developing C) */
+function _spBook(d) { return !!(d && d.lists && d.lists.tierFrom === 'book'); }
+function _spTN(d) { return _spBook(d) ? d.lists.tierNames : null; }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const s = typeof requireSalesPlanAccess === 'function' ? requireSalesPlanAccess() : null;   // sales (their own), the director, management
@@ -129,7 +132,9 @@ function spWire() {
     const b = e.target.closest('[data-rep]');
     if (b) { SP.user = b.getAttribute('data-rep'); spGo(); return; }
     const u = e.target.closest('[data-unassigned]');
-    if (u) spUnassignedSheet(u);
+    if (u) { spUnassignedSheet(u); return; }
+    const o = e.target.closest('[data-orderlinks]');
+    if (o) spOrderLinksSheet(o);   // A407
   });
   _spId('spTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) spTab(b.getAttribute('data-tab')); });
   _spId('spTabs').addEventListener('keydown', spTabKeys);
@@ -175,8 +180,9 @@ function spDrawTeam() {
   }).join('');
   const none = t.unassigned || [], noneSum = none.reduce((s, x) => s + x.amount, 0);
   el.hidden = false;
-  el.innerHTML = '<div class="sp-teamhead"><h2>The team in ' + t.year + '</h2>' +
-    (none.length ? '<button type="button" class="sp-link" data-unassigned>' + none.length + ' order' + (none.length === 1 ? '' : 's') + ' (' + spShort(noneSum) + ') in no one\'s plan</button>' : '') + '</div>' +
+  el.innerHTML = '<div class="sp-teamhead"><h2>The team in ' + t.year + '</h2><span class="sp-teamlinks">' +
+    (none.length ? '<button type="button" class="sp-link" data-unassigned>' + none.length + ' order' + (none.length === 1 ? '' : 's') + ' (' + spShort(noneSum) + ') in no one\'s plan</button>' : '') +
+    (SP.role === 'director' && t.lists && t.lists.tierFrom ? '<button type="button" class="sp-link" data-orderlinks>Connect orders to quotations</button>' : '') + '</span></div>' +   // A407
     '<div class="sp-scroll"><table class="sp-table sp-teamtable"><thead><tr><th scope="col">Rep</th><th scope="col" class="num">Year target</th><th scope="col" class="num">So far</th><th scope="col" class="num">Achieved</th>' +
     (inYear ? '<th scope="col" class="num">' + SP_MONTHS_LONG[mi] + '</th>' : '') + '<th scope="col" class="num">Pipeline, weighted</th>' + (t.may && t.may.cost ? '<th scope="col" class="num">Gross profit</th>' : '') +
     '<th scope="col" class="num">Accounts</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
@@ -185,6 +191,55 @@ function spUnassignedSheet(back) {
   const list = (SP.team && SP.team.unassigned) || [];
   spSheet('Orders in no one\'s plan', 'These ' + SP.team.year + ' sales orders count for no rep: the order names no rep\'s quotation and the customer is in no rep\'s Client Book, or its quotation belongs to someone with no plan. Add the customer to a rep\'s Client Book and the order counts for that rep.',
     '<ul class="sp-plain">' + list.map(x => '<li><span><b>' + _spE(x.customer) + '</b><span class="sp-sub">' + _spE([x.soNo, spDay(x.date), x.owner ? 'quotation of ' + x.owner : ''].filter(Boolean).join(' · ')) + '</span></span><span class="num">' + spMoney(x.amount) + '</span></li>').join('') + '</ul>', back);
+}
+
+/* ── A407 · orders and their quotations (the director) ───────────────────────────────────────────────
+ * A won quotation is one an order names. This sheet lists the year's orders that are not connected yet: those that name a
+ * quotation not marked won (one tap marks them all), and those that name none, each with the likeliest quotations of the
+ * same client (spelling, date, amount) to connect with a tap. Connecting writes the order's quotation number and marks the
+ * quotation won; nothing else changes. */
+async function spOrderLinksSheet(back) {
+  spSheet('Orders and their quotations', 'Loading the ' + SP.year + ' orders…', '<p class="sp-sub">Reading…</p>', back);
+  const r = await postFlow('getOrderQuotationLinks', { year: SP.year }).catch(_spFail);
+  if (!r || !r.success) { spSheet('Orders and their quotations', '', '<p class="sp-err">' + _spE((r && r.message) || 'Could not read the orders.') + '</p>', back); return; }
+  SP.links = r;
+  spOrderLinksDraw(back);
+}
+function spOrderLinksDraw(back) {
+  const r = SP.links, named = r.named || [], open = (r.unnamed || []).concat(r.unknown || []);
+  const order = (x) => '<span><b>' + _spE(x.customer) + '</b><span class="sp-sub">' + _spE([x.soNo, spDay(x.date), x.ref ? 'names "' + x.ref + '"' : ''].filter(Boolean).join(' · ')) + '</span></span><span class="num">' + spMoney(x.amount) + '</span>';
+  const namedHtml = named.length ? '<section class="sp-sec"><div class="sp-sechead"><h4>Quotation named, not marked won · ' + named.length + '</h4>' +
+      '<button type="button" class="btn btn-primary primary" data-linkall>Mark ' + (named.length === 1 ? 'it' : 'all ' + named.length) + ' won</button></div>' +
+      '<ul class="sp-plain sp-links">' + named.map(x => '<li>' + order(x) + '<span class="sp-sub sp-linkq">' + _spE(x.quotationNo) + (x.quoteStatus && x.quoteStatus !== 'Sent' ? ' · ' + _spE(x.quoteStatus) : '') + '</span></li>').join('') + '</ul></section>' : '';
+  const openHtml = open.length ? '<section class="sp-sec"><h4>No quotation connected · ' + open.length + '</h4><ul class="sp-plain sp-links">' + open.map(x =>
+      '<li data-so="' + _spE(x.soNo) + '">' + order(x) + (x.candidates.length ? '<span class="sp-cands" role="group" aria-label="Likely quotations">' + x.candidates.map(c =>
+        '<button type="button" class="sp-cand" data-link="' + _spE(x.soNo) + '" data-q="' + _spE(c.quotationNo) + '"><b>' + _spE(c.quotationNo) + '</b><span>' + _spE([spMoney(c.value), spDay(c.date), c.owner ? _spFirst(c.owner) : '', c.amountFit ? c.amountFit + '% of the amount' : ''].filter(Boolean).join(' · ')) + '</span></button>').join('') + '</span>'
+        : '<span class="sp-sub sp-linkq">No quotation for this client before the order. It stays an order without a quotation.</span>') + '</li>').join('') + '</ul></section>' : '';
+  const html = (named.length || open.length) ? namedHtml + openHtml + '<p class="sp-note">Connecting writes the quotation\'s number on the order and marks the quotation won. New orders do this by themselves when they name their quotation.</p>'
+    : '<div class="sp-start"><p class="sp-start-t">Every ' + r.year + ' order is connected</p><p class="sp-sub">Each names its quotation, and each of those quotations is marked won.</p></div>';
+  const sub = named.length + open.length ? (named.length + open.length) + ' of the ' + r.year + ' orders to connect' : '';
+  const ov = _spId('spOverlay'), live = ov && ov.classList.contains('open') && ov.querySelector('#spSheetTitle') && ov.querySelector('#spSheetTitle').textContent === 'Orders and their quotations';
+  if (live) {   // already open (loading, or after a connect): change the list in place, so the sheet does not open again
+    const s = ov.querySelector('.sp-shead .sp-sub'); if (s) s.textContent = sub;
+    ov.querySelector('.sp-sbody').innerHTML = html;
+  } else spSheet('Orders and their quotations', sub, html, back || SP.back);
+  const box = _spId('spOverlay').querySelector('.sp-sbody');
+  box.addEventListener('click', async (e) => {
+    const all = e.target.closest('[data-linkall]'), one = e.target.closest('[data-link]');
+    if (!all && !one) return;
+    const b = all || one;
+    b.disabled = true;
+    const p = all ? { all: true, year: r.year } : { links: JSON.stringify([{ soNo: one.getAttribute('data-link'), quotationNo: one.getAttribute('data-q') }]) };
+    const res = await postFlow('linkOrderQuotations', p).catch(_spFail);
+    if (!res || !res.success) { b.disabled = false; _spToast((res && res.message) || 'Not connected.', 'error'); return; }
+    const done = {}; (res.done || []).forEach(d => { done[d.soNo] = 1; });
+    r.named = (r.named || []).filter(x => !done[x.soNo]);
+    r.unnamed = (r.unnamed || []).filter(x => !done[x.soNo]);
+    r.unknown = (r.unknown || []).filter(x => !done[x.soNo]);
+    _spToast(res.message || 'Connected.');
+    spOrderLinksDraw(SP.back);
+    spLoad();
+  }, { once: true });
 }
 
 /* ── the tabs: a segmented control that keeps its indicator ──────────────────────────────────────── */
@@ -280,13 +335,14 @@ function spPlanHtml(d) {
       '<td class="sp-barcol"><span class="sp-mbar"><i class="t" style="width:' + Math.round(r.target / max * 100) + '%"></i><i class="a" style="width:' + Math.round(r.actual / max * 100) + '%"></i></span></td></tr>').join('') +
     '</tbody><tfoot><tr><th scope="row">Year</th><td class="num">' + mr.total.share.toFixed(2).replace(/\.?0+$/, '') + '%</td><td class="num">' + spMoney(mr.total.target) + '</td><td class="num">' + spMoney(mr.total.actual) + '</td>' +
     '<td class="num">' + spMoney(mr.total.variance) + '</td><td class="num">' + spPct(mr.total.achievement) + '</td><td></td></tr></tfoot></table></div></section>';
-  const tiers = spTierRows(d.accounts), at = spAccountsTotal(d.accounts, k.annual);
-  const tierHtml = '<section class="sp-sec"><h3>By account tier</h3><div class="sp-scroll"><table class="sp-table"><thead><tr><th scope="col">Tier</th><th scope="col" class="num">Accounts</th>' +
+  const tiers = spTierRows(d.accounts, _spTN(d)), at = spAccountsTotal(d.accounts, k.annual);
+  const tierHtml = '<section class="sp-sec"><h3>' + (_spBook(d) ? 'By label' : 'By account tier') + '</h3><div class="sp-scroll"><table class="sp-table"><thead><tr><th scope="col">' + (_spBook(d) ? 'Label' : 'Tier') + '</th><th scope="col" class="num">Accounts</th>' +
     '<th scope="col" class="num">Target</th><th scope="col" class="num">Actual</th><th scope="col" class="num">Achieved</th></tr></thead><tbody>' +
     tiers.map(t => '<tr><th scope="row">' + _spE(t.label) + '</th><td class="num">' + t.accounts + '</td><td class="num">' + spMoney(t.target) + '</td><td class="num">' + spMoney(t.actual) + '</td><td class="num">' + spPct(t.achievement) + '</td></tr>').join('') +
     '</tbody></table></div><p class="sp-note">' + (at.match ? 'The accounts\' targets add up to the year target.' : 'The accounts\' targets add up to ' + spMoney(at.total) + '; the year target is ' + spMoney(at.annual) +
     (at.gap > 0 ? ' — ' + spMoney(at.gap) + ' is not on an account yet.' : ' — the accounts carry ' + spMoney(-at.gap) + ' more.')) +
-    ' Tiers start from the follow-up rank: 1–' + (d.lists.ranks[0]) + ' A, ' + (d.lists.ranks[0] + 1) + '–' + d.lists.ranks[1] + ' B, ' + (d.lists.ranks[1] + 1) + '–' + d.lists.ranks[2] + ' C.</p></section>';
+    (_spBook(d) ? ' Major, Minor and Developing are the labels in the Client Book; a client with no label has no default target.'
+      : ' Tiers start from the follow-up rank: 1–' + (d.lists.ranks[0]) + ' A, ' + (d.lists.ranks[0] + 1) + '–' + d.lists.ranks[1] + ' B, ' + (d.lists.ranks[1] + 1) + '–' + d.lists.ranks[2] + ' C.') + '</p></section>';
   return hero + kpis + months + tierHtml;
 }
 
@@ -294,14 +350,15 @@ function spPlanHtml(d) {
 
 function spAccountsHtml(d) {
   const f = SP.f.acc, counts = spAccountCounts(d.accounts), list = spAccountsFilter(d.accounts, f), today = _spToday();
-  const chips = SP_ACCOUNT_SEGS.filter(([k]) => k === 'all' || counts[k]).map(([k, l]) => '<button type="button" class="sp-chip' + (f.seg === k ? ' on' : '') + '" data-aseg="' + k + '" aria-pressed="' + (f.seg === k) + '">' +
+  const book = _spBook(d), rank = !book;   // A407 — from the book there is no rank: the label orders the list
+  const chips = spAccountSegs(_spTN(d)).filter(([k]) => k === 'all' || counts[k]).map(([k, l]) => '<button type="button" class="sp-chip' + (f.seg === k ? ' on' : '') + '" data-aseg="' + k + '" aria-pressed="' + (f.seg === k) + '">' +
     _spE(l) + ' <span class="n">' + counts[k] + '</span></button>').join('');
   const at = spAccountsTotal(d.accounts, d.plan.annual);
   const rows = list.map(a => {
     const ach = spRatio(a.actual, a.target), c = a.contact;
-    return '<tr data-acct="' + _spE(a.clientNo) + '" tabindex="0"><td class="sp-rank">' + (a.rank || '') + '</td>' +
+    return '<tr data-acct="' + _spE(a.clientNo) + '" tabindex="0">' + (rank ? '<td class="sp-rank">' + (a.rank || '') + '</td>' : '') +
       '<th scope="row"><b>' + _spE(a.company) + '</b><span class="sp-sub">' + _spE([a.sector, a.nextStep && 'Next: ' + a.nextStep].filter(Boolean).join(' · ')) + '</span></th>' +
-      '<td>' + (a.tier ? '<span class="sp-tier t' + a.tier + '">' + a.tier + '</span>' : '<span class="sp-dim">—</span>') + (a.tierSet ? '<span class="sp-set" title="Changed by hand">•</span>' : '') + '</td>' +
+      '<td>' + (a.tier ? '<span class="sp-tier t' + a.tier + (book ? ' word' : '') + '">' + _spE(book ? spTierName(a.tier, _spTN(d)) : a.tier) + '</span>' : '<span class="sp-dim">—</span>') + (a.tierSet ? '<span class="sp-set" title="Changed by hand">•</span>' : '') + '</td>' +
       '<td class="num">' + (a.target ? spMoney(a.target) : '—') + '</td>' +
       '<td class="num"><b>' + (a.actual ? spMoney(a.actual) : '—') + '</b>' + (a.target ? '<span class="sp-meter"><i style="width:' + Math.min(100, Math.round((ach || 0) * 100)) + '%"></i></span>' : '') + '</td>' +
       '<td>' + (c ? _spE(c.name || '—') + (c.position ? '<span class="sp-sub">' + _spE(c.position) + '</span>' : '') : '<span class="sp-dim">No contact</span>') + '</td>' +
@@ -312,12 +369,13 @@ function spAccountsHtml(d) {
   return '<div class="sp-bar2"><label class="sp-search"><span class="sp-sr">Search the accounts</span><input type="search" class="sp-in" id="spAccQ" placeholder="Search accounts, contacts, focus" value="' + _spE(f.q) + '"></label></div>' +
     '<div class="sp-chips" role="group" aria-label="Show">' + chips + '</div>' +
     '<p class="sp-count">' + list.length + ' of ' + d.accounts.length + ' accounts · targets add up to ' + spMoney(at.total) + ' of ' + spMoney(at.annual) + '</p>' +
-    (d.accounts.length ? '<div class="sp-scroll"><table class="sp-table sp-acc sp-rows"><thead><tr><th scope="col" class="sp-rank">#</th><th scope="col">Customer</th><th scope="col">Tier</th><th scope="col" class="num">Target</th>' +
+    (d.accounts.length ? '<div class="sp-scroll"><table class="sp-table sp-acc sp-rows' + (book ? ' sp-norank' : '') + '"><thead><tr>' + (rank ? '<th scope="col" class="sp-rank">#</th>' : '') + '<th scope="col">Customer</th><th scope="col">' + (book ? 'Label' : 'Tier') + '</th><th scope="col" class="num">Target</th>' +
       '<th scope="col" class="num">Sales</th><th scope="col">Main contact</th><th scope="col">Visits</th><th scope="col">Focus</th><th scope="col">Status</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="9" class="sp-empty">No account matches.</td></tr>') + '</tbody></table></div>'
+      (rows || '<tr><td colspan="' + (rank ? 9 : 8) + '" class="sp-empty">No account matches.</td></tr>') + '</tbody></table></div>'
       : '<div class="sp-start"><p class="sp-start-t">No accounts yet</p><p class="sp-sub">The accounts are the clients in ' + (_spOwn() && !SP.over ? 'your' : _spFirst(d.user) + '\'s') +
         ' Client Book. <a href="director-client-book.html">Open the Client Book</a> to add them.</p></div>') +
-    '<p class="sp-note">Rank and tier come from the follow-up guide\'s ranking; sales from the sales orders; contact and visits from the Client Book and the visit plans. Tap an account to change its tier, target, focus or status.</p>';
+    (book ? '<p class="sp-note">The label (Major, Minor, Developing) is the Client Book\'s; sales come from the sales orders; contact and visits from the Client Book and the visit plans. Tap an account to change its target, focus or status.</p>'
+      : '<p class="sp-note">Rank and tier come from the follow-up guide\'s ranking; sales from the sales orders; contact and visits from the Client Book and the visit plans. Tap an account to change its tier, target, focus or status.</p>');
 }
 function spStatusTone(s) { return s === 'Active' ? 'ok' : s === 'Dormant' ? 'warn' : s === 'On Hold' ? 'off' : 'mid'; }
 
@@ -325,11 +383,14 @@ function spAccountSheet(no, back) {
   const d = SP.data, a = d.accounts.find(x => x.clientNo === no);
   if (!a) return;
   const auto = (v) => 'Automatic' + (v ? ': ' + v : '');
+  const book = _spBook(d), tn = _spTN(d);
   const tierOpts = [['', auto(a.tierAuto || 'no tier')]].concat(d.lists.tiers.map(t => [t, 'Tier ' + t + ' · ' + spShort(d.plan.tierTargets[t])])).concat([['-', 'No tier']]);
   const cur = a.tierSet ? (a.tier || '-') : '';
   const c = a.contact;
   const facts = '<dl class="sp-dl">' +
-    '<div><dt>Follow-up rank</dt><dd>' + (a.rank || '—') + '</dd></div>' +
+    (book ? '<div><dt>Label</dt><dd>' + _spE(spTierName(a.tier, tn)) + (a.tier ? ' · ' + spShort(d.plan.tierTargets[a.tier]) + ' default target' : '') +
+      ' <a class="sp-link" href="director-client-book.html?client=' + encodeURIComponent(a.clientNo) + '">Change it in the Client Book</a></dd></div>'
+      : '<div><dt>Follow-up rank</dt><dd>' + (a.rank || '—') + '</dd></div>') +
     '<div><dt>Sales this year</dt><dd>' + spMoney(a.actual) + ' · ' + a.orders + ' order' + (a.orders === 1 ? '' : 's') + '</dd></div>' +
     '<div><dt>Last order</dt><dd>' + (a.lastSale ? _spE(spDay(a.lastSale, String(d.year))) : 'None yet') + '</dd></div>' +
     '<div><dt>Main contact</dt><dd>' + (c ? _spE(c.name) + (c.position ? ', ' + _spE(c.position) : '') + (c.phone ? '<br><a class="sp-tel" href="tel:' + _spE(String(c.phone).replace(/[^\d+]/g, '')) + '">' + _spE(c.phone) + '</a>' : '') +
@@ -338,13 +399,13 @@ function spAccountSheet(no, back) {
     (a.nextStep ? '<div><dt>Client Book next step</dt><dd>' + _spE(a.nextStep) + '</dd></div>' : '') + '</dl>';
   const hints = a.focusHints.length ? '<div class="sp-hints" role="group" aria-label="From their quotations">' + a.focusHints.map(h => '<button type="button" class="sp-hint" data-hint="' + _spE(h) + '">+ ' + _spE(h) + '</button>').join('') + '</div>' : '';
   const form = '<form class="sp-form" id="spAccForm" data-no="' + _spE(no) + '" autocomplete="off">' +
-    '<div class="sp-grid2"><label>Tier<select class="sp-in" name="tier">' + tierOpts.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + _spE(l) + '</option>').join('') + '</select></label>' +
+    '<div class="sp-grid2">' + (book ? '' : '<label>Tier<select class="sp-in" name="tier">' + tierOpts.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + _spE(l) + '</option>').join('') + '</select></label>') +
     '<label>Year target (₱)<input type="text" class="sp-in" name="target" inputmode="decimal" value="' + (a.targetSet ? a.target : '') + '" placeholder="' + _spE(auto(spMoney(a.targetAuto))) + '"></label></div>' +
     '<label>Products / opportunity focus<textarea class="sp-in" name="focus" rows="2" maxlength="300" placeholder="What to sell them this year">' + _spE(a.focus) + '</textarea></label>' + hints +
     '<label>Account status<select class="sp-in" name="status">' + [['', auto(a.statusAuto)]].concat(d.lists.statuses.map(s => [s, s])).map(([v, l]) => '<option value="' + v + '"' + (a.statusSet && v === a.status ? ' selected' : '') + '>' + _spE(l) + '</option>').join('') + '</select></label>' +
     '<p class="sp-err" id="spAccErr" role="alert" hidden></p>' +
     '<div class="sp-formfoot"><span class="sp-sub">' + (a.updatedBy ? 'Changed by ' + _spE(a.updatedBy) : 'Nothing changed by hand yet') + '</span><button type="submit" class="btn btn-primary primary">Save</button></div></form>';
-  spSheet(a.company, [a.sector, a.tier ? 'Tier ' + a.tier : '', a.status].filter(Boolean).join(' · '), facts + form, back);
+  spSheet(a.company, [a.sector, a.tier ? spTierName(a.tier, tn) : '', a.status].filter(Boolean).join(' · '), facts + form, back);
   const f = _spId('spAccForm');
   f.addEventListener('submit', (e) => { e.preventDefault(); spSaveAccount(f, a); });
   f.addEventListener('click', (e) => {
@@ -360,7 +421,8 @@ function spAccountSheet(no, back) {
 async function spSaveAccount(f, a) {
   const el = f.elements, t = el.target.value.replace(/,/g, '').trim();
   if (t && !(isFinite(Number(t)) && Number(t) >= 0)) { spErr('spAccErr', 'The target is an amount in pesos.'); el.target.focus(); return; }
-  const p = { year: SP.year, clientNo: a.clientNo, tier: el.tier.value, target: t, focus: el.focus.value.trim(), status: el.status.value };
+  const p = { year: SP.year, clientNo: a.clientNo, target: t, focus: el.focus.value.trim(), status: el.status.value };
+  if (el.tier) p.tier = el.tier.value;   // A407 — from the book the label is not set here
   if (SP.over) p.user = SP.data.user;
   if (a.updatedAt) p.ifUpdatedAt = a.updatedAt;
   const btn = f.querySelector('[type="submit"]'); btn.disabled = true;
@@ -557,7 +619,7 @@ function spTargetSheet(back) {
     '<td class="num" id="spTm' + i + '">' + spMoney(p.annual * s / 100) + '</td></tr>').join('');
   spSheet(_spFirst(d.user) + '\'s ' + d.year + ' target', 'The year target, how it spreads over the months, and what each account tier carries by default.',
     '<form class="sp-form" id="spTgtForm" autocomplete="off"><label>Year target (₱)<input type="text" class="sp-in" name="annual" inputmode="decimal" required value="' + p.annual + '"></label>' +
-    '<fieldset class="sp-fs"><legend>Each account\'s default target by tier</legend><div class="sp-grid3">' + d.lists.tiers.map(t => '<label>Tier ' + t + '<input type="text" class="sp-in" name="t' + t + '" inputmode="decimal" value="' + p.tierTargets[t] + '"></label>').join('') + '</div></fieldset>' +
+    '<fieldset class="sp-fs"><legend>Each account\'s default target by ' + (_spBook(d) ? 'label' : 'tier') + '</legend><div class="sp-grid3">' + d.lists.tiers.map(t => '<label>' + _spE(spTierName(t, _spTN(d))) + '<input type="text" class="sp-in" name="t' + t + '" inputmode="decimal" value="' + p.tierTargets[t] + '"></label>').join('') + '</div></fieldset>' +
     '<div class="sp-sechead"><h4>The months</h4><button type="button" class="sp-link" data-even>Spread evenly</button></div>' +
     '<div class="sp-scroll"><table class="sp-table sp-split"><thead><tr><th scope="col">Month</th><th scope="col">Share (%)</th><th scope="col" class="num">Target</th></tr></thead><tbody>' + rows +
     '</tbody><tfoot><tr><th scope="row">Year</th><td id="spTotal"></td><td class="num" id="spTotalAmt"></td></tr></tfoot></table></div>' +
@@ -579,7 +641,7 @@ function spTargetSheet(back) {
     const ok = recalc();
     if (!ok) return;
     const tiers = {};
-    for (const t of d.lists.tiers) { const v = Number(String(f.elements['t' + t].value).replace(/,/g, '')); if (!(isFinite(v) && v >= 0)) { spErr('spTgtErr', 'Tier ' + t + '\'s target is an amount in pesos.'); return; } tiers[t] = v; }
+    for (const t of d.lists.tiers) { const v = Number(String(f.elements['t' + t].value).replace(/,/g, '')); if (!(isFinite(v) && v >= 0)) { spErr('spTgtErr', spTierName(t, _spTN(d)) + '\'s target is an amount in pesos.'); return; } tiers[t] = v; }
     const btn = f.querySelector('[type="submit"]'); btn.disabled = true;
     const r = await postFlow('saveSalesPlanTarget', { user: d.user, year: d.year, annual: ok.annual, months: ok.shares, tierTargets: tiers, ifUpdatedAt: p.updatedAt || undefined }).catch(_spFail);
     btn.disabled = false;

@@ -2,9 +2,10 @@
  *
  * Linked by dashboard.html after css/styles.css (tokens, both themes, the deck, glass, buttons,
  * badges) and css/training-mode.css. This file is only what the page adds: the target ring inside
- * the slab, the report tag's two tones, the work links, the pipeline stages, the target bars and
- * the overdue rows that dashboard.js emits, and the hooks on the two shared cards (leads handed
- * over, salary deduction). Every rule hangs off body.sl.
+ * the slab, the report tag's two tones, the work links, the pipeline stages, the target bars
+ * that dashboard.js emits, and the hooks on the two shared cards (leads handed over, salary
+ * deduction). Every rule hangs off body.sl. A407: the overdue rows and the pending-items fact
+ * are gone with the cards that read the frozen per-rep sheets.
  *
  * Motion: ONE load moment (body.sl-load, added once by js/sales-home-page.js when the month's
  * figure lands, or after 1.5 s). The ring fills, the facts arrive, the bars grow. After that only
@@ -30,7 +31,6 @@ body.sl #reportPill[data-tone="ok"]::before { background: var(--hx-cyan); opacit
 body.sl #reportPill[data-tone="warn"] { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); color: #fff; }
 body.sl #reportPill[data-tone="warn"]::before { background: var(--hx-warn); opacity: 1; }
 body.sl .hx-facts { grid-template-columns: 1fr 1fr; }
-body.sl .hx-facts > div.wide { grid-column: 1 / -1; }
 
 /* ── 2 · the rail nav: links that follow their sections ──────────────────────────────────────── */
 body.sl .hx-rail-nav a[hidden] { display: none; }
@@ -68,10 +68,9 @@ body.sl .sl-stage:nth-child(5) i { background: var(--hx-navy); }
 body.sl .sl-stage.won { background: var(--hx-navy-soft); border-color: var(--hx-navy-line); color: var(--hx-navy-text); }
 body.sl .sl-stages svg { width: 12px; height: 12px; color: var(--hx-ink-3); flex: 0 0 auto; }
 
-/* ── 6 · targets and follow-ups, side by side ────────────────────────────────────────────────── */
-body.sl .sl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+/* ── 6 · the month's target: the bars, or the quiet card until a target is set (one at a time) ─── */
+body.sl .sl-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 body.sl .sl-pair > section { margin: 0; }
-body.sl .sl-pair > #quietState:only-child, body.sl .sl-pair > #quietState:first-child:nth-last-child(3) { grid-column: 1 / -1; }
 
 /* target bars — markup from dashboard.js makeProgressBar() */
 body.sl .progress-row { margin-bottom: 14px; }
@@ -82,19 +81,7 @@ body.sl .progress-bar-bg { width: 100%; height: 8px; border-radius: var(--hx-r-p
 body.sl .progress-bar-fill { height: 100%; border-radius: var(--hx-r-pill); background: var(--hx-navy); transform-origin: left center; transition: width .6s var(--hx-ease); }
 body.sl .progress-bar-fill.p { background: var(--hx-cyan-ink); }
 
-/* overdue rows — markup from dashboard.js */
-body.sl #overdueSection .hx-head h2 { color: var(--hx-red); }
-body.sl #overdueSection .hx-head h2 svg { width: 16px; height: 16px; }
-body.sl .overdue-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--hx-hair-2); font: 400 12.5px/1.4 var(--hx-text); }
-body.sl .overdue-item:last-of-type { border-bottom: 0; }
-body.sl .overdue-item .name { font-weight: 700; color: var(--hx-ink); grid-column: 1; }
-body.sl .overdue-item .meta { color: var(--hx-ink-3); font-size: 11.5px; grid-column: 1; }
-body.sl .overdue-item .due { color: var(--hx-red); font-size: 11.5px; font-weight: 700; grid-column: 2; grid-row: 1 / span 2; align-self: center; white-space: nowrap; }
-body.sl .overdue-more { padding: 8px 0 0; font: 500 12px/1.4 var(--hx-text); color: var(--hx-ink-3); }
-body.sl #overdueSection .btn { margin-top: 12px; }
-
-/* all caught up */
-body.sl #quietState .hx-head h2 svg { width: 16px; height: 16px; color: var(--hx-ok); }
+/* no target yet */
 body.sl #quietState p { margin: 0; font: 400 12.5px/1.5 var(--hx-text); color: var(--hx-ink-2); }
 
 /* ── 7 · the shared cards ────────────────────────────────────────────────────────────────────── */
@@ -146,7 +133,6 @@ body.sl.sl-load .hx-facts dd { animation: slIn .45s var(--hx-ease) both; }
 body.sl.sl-load .hx-facts > div:nth-child(2) dd { animation-delay: .05s; }
 body.sl.sl-load .hx-facts > div:nth-child(3) dd { animation-delay: .10s; }
 body.sl.sl-load .hx-facts > div:nth-child(4) dd { animation-delay: .15s; }
-body.sl.sl-load .hx-facts > div:nth-child(5) dd { animation-delay: .20s; }
 body.sl.sl-load .progress-bar-fill { animation: slFill .8s var(--hx-ease) both; }
 body.sl.sl-load .sl-link { animation: slIn .4s var(--hx-ease) both; }
 body.sl.sl-load .sl-link:nth-child(2) { animation-delay: .03s; }
@@ -164,9 +150,7 @@ body.sl .hx-slab .v.sl-tick, body.sl .hx-facts dd.sl-tick { animation: slFade .5
 
 /* ── 9 · responsive ──────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 899px) {
-  body.sl .sl-pair { grid-template-columns: 1fr; }
-  body.sl .hx-facts { grid-template-columns: repeat(3, 1fr); }
-  body.sl .hx-facts > div.wide { grid-column: auto; }
+  body.sl .hx-facts { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 768px) {
   body.sl .sl-links { grid-template-columns: 1fr 1fr; }

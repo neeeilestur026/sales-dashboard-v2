@@ -23,6 +23,7 @@ const read = (f) => fs.readFileSync(D + f, 'utf8');
 let FAIL = 0, N = 0;
 const ok = (l, c, e) => { N++; if (c) console.log('  ok   ' + l); else { FAIL++; console.log('  FAIL ' + l + (e === undefined ? '' : '\n     ' + JSON.stringify(e).slice(0, 400))); } };
 const sec = (t) => console.log('\n== ' + t + ' ==');
+const eq = (l, got, want) => ok(l, JSON.stringify(got) === JSON.stringify(want), { got, want });   // A407
 
 const CSS = read('css/ledger.css');
 const ROLES = ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'];
@@ -118,6 +119,7 @@ sec('2 · contrast meets WCAG AA in both themes');
 /* ── 3 · the pages ─────────────────────────────────────────────────────────────────────────── */
 sec('3 · exactly the in-scope pages carry the look');
 const EXCLUDED = ['scan.html', 'collect.html', 'labels.html', 'index.html', 'director-recommender.html', 'clients.html', 'hr-memos.html',   // A385 · A390: redirect stubs
+  'report.html', 'my-reports.html', 'performance.html', 'quotation-summary.html', 'pending-items.html', 'weekly-itinerary.html',   // A407: redirect stubs (js/page-moved.js)
   'reconcile-2026-costs.html', 'replace-2026-sos.html', 'update-2025-costs.html'];
 const PAGES = fs.readdirSync(D).filter(f => f.endsWith('.html') && !f.startsWith('_')).sort();
 const IN = PAGES.filter(f => !EXCLUDED.includes(f) && !f.startsWith('migrate-'));
@@ -298,6 +300,23 @@ function guardAdmits(page, role) {
   ok('  each of which the page\'s own guard admits for that role', shut.length === 0, shut);
   ok('  every page marks itself current (its rail section, and its flyout link or avatar entry)', current.length === 0, current.slice(0, 5));
   ok('  the bell, its badge, dropdown and list, and the theme toggle keep their ids, once', ids.length === 0, ids);
+  /* A407 — one of everything (Neil, 25 Nov 2026): the sales menu is these 17 pages, in this order, in both looks; the
+     personal pages (leave, payslips, email, password) sit apart, in the avatar menu or at the end of the classic bar. */
+  const SALES_17 = ['dashboard.html', 'product-finder.html', 'flow-pricing-request.html', 'flow-quotations.html', 'quotation-status.html', 'item-book.html',
+    'flow-inventory.html', 'director-client-book.html', 'follow-up-guide.html', 'sales-plan.html', 'shutdown-calendar.html', 'client-visits.html',
+    'flow-travel.html', 'flow-commissions.html', 'sales-emails.html', 'my-daily-report.html', 'flow-guide.html'];
+  const ME_PAGES = ['leave-request.html', 'my-payslips.html', 'email-setup.html', 'change-password.html'];
+  const salesOn = navbar(AUTH, 'sales', { on: true });
+  const railSales = vm.runInContext('JSON.stringify(LEDGER_NAV.sales)', salesOn.ctx);
+  const rail = JSON.parse(railSales).reduce((a, s) => a.concat(typeof s[2] === 'string' ? [s[2]] : s[2].map(x => x[0])), []);
+  eq('the sales menu, Apple look: exactly the 17 links, in order', rail, SALES_17);
+  eq('  classic look: the same 17, in the same order, then only the personal pages', hrefs(navbar(AUTH_BEFORE, 'sales', { nav: false }).html).filter(h => !ME_PAGES.includes(h)), SALES_17);
+  ok('  the daily report is one direct link, "Daily report", in both looks (no "New daily report" for a rep)',
+    JSON.parse(railSales).some(s => s[0] === 'Daily report' && s[2] === 'my-daily-report.html') && !/New daily report/i.test(railSales)
+    && /href="my-daily-report\.html"[^>]*>[\s\S]{0,400}?Daily Report\s*<\/a>/.test(navbar(AUTH_BEFORE, 'sales', { nav: false }).html)
+    && !/New Daily Report/.test(navbar(AUTH_BEFORE, 'sales', { nav: false }).html));
+  const RETIRED = ['report.html', 'my-reports.html', 'performance.html', 'client-tracker.html', 'pending-items.html', 'quotation-summary.html', 'weekly-itinerary.html'];
+  eq('  the retired pages are in neither sales menu', RETIRED.filter(f => rail.includes(f) || hrefs(navbar(AUTH_BEFORE, 'sales', { nav: false }).html).includes(f)), []);
   const wh = navbar(AUTH, 'warehouse', { on: true }).html;
   ok('the warehouse keeps the classic navbar even if asked for the look', /id="navLinks"/.test(wh) && !/l-rail/.test(wh));
   ok('ledger-nav.js escapes through api.js (no helper of its own) and holds no colour', /hxEsc\(s\)/.test(NAV) && !/#[0-9a-fA-F]{3,6}\b/.test(NAV));

@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flow — Weekly Itineraries</title>
+  <title>Flow — Itineraries</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/flow.css">
   <link rel="stylesheet" href="css/flow-screen.css">
+  <link rel="stylesheet" href="css/management-itinerary.css">   <!-- A407: the week's client visits on top -->
 <style>
   /* A216 — the rail is the queue AND the team roster; the pane is one rep's whole week.
      Splitting them this way is what lets one page both approve and monitor: you never lose sight of
@@ -117,8 +118,8 @@
         <div class="dpill"><span class="d" id="hbDay">—</span><span class="m" id="hbMon">&nbsp;</span></div>
         <div>
           <div class="eyebrow">Sales · Field Plans</div>
-          <h1>Weekly Itineraries</h1>
-          <p>Approve the week's plans, then see how the week actually went against them.</p>
+          <h1>Itineraries</h1>
+          <p>The week's client visits, then the older weekly itineraries and how those weeks went against them.</p>
         </div>
       </div>
       <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -132,6 +133,12 @@
         <button class="btn btn-sm btn-secondary" id="miPrint">Print</button>
       </div>
     </div>
+
+    <!-- A407 — client visits replaced the weekly itinerary for reps (Neil, 25 Nov 2026): the week's visits come first
+         (js/management-itinerary.js miLoadVisits), the weekly itineraries below stay readable. -->
+    <section class="mi-pane mi-visits" id="miVisits" aria-labelledby="miVisitsH" hidden></section>
+    <h2 class="mi-older">Older weekly itineraries</h2>
+    <p class="mi-older-note">How reps planned their weeks before client visits, and how those weeks went.</p>
 
     <div id="miMsg" class="flow-msg" style="display:none;"></div>
     <div id="miAlert"></div>

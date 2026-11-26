@@ -481,13 +481,13 @@ sec('8b · A363: the director reads a rep\'s own report; a rep keeps their own')
   ok('  the director reads their sent mail by their login; their received mail stays theirs', /apiFetchEmailLogToday\(SR_UI\.ro \? SR_UI\.me\.username : undefined, day\)/.test(SRC) && /if \(SR_UI\.ro\) receivedState = 'private';/.test(SRC) &&
      /received mail stays private to/.test(SRC));
   ok('  a click that would write is ignored while reading (only the records, the filters, the week and A405\'s Try again answer)', /if \(SR_UI\.ro && !b\.hasAttribute\('data-rec'\) && !b\.hasAttribute\('data-feed'\) && !b\.hasAttribute\('data-week'\) && !b\.hasAttribute\('data-mailretry'\)\) return;/.test(SRC));
-  ok('a rep\'s own page: "My daily report", in their own words, needing FlowAPI 184', /SR_UI\.own \? 'My daily report'/.test(SRC) && /Your new daily report\. Only you and the director see it, and your old daily report still works as before\./.test(SRC) &&
+  ok('a rep\'s own page: "My daily report", in their own words, needing FlowAPI 184', /SR_UI\.own \? 'My daily report'/.test(SRC) && /Your daily report\. Nothing here changes the real call log/.test(SRC) &&
      /SR_UI\.own \? '184' : '177'/.test(SRC));
 }
 {
   const SRC = fs.readFileSync(path.join(DASH, 'sales-report.js'), 'utf8') + fs.readFileSync(path.join(DASH, 'sales-report-model.js'), 'utf8');
   const posts = Array.from(new Set((SRC.match(/postFlow\('(\w+)'/g) || []).map(x => x.slice(10, -1)))).sort();
-  eq('the only writes and private reads are the trial\'s own (A350: and the Client Book, A369: the client visits, read only)', posts, ['getClientBook', 'getProofReports', 'getVisitPlans', 'saveProofReport', 'submitProofReport']);
+  eq('the only writes and private reads are the trial\'s own (A350: and the Client Book, A369: the client visits, read only; A407: the follow-up guide, read only)', posts, ['getClientBook', 'getFollowUpGuide', 'getProofReports', 'getVisitPlans', 'saveProofReport', 'submitProofReport']);
   ok('  nothing touches the real call log, visits or quotations', !/logSalesCall|logClientVisit|closeQuotation|deleteSalesCall/.test(SRC));
   ok('no emoji, no hex colour, no inline style', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{2712}\u{2716}-\u{27BF}]/u.test(SRC) && !/#[0-9a-fA-F]{6}\b/.test(SRC) && !/style="/.test(SRC));
   ok('no location is asked for', !/geolocation|latitude|longitude/i.test(SRC));

@@ -5,5 +5,6 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!s) return;
   if (typeof renderNavbar === 'function') renderNavbar('follow-up-guide');
   const lede = document.querySelector('.fgp-lede');
-  if (lede && s.role !== 'sales') lede.textContent = 'Each rep\'s top 50 through the week, read only. Quotations come first, on day 3, 5, 7 and 14 after sending and then every week until they are won or lost. Then ten clients a day, Monday to Friday.';
+  /* A407 — the plan is each rep's Client Book: Major, then Minor, then Developing */
+  if (lede && s.role !== 'sales') lede.textContent = 'Each rep\'s clients through the week, read only. Every open quotation comes first, on day 3, 5, 7 and 14 after sending and then every week until it is won or lost. Then the Major, Minor and Developing clients, spread over Monday to Friday.';
 });

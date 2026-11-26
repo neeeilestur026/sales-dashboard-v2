@@ -32,10 +32,16 @@ const rows = () => store.PricingRequests || [];
 
 sec('1 · no client: as before');
 {
+  /* A407 — a sales rep's new request must name its client from the Client Book (FlowSettings requireClientPick, on by default) */
+  const before = rows().length;
+  const r0 = pr(GERALD);
+  ok('A407: a rep\'s PR with no client is refused, and says how to fix it', !r0.success && r0.needClient === true && /Client Book/.test(r0.message) && rows().length === before, r0);
+  store.FlowSettings.push({ Key: 'requireClientPick', Value: 'off' });
   const r = pr(GERALD);
   const row = rows()[rows().length - 1];
-  ok('a PR with no client is made as before', r.success && /^PR-/.test(r.prNo), r);
+  ok('with requireClientPick off, a PR with no client is made as before', r.success && /^PR-/.test(r.prNo), r);
   ok('  21 wide, the new column blank', row.__arity === 21 && row['Client Book No'] === '' && row['Salesperson'] === 'Gerald Lucena', row);
+  store.FlowSettings.pop();
 }
 
 sec('2 · the rep\'s own client');

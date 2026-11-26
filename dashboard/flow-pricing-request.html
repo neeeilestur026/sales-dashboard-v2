@@ -87,6 +87,7 @@
     .pe-ctx.site { background: var(--hx-navy-soft); border-color: var(--hx-navy-line); }
     .pe-ctx-note { font-size:0.72rem; color: var(--hx-ink-3); }
   </style>
+  <link rel="stylesheet" href="css/client-pick.css">
   <link rel="stylesheet" href="css/sales-lists.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
@@ -214,6 +215,8 @@
       <div class="flow-actions">
         <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveRequest()">Submit to Admin</button>
         <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+        <!-- A407 — what the request still needs before it can go (js/client-pick.js writes it) -->
+        <span class="cp-why" id="prSaveWhy" aria-live="polite" hidden></span>
       </div>
       <div id="formMsg" class="flow-msg" style="display:none;"></div>
     </div>
@@ -286,6 +289,7 @@
   <script src="js/flow-pricing-engine.js"></script>
   <script src="js/sales-lists-model.js"></script>
   <script src="js/sales-lists.js"></script>
+  <script src="js/client-pick.js"></script>
   <script src="js/client-rollup.js"></script>
   <script src="js/supplier-list-model.js"></script>
   <script src="js/flow-pricing-request.js"></script>

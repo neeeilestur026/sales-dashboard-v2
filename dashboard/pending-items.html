@@ -1,184 +1,19 @@
 <!DOCTYPE html>
+<!-- A407: Pending items (the old per-agent PR and quotation sheets, which nothing writes any more) is retired (Neil, 25 Nov 2026);
+     requests and quotations in flight are on flow-quotations.html.
+     This page only exists so a saved link does not 404: js/page-moved.js sends everyone to flow-quotations.html. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Dashboard — Pending Items</title>
+  <title>Pending Items — moved</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/training-mode.css">
-  <style>
-    .tracker-toolbar {
-      display: flex; gap: 0.75rem; flex-wrap: wrap;
-      align-items: center; margin-bottom: 1.25rem;
-    }
-    .tracker-toolbar input[type="text"] {
-      flex: 1; min-width: 200px; padding: 0.5rem 0.75rem;
-      background: var(--surface-2); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text-primary); font-size: 0.875rem;
-    }
-    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted); }
-    .tracker-toolbar select {
-      padding: 0.5rem 0.75rem; background: var(--surface-2);
-      border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text-primary); font-size: 0.875rem; cursor: pointer;
-    }
-    .tracker-table-wrap { overflow-x: auto; }
-    .tracker-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-    .tracker-table th {
-      text-align: left; padding: 0.65rem 0.9rem; color: var(--text-muted);
-      border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap;
-    }
-    .tracker-table td {
-      padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--hx-hair-2);
-      vertical-align: middle; color: var(--text-primary);
-    }
-    .tracker-table tr:hover td { background: var(--hx-hair-2); }
-    .badge {
-      display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px;
-      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
-    }
-    .badge-for-pricing   { background: var(--hx-cyan-soft);  color: var(--hx-cyan-ink); }
-    .badge-for-quotation { background: rgba(168,85,247,0.15);  color: var(--hx-navy-text); }
-    .badge-pending   { background: var(--hx-warn-soft);   color: var(--hx-warn); }
-    .badge-approved  { background: var(--hx-ok-soft);    color: var(--hx-ok); }
-    .badge-rejected  { background: var(--hx-red-soft);   color: var(--hx-red); }
-    .badge-won       { background: var(--hx-ok-soft);    color: var(--hx-ok); }
-    .badge-lost      { background: var(--hx-red-soft);   color: var(--hx-red); }
-    .badge-replied   { background: var(--hx-ok-soft);   color: var(--hx-ok); }
-    .badge-pending-approval { background: var(--hx-warn-soft); color: var(--hx-warn); }
-    .badge-partially-approved { background: var(--hx-warn-soft); color: var(--hx-warn); }
-    .tracker-count { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
-    .no-results { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-
-    /* Tab bar */
-    .tab-bar { display: flex; gap: 0.25rem; margin-bottom: 1.25rem; }
-    .tab-btn {
-      display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.55rem 1.25rem; border-radius: 8px; font-size: 0.875rem;
-      font-weight: 600; border: 1px solid var(--border);
-      background: transparent; color: var(--text-secondary);
-      cursor: pointer; transition: all 0.15s;
-    }
-    .tab-btn:hover { background: var(--hx-inset); color: var(--text-primary); }
-    .tab-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
-    .tab-count {
-      background: var(--hx-inset); padding: 0.1rem 0.5rem;
-      border-radius: 999px; font-size: 0.72rem; font-weight: 700;
-    }
-    .tab-btn.active .tab-count { background: var(--hx-cyan-soft); }
-
-    /* Price input */
-    .price-input {
-      width: 90px; padding: 0.25rem 0.4rem;
-      background: var(--surface-2); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text-primary); font-size: 0.82rem;
-      text-align: right;
-    }
-    .price-input:focus { border-color: var(--accent); outline: none; }
-    .price-display { font-size: 0.82rem; }
-    .price-awaiting { color: var(--text-muted); font-style: italic; font-size: 0.78rem; }
-
-    .section-hidden { display: none; }
-
-    .fwd-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--hx-navy); }
-    .btn-forward {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.45rem 0.85rem; background: var(--hx-cyan-soft); color: var(--hx-cyan-ink);
-      border: 1px solid var(--hx-cyan-soft); border-radius: 8px;
-      font-size: 0.82rem; font-weight: 600; cursor: pointer;
-    }
-    .btn-forward:hover { background: var(--hx-cyan-soft); }
-    .btn-forward:disabled { opacity: 0.5; cursor: not-allowed; }
-  </style>
-  <link rel="stylesheet" href="css/ledger.css">
-  <link rel="stylesheet" href="css/apple.css">
 </head>
 <body>
   <script src="js/theme.js"></script>
-  <header class="navbar" id="navbar"></header>
-
   <main class="main-content">
-    <div class="page-header">
-      <h1>Pending Items</h1>
-      <p>Purchase Requests awaiting pricing and Quotations pending approval.</p>
-    </div>
-
-    <div class="chart-card" style="margin-bottom:1.5rem;">
-      <!-- Tab Bar -->
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('pr')" id="tabPR">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Purchase Requests <span class="tab-count" id="prCount">0</span>
-        </button>
-        <button class="tab-btn" onclick="switchTab('quotation')" id="tabQuotation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          Quotations <span class="tab-count" id="quotationCount">0</span>
-        </button>
-      </div>
-
-      <!-- PR Section -->
-      <div id="prSection">
-        <div class="tracker-toolbar">
-          <input type="text" id="prSearch" placeholder="Search company, PR #, item..." oninput="applyPRFilters()">
-          <select id="prAgentFilter" style="display:none;" onchange="applyPRFilters()">
-            <option value="">All Agents</option>
-          </select>
-          <select id="prStatusFilter" onchange="applyPRFilters()">
-            <option value="">All Statuses</option>
-            <option value="For Pricing">For Pricing</option>
-            <option value="For Quotation">For Quotation</option>
-          </select>
-          <button class="btn" onclick="loadPendingItems()" title="Refresh">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
-          <button class="btn" onclick="exportPendingExcel('pr')" title="Export Excel">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Excel
-          </button>
-          <button class="btn-forward" id="btnForwardPricing" style="display:none;" onclick="forwardSelectedToPricing()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            Forward to Management
-          </button>
-          <button class="btn-forward" id="btnCreateQuotation" style="display:none;background: rgba(168,85,247,0.12);color: var(--hx-navy-text);border-color: rgba(168,85,247,0.25);" onclick="createQuotationFromPR()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Create Quotation
-          </button>
-          <button class="btn-forward" id="btnCreateSQ" style="display:none;background: var(--hx-warn-soft);color: var(--hx-warn);border-color: var(--hx-warn-soft);" onclick="createSupplierQuotationFromPR()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Create Supplier Quotation
-          </button>
-        </div>
-        <div id="prTrackerCount" class="tracker-count"></div>
-        <div id="prContainer" class="tracker-table-wrap">
-          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
-        </div>
-      </div>
-
-      <!-- Quotation Section -->
-      <div id="quotationSection" class="section-hidden">
-        <div class="tracker-toolbar">
-          <input type="text" id="qSearch" placeholder="Search client, ref #, subject..." oninput="applyQuotationFilters()">
-          <select id="qAgentFilter" style="display:none;" onchange="applyQuotationFilters()">
-            <option value="">All Agents</option>
-          </select>
-          <button class="btn" onclick="loadPendingItems()" title="Refresh">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
-        </div>
-        <div id="qTrackerCount" class="tracker-count"></div>
-        <div id="qContainer" class="tracker-table-wrap">
-          <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
-        </div>
-      </div>
-    </div>
+    <p>Pending items have moved to <a href="flow-quotations.html">Quotations</a>.</p>
   </main>
-
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/ledger-nav.js"></script>
-  <script src="js/pending-items.js"></script>
-  <script src="js/training-mode.js"></script>
+  <script src="js/page-moved.js" data-to="flow-quotations.html"></script>
 </body>
 </html>

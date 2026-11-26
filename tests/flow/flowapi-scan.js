@@ -80,7 +80,7 @@ sec('2 · a PO edit that is refused writes nothing');
 sec('3 · the browser cannot choose an approval status');
 {
   const store = { Quotations: [], QuotationItems: [], Clients: [{ 'Customer': 'ACME' }], PurchaseOrders: [], PurchaseOrderItems: [],
-                  APAging: [], Inventory: [], Journal: [], SalesOrders: [] };
+                  APAging: [], Inventory: [], Journal: [], SalesOrders: [], FlowSettings: [{ Key: 'requireClientPick', Value: 'off' }] };   // A407 — not about naming the client
   const ctx = load(undefined, store);
   const q = call(ctx, 'createQuotation', Object.assign({ customer: 'ACME', status: 'Approved',
     items: JSON.stringify([{ itemNo: 'TW-01', itemName: TOOL, qty: 1, price: 100 }]) }, SAM));
