@@ -167,7 +167,8 @@ function qsBuild(quotations, o) {
     return {
       q: q, seg: seg, clientKey: clientKey, client: names[clientKey] || String(q.customer || '').trim() || 'No client',
       age: _qsDays(q.date, today), last: qsLastFollowUp(q, links), linked: qsLinkedFollowUp(q, links),
-      due: !!(fu && (fu.state === 'due' || fu.state === 'overdue' || fu.state === 'replied')), fu: fu,
+      /* A407 — with the rep's follow-up guide read (o.guideDue: {quotationNo: step}), "Follow-up due" is the guide's list */
+      due: opt.guideDue ? !!opt.guideDue[String(q.quotationNo)] && (seg === 'pending' || seg === 'update') : !!(fu && (fu.state === 'due' || fu.state === 'overdue' || fu.state === 'replied')), fu: fu,
       can: qsCanAct(q, seg, opt.hasSO), owner: _qsOwner(q)
     };
   });

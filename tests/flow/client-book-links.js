@@ -26,7 +26,7 @@ const GERALD = { actorName: 'Gerald Lucena', actorRole: 'sales' }, KIM = { actor
 const NEIL = { actorName: 'Neil Estur', actorRole: 'director' }, ADMIN = { actorName: 'Aira Limpoco', actorRole: 'admin' };
 const ITEMS = JSON.stringify([{ itemNo: '1', itemName: 'Hydraulic torque wrench', qty: 1, uom: 'set' }]);
 
-const store = { FlowSettings: [], Quotations: [] };
+const store = { FlowSettings: [{ Key: 'requireClientPick', Value: 'off' }], Quotations: [] };   // A407 — old records made before a client had to be named
 const C = load(GS, store);
 const client = (who, company) => call(C, 'saveClientBookClient', Object.assign({ tier: 'Major', sector: 'Cement', company }, who)).clientNo;
 const pr = (who, customer, extra) => call(C, 'createPricingRequest', Object.assign({ customer, items: ITEMS, requestedBy: who.actorName }, extra || {}, who)).prNo;

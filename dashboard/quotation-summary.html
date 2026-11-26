@@ -1,122 +1,19 @@
 <!DOCTYPE html>
+<!-- A407: the Quotation summary (the old per-agent quotation sheets, which nothing writes any more) is retired (Neil, 25 Nov 2026);
+     My quotations (quotation-status.html) lists every quotation by status.
+     This page only exists so a saved link does not 404: js/page-moved.js sends everyone to quotation-status.html. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Dashboard — Quotation Summary</title>
+  <title>Quotation Summary — moved</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/training-mode.css">
-  <style>
-    .tracker-toolbar {
-      display: flex; gap: 0.75rem; flex-wrap: wrap;
-      align-items: center; margin-bottom: 1.25rem;
-    }
-    .tracker-toolbar input[type="text"] {
-      flex: 1; min-width: 200px; padding: 0.5rem 0.75rem;
-      background: var(--surface-2); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text-primary); font-size: 0.875rem;
-    }
-    .tracker-toolbar input[type="text"]::placeholder { color: var(--text-muted); }
-    .tracker-toolbar select {
-      padding: 0.5rem 0.75rem; background: var(--surface-2);
-      border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text-primary); font-size: 0.875rem; cursor: pointer;
-    }
-    .tracker-table-wrap { overflow-x: auto; }
-    .tracker-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-    .tracker-table th {
-      text-align: left; padding: 0.65rem 0.9rem; color: var(--text-muted);
-      border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap;
-    }
-    .tracker-table td {
-      padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--hx-hair-2);
-      vertical-align: middle; color: var(--text-primary);
-    }
-    .tracker-table tr:hover td { background: var(--hx-hair-2); }
-    .tracker-count { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
-    .no-results { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-
-    /* KPI Grid */
-    .kpi-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem; margin-bottom: 1.5rem;
-    }
-    .kpi-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 1rem 1.25rem; text-align: center;
-    }
-    .kpi-label {
-      font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.35rem;
-    }
-    .kpi-value { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); }
-    .kpi-value.accent { color: var(--accent); }
-    .kpi-value.green { color: var(--hx-ok); }
-  </style>
-  <link rel="stylesheet" href="css/ledger.css">
-  <link rel="stylesheet" href="css/apple.css">
 </head>
 <body>
   <script src="js/theme.js"></script>
-  <header class="navbar" id="navbar"></header>
-
   <main class="main-content">
-    <div class="page-header">
-      <h1>Quotation Summary</h1>
-      <p>Overview of all quotations and PO conversions.</p>
-    </div>
-
-    <!-- KPI Cards -->
-    <div class="kpi-grid" id="kpiGrid">
-      <div class="kpi-card">
-        <div class="kpi-label">Total Quotations</div>
-        <div class="kpi-value" id="kpiTotal">0</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Total Amount</div>
-        <div class="kpi-value accent" id="kpiAmount">&#8369;0</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">With PO</div>
-        <div class="kpi-value green" id="kpiPOCount">0</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Total PO Amount</div>
-        <div class="kpi-value green" id="kpiPOAmount">&#8369;0</div>
-      </div>
-    </div>
-
-    <div class="chart-card" style="margin-bottom:1.5rem;">
-      <div class="tracker-toolbar">
-        <input type="text" id="searchInput" placeholder="Search company, quotation #, product..." oninput="applyFilters()">
-        <select id="agentFilter" style="display:none;" onchange="applyFilters()">
-          <option value="">All Agents</option>
-        </select>
-        <select id="monthFilter" onchange="applyFilters()">
-          <option value="">All Months</option>
-        </select>
-        <button class="btn" onclick="loadSummary()" title="Refresh">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          Refresh
-        </button>
-        <button class="btn" onclick="exportSummaryExcel()" title="Export Excel">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Excel
-        </button>
-      </div>
-
-      <div id="trackerCount" class="tracker-count"></div>
-
-      <div id="trackerContainer" class="tracker-table-wrap">
-        <div class="loading-overlay"><div class="spinner spinner-lg"></div><span>Loading...</span></div>
-      </div>
-    </div>
+    <p>The quotation summary has moved to <a href="quotation-status.html">My quotations</a>.</p>
   </main>
-
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/ledger-nav.js"></script>
-  <script src="js/quotation-summary.js"></script>
-  <script src="js/training-mode.js"></script>
+  <script src="js/page-moved.js" data-to="quotation-status.html"></script>
 </body>
 </html>

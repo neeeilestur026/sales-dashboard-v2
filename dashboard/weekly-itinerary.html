@@ -1,96 +1,19 @@
 <!DOCTYPE html>
+<!-- A407: the weekly itinerary is retired for reps (Neil, 25 Nov 2026) — client-visits.html (VisitPlans) replaced it, and a travel
+     allowance already accepts an approved or done visit plan. Management reads the older itineraries on management-itinerary.html.
+     This page only exists so a saved link does not 404: js/page-moved.js sends everyone to client-visits.html. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weekly Itinerary</title>
+  <title>Weekly Itinerary — moved</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/flow.css">
-  <style>
-    /* A190 — the plan is read day by day, so each day is its own block rather than one long table.
-       A rep filling Tuesday should never have to count rows to find where Tuesday ends. */
-    .wiWeekBar { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:1rem; }
-    .wiWeekBar .rng { font-weight:700; font-size:0.95rem; }
-    .wiStatus { display:inline-block; font-size:0.68rem; font-weight:800; text-transform:uppercase;
-                letter-spacing:0.05em; padding:0.15rem 0.55rem; border-radius: 999px; border: 1px solid; }
-    .wiStatus.draft   { color: var(--hx-ink-2); border-color: var(--hx-hair); background: var(--hx-inset); }
-    .wiStatus.pending { color: var(--hx-warn); border-color: var(--hx-warn-soft); background: var(--hx-warn-soft); }
-    .wiStatus.approved{ color: var(--hx-ok); border-color: var(--hx-ok-soft); background: var(--hx-ok-soft); }
-    .wiStatus.rejected{ color: var(--hx-red); border-color: var(--hx-red-soft); background: var(--hx-red-soft); }
-
-    .wiDay { border: 1px solid var(--border); border-radius: 12px; margin-bottom:0.9rem; overflow:hidden; }
-    .wiDayHead { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.85rem;
-                 background: var(--bg-inset); border-bottom: 1px solid var(--border); }
-    .wiDayHead .d { font-weight:800; font-size:0.86rem; }
-    .wiDayHead .dt { font-size:0.76rem; color: var(--text-muted); }
-    .wiDayHead .n { margin-left:auto; font-size:0.72rem; color: var(--text-muted); }
-    .wiTable { width:100%; border-collapse: collapse; font-size:0.82rem; min-width:900px; }
-    .wiTable th { text-align:left; padding:0.4rem 0.55rem; font-size:0.64rem; text-transform:uppercase;
-                  letter-spacing:0.04em; color: var(--text-muted); font-weight:700; border-bottom: 1px solid var(--border); }
-    .wiTable td { padding:0.3rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align:top; }
-    .wiTable input, .wiTable textarea { width:100%; box-sizing:border-box; padding:0.32rem 0.45rem;
-      border: 1px solid var(--border); border-radius: 6px; font-size:0.8rem; font-family:inherit; }
-    .wiTable textarea { resize:vertical; min-height:32px; }
-    .wiDel { border: 1px solid var(--border); border-radius: 6px; padding:0.1rem 0.4rem;
-             font-size:0.72rem; cursor:pointer; background: transparent; }
-    .wiLocked .wiTable input, .wiLocked .wiTable textarea { background: var(--bg-inset); pointer-events:none; }
-    .wiLocked .wiDel, .wiLocked .wiAddRow { display:none; }
-    .wiNote { font-size:0.78rem; color: var(--text-muted); margin:0.3rem 0 0; }
-    .wiBanner { padding:0.6rem 0.85rem; border-radius: 8px; font-size:0.82rem; margin-bottom:0.9rem; }
-    .wiBanner.warn { background: var(--hx-warn-soft); border: 1px solid var(--hx-warn-soft); color: var(--hx-warn); }
-    .wiBanner.bad  { background: var(--hx-red-soft); border: 1px solid var(--hx-red-soft); color: var(--hx-red); }
-    .wiBanner.good { background: var(--hx-ok-soft); border: 1px solid var(--hx-ok-soft); color: var(--hx-ok); }
-  </style>
-  <link rel="stylesheet" href="css/ledger.css">
-  <link rel="stylesheet" href="css/apple.css">
 </head>
 <body>
   <script src="js/theme.js"></script>
-  <header class="navbar" id="navbar"></header>
   <main class="main-content">
-    <div class="page-header">
-      <h1>Weekly Itinerary</h1>
-      <p>Plan the week's client visits, then send it for approval — the director signs off first,
-         then management. Once approved you can log each visit against its planned stop.</p>
-    </div>
-
-    <div class="chart-card" style="margin-bottom:1.25rem;">
-      <div class="wiWeekBar">
-        <button class="btn btn-sm btn-secondary" id="wiPrev">◀</button>
-        <span class="rng" id="wiRange">—</span>
-        <button class="btn btn-sm btn-secondary" id="wiNext">▶</button>
-        <button class="btn btn-sm btn-secondary" id="wiThis">This week</button>
-        <span id="wiStatusChip"></span>
-        <span style="margin-left:auto;display:flex;gap:0.5rem;flex-wrap:wrap;">
-          <button class="btn btn-sm btn-secondary" id="wiSaveBtn">Save draft</button>
-          <button class="btn btn-sm btn-primary" id="wiSubmitBtn">Submit for approval</button>
-          <button class="btn btn-sm btn-secondary" id="wiReviseBtn" style="display:none;">Reopen for editing</button>
-        </span>
-      </div>
-
-      <div id="wiBanner"></div>
-
-      <div class="flow-form" style="margin-bottom:1rem;">
-        <div style="grid-column:1 / -1;"><label>Objectives for the week</label>
-          <input type="text" id="wiObjectives" placeholder="e.g. Close the Petra follow-up, open two accounts in Davao"></div>
-        <div style="grid-column:1 / -1;"><label>Notes</label>
-          <input type="text" id="wiNotes" placeholder="Anything the approver should know"></div>
-      </div>
-
-      <div id="wiDays"></div>
-      <div id="wiMsg" class="flow-msg" style="display:none;"></div>
-    </div>
-
-    <div class="chart-card">
-      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;">Previous weeks</h3>
-      <div id="wiHistory" style="overflow-x:auto;"><div class="loading-overlay"><div class="spinner"></div></div></div>
-    </div>
+    <p>The weekly itinerary has moved to <a href="client-visits.html">Client visits</a>.</p>
   </main>
-
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/ledger-nav.js"></script>
-  <script src="js/flow-api.js"></script>
-  <script src="js/weekly-itinerary.js"></script>
+  <script src="js/page-moved.js" data-to="client-visits.html"></script>
 </body>
 </html>

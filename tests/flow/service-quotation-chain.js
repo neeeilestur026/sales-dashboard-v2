@@ -54,7 +54,8 @@ function boot() {
                   'Type': 'Stock', 'Item ID': 'ITM-00001' }],
     Clients: [{ 'Customer': 'HOLCIM PHILIPPINES, INC.', 'Payment Terms': '30 days' }],
     Quotations: [], QuotationItems: [], SalesOrders: [], SalesOrderItems: [],
-    Invoices: [], InvoiceItems: [], ARAging: [], Journal: [], ChartOfAccounts: []
+    Invoices: [], InvoiceItems: [], ARAging: [], Journal: [], ChartOfAccounts: [],
+    FlowSettings: [{ Key: 'requireClientPick', Value: 'off' }]   // A407 — this suite is about the chain, not naming the client
   };
   return { ctx: load(undefined, store), store };
 }

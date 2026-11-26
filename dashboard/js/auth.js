@@ -975,8 +975,8 @@ function renderNavbar(activePage) {
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Pricing Requests</a>
           <a href="purchase-request-tracker.html" class="${activePage === 'purchase-request-tracker' ? 'active' : ''}">PR Tracker</a>
           <a href="management-leave.html" class="${activePage === 'management-leave' ? 'active' : ''}">Leave Approvals</a>
-          <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
+          <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Older Itineraries</a>   <!-- A407 — the weekly itineraries, before client visits -->
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
           <a href="sales-plan.html" class="${activePage === 'sales-plan' ? 'active' : ''}">Sales Plan</a>   <!-- A403 -->
@@ -1148,8 +1148,8 @@ function renderNavbar(activePage) {
         <div class="nav-dropdown-menu">
           <a href="all-daily-reports.html" class="${activePage === 'all-daily-reports' ? 'active' : ''}">Daily Reports</a>
           <a href="team-daily-reports.html" class="${activePage === 'team-daily-reports' ? 'active' : ''}">New Daily Reports</a>   <!-- A366 -->
-          <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Weekly Itineraries</a>
           <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 -->
+          <a href="management-itinerary.html" class="${activePage === 'management-itinerary' ? 'active' : ''}">Older Itineraries</a>   <!-- A407 — the weekly itineraries, before client visits -->
           <a href="team-performance.html" class="${activePage === 'team-performance' ? 'active' : ''}">Team Performance</a>
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
           <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
@@ -1333,9 +1333,12 @@ function renderNavbar(activePage) {
         Change Password
       </a>`;
   } else {
-    const workActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'flow-inventory', 'client-visits', 'weekly-itinerary', 'flow-travel', 'flow-commissions', 'sales-emails', 'quotation-board', 'client-tracker', 'purchase-request-tracker', 'quotation-status'].includes(activePage);   // A190 · A207 · A208 · A214 · A217 · A226 · A369
-    const clientsActive = ['clients', 'director-client-book', 'performance', 'pending-items', 'quotation-summary', 'shutdown-calendar', 'sales-plan', 'follow-up-guide'].includes(activePage);   // A391 · A393 · A403
-    const reportsActive = ['report', 'my-reports', 'my-daily-report'].includes(activePage);
+    /* A407 — one of everything (Neil, 25 Nov 2026): the same 17 links as LEDGER_NAV.sales in js/ledger-nav.js, in the same
+       order — Home, Quote, Clients, Field, the daily report, the guide. The old daily report, My reports, both client
+       trackers, Pending items, Quotation summary and the weekly itinerary are gone (their pages send a saved link on). */
+    const quoteActive = ['product-finder', 'flow-pricing-request', 'flow-quotations', 'quotation-status', 'item-book', 'flow-inventory', 'quotation-board', 'client-tracker', 'purchase-request-tracker'].includes(activePage);   // A190 · A207 · A217 · A382 · A387
+    const clientsActive = ['clients', 'director-client-book', 'follow-up-guide', 'sales-plan', 'shutdown-calendar'].includes(activePage);   // A391 · A393 · A403
+    const fieldActive = ['client-visits', 'flow-travel', 'flow-commissions', 'sales-emails'].includes(activePage);   // A208 · A214 · A369
     const accountActive = ['email-setup', 'change-password'].includes(activePage);
     navLinks = `
       <a href="dashboard.html" class="${activePage === 'dashboard' ? 'active' : ''}">
@@ -1343,9 +1346,9 @@ function renderNavbar(activePage) {
         Home
       </a>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${workActive ? 'active' : ''}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-          Work
+        <button class="nav-dropdown-btn ${quoteActive ? 'active' : ''}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Quote
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
@@ -1353,15 +1356,8 @@ function renderNavbar(activePage) {
           <a href="flow-pricing-request.html" class="${activePage === 'flow-pricing-request' ? 'active' : ''}">Purchase Requests</a>
           <a href="flow-quotations.html" class="${activePage === 'flow-quotations' ? 'active' : ''}">Quotations</a>
           <a href="quotation-status.html" class="${activePage === 'quotation-status' ? 'active' : ''}">My Quotations</a>   <!-- A382 -->
-          <a href="client-tracker.html" class="${activePage === 'client-tracker' ? 'active' : ''}">Client Tracker</a>
-          <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
           <a href="item-book.html" class="${activePage === 'item-book' ? 'active' : ''}">Items</a>   <!-- A387 — the Item Book -->
-          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 — the new itinerary -->
-          <a href="weekly-itinerary.html" class="${activePage === 'weekly-itinerary' ? 'active' : ''}">Weekly Itinerary</a>
-          <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
-          <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests${_soon(session.role)}</a>
-          <a href="sales-emails.html" class="${activePage === 'sales-emails' ? 'active' : ''}">My Emails</a>
-          <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">Process Guide</a>
+          <a href="flow-inventory.html" class="${activePage === 'flow-inventory' ? 'active' : ''}">Inventory</a>
         </div>
       </div>
       <div class="nav-dropdown">
@@ -1372,26 +1368,32 @@ function renderNavbar(activePage) {
         </button>
         <div class="nav-dropdown-menu">
           <a href="director-client-book.html" class="${activePage === 'director-client-book' ? 'active' : ''}">Client Book</a>
+          <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
           <a href="sales-plan.html" class="${activePage === 'sales-plan' ? 'active' : ''}">Sales Plan</a>   <!-- A403 -->
           <a href="shutdown-calendar.html" class="${activePage === 'shutdown-calendar' ? 'active' : ''}">Shutdown Calendar</a>   <!-- A391 -->
-          <a href="follow-up-guide.html" class="${activePage === 'follow-up-guide' ? 'active' : ''}">Follow-up Guide</a>   <!-- A393 -->
-          <a href="performance.html" class="${activePage === 'performance' ? 'active' : ''}">Client Tracker</a>
-          <a href="pending-items.html" class="${activePage === 'pending-items' ? 'active' : ''}">Pending Items</a>
-          <a href="quotation-summary.html" class="${activePage === 'quotation-summary' ? 'active' : ''}">Quotation Summary</a>
         </div>
       </div>
       <div class="nav-dropdown">
-        <button class="nav-dropdown-btn ${reportsActive ? 'active' : ''}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Reports
+        <button class="nav-dropdown-btn ${fieldActive ? 'active' : ''}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Field
           <svg class="dd-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="nav-dropdown-menu">
-          <a href="report.html" class="${activePage === 'report' ? 'active' : ''}">Daily Report</a>
-          <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">New Daily Report</a>
-          <a href="my-reports.html" class="${activePage === 'my-reports' ? 'active' : ''}">My Reports</a>
+          <a href="client-visits.html" class="${activePage === 'client-visits' ? 'active' : ''}">Client Visits</a>   <!-- A369 — the new itinerary -->
+          <a href="flow-travel.html" class="${activePage === 'flow-travel' ? 'active' : ''}">Travel Allowance</a>
+          <a href="flow-commissions.html" class="${activePage === 'flow-commissions' ? 'active' : ''}">Commission Requests${_soon(session.role)}</a>
+          <a href="sales-emails.html" class="${activePage === 'sales-emails' ? 'active' : ''}">My Emails</a>
         </div>
       </div>
+      <a href="my-daily-report.html" class="${activePage === 'my-daily-report' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        Daily Report
+      </a>
+      <a href="flow-guide.html" class="${activePage === 'flow-guide' ? 'active' : ''}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+        Guide
+      </a>
       <a href="leave-request.html" class="${activePage === 'leave-request' ? 'active' : ''}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Leave Request
@@ -1564,19 +1566,14 @@ async function flowComputeActions(session) {
   }
   /* A190 — weekly itineraries. The director is the FIRST approver and management the second, so
      each role is shown only its own stage; surfacing the other tier's queue trains people to
-     ignore the list. A rep sees their own plan coming back rejected. */
+     ignore the list. A407 — a rep no longer files them (client visits replaced them), so a rep is not
+     told about one sent back: the client-visit nudge below is theirs. */
   if (isDir || isMgmt) {
     const stage = isDir ? 'Pending Director' : 'Pending Management';
     jobs.push(fetchFlow('getWeeklyItineraries').then(r => {
       const n = ((r && r.data) || []).filter(x => x.status === stage).length;
       if (n) add('report', 'warn', n + ' weekly itinerar' + (n === 1 ? 'y' : 'ies') + ' awaiting your approval',
                  isDir ? 'director-home.html' : 'management-home.html');
-    }).catch(() => {}));
-  }
-  if (isSales) {
-    jobs.push(fetchFlow('getWeeklyItineraries', { user: session.name }).then(r => {
-      const mine = ((r && r.data) || []).filter(x => x.status === 'Rejected').length;
-      if (mine) add('report', 'urgent', mine + ' weekly itinerar' + (mine === 1 ? 'y was' : 'ies were') + ' sent back', 'weekly-itinerary.html');
     }).catch(() => {}));
   }
   /* A369 — client visits, the new itinerary: the director sees the visits waiting for them, a rep their own sent back.
@@ -1849,7 +1846,17 @@ async function flowComputeActions(session) {
       }
       if (notSent) add('report', 'ok', notSent + ' approved quotation(s) still not sent to the client', 'flow-quotations.html');
       if (replied) add('report', 'info', replied + ' client repl' + (replied === 1 ? 'y' : 'ies') + ' waiting on you', 'flow-quotations.html');
-      if (chase) add('report', 'warn', chase + ' quotation(s) with no client reply — due a follow-up', 'flow-quotations.html');
+      /* A407 — the follow-ups due are the follow-up guide's, the one list the home card, the daily report and My quotations
+         show: the count comes from the guide card's copy of today (this browser). Without one, nothing here; the 7-day count
+         this used to show named other quotations than the guide. */
+      let fug = null;
+      try {
+        const c = JSON.parse(localStorage.getItem('hx_fug1:' + (session.username || session.name) + ':me') || 'null');
+        if (c && c.success && c.summary && c.planFrom && c.today === (typeof flowToday === 'function' ? flowToday() : hxToday())) fug = c;
+      } catch (e) { fug = null; }
+      const fuN = fug ? (fug.summary.quotesDue || 0) : 0;
+      if (fuN) add('report', 'warn', fuN + ' quotation follow-up' + (fuN === 1 ? '' : 's') + ' due', 'follow-up-guide.html');
+      else if (chase && !fug && !(typeof flowVersionAtLeast === 'function')) add('report', 'warn', chase + ' quotation(s) with no client reply — due a follow-up', 'flow-quotations.html');
       if (noOrder) add('report', 'warn', noOrder + ' sent quotation(s) still with no sales order', 'flow-sales-orders.html');
     }).catch(() => {}));
   }

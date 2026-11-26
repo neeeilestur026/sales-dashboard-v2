@@ -99,7 +99,7 @@ function chCsv(cards, sales) {
 /* ── A404 · the sales view (the director and management): each client's status, reps and Major / Minor ─────────────────
  * FlowAPI 203's getClientHubSales works the status out from the records (orders, quotations, requests, the daily reports,
  * visits); `sales` below is its reply as a map of the hub's keys. A card with no entry has no sales activity and no rep. */
-const CH_SALES_SEGS = [['all', 'All clients'], ['major', 'Major'], ['minor', 'Minor'], ['nolabel', 'No label'], ['quiet', 'Quiet'], ['norep', 'No rep']];
+const CH_SALES_SEGS = [['all', 'All clients'], ['major', 'Major'], ['minor', 'Minor'], ['developing', 'Developing'], ['nolabel', 'No label'], ['quiet', 'Quiet'], ['norep', 'No rep']];   // A407 — Developing
 const CH_STAGE_TONE = { 'PO received': 'ok', 'Quotation sent': 'mid', 'Following up': 'mid', 'Negotiating': 'mid', 'RFQ received': 'mid', 'RFQ pending': 'mid',
   'Contacted': 'off', 'Not reached': 'warn', 'On hold': 'warn', 'Lost': 'off', 'No requirement now': 'off' };
 /** The sales map: key → the client's sales picture. */
@@ -111,7 +111,7 @@ function chFirst(name) { return String(name || '').trim().split(/\s+/)[0] || '';
 /** 'Major', 'Minor', 'Reps differ', 'No label' (a client some rep has), or '' (no rep: nowhere to keep a label). */
 function chTierText(s) {
   if (!s || !(s.rows || []).length) return '';
-  return s.tier === 'Major' || s.tier === 'Minor' ? s.tier : s.tier === 'mixed' ? 'Reps differ' : 'No label';
+  return s.tier === 'Major' || s.tier === 'Minor' || s.tier === 'Developing' ? s.tier : s.tier === 'mixed' ? 'Reps differ' : 'No label';
 }
 function chIsQuiet(s, quietDays) { return !!s && (s.rows || []).length > 0 && (s.quiet === null || s.quiet === undefined || s.quiet >= quietDays); }
 /** 'Today', 'Yesterday', '5 days ago'; or how long it has been quiet. */
@@ -127,7 +127,8 @@ function chSalesInSeg(card, s, seg, quietDays) {
   if (!seg || seg === 'all') return true;
   if (seg === 'major') return !!s && s.tier === 'Major';
   if (seg === 'minor') return !!s && s.tier === 'Minor';
-  if (seg === 'nolabel') return owned && s.tier !== 'Major' && s.tier !== 'Minor';
+  if (seg === 'developing') return !!s && s.tier === 'Developing';   // A407
+  if (seg === 'nolabel') return owned && s.tier !== 'Major' && s.tier !== 'Minor' && s.tier !== 'Developing';
   if (seg === 'quiet') return chIsQuiet(s, quietDays);
   if (seg === 'norep') return !chOwners(card, s).length;
   return true;

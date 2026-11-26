@@ -104,15 +104,18 @@ async function _srLoad(fresh) {
   /* A369 — client visits, the new itinerary: the day's planned stops beside the weekly plan's. Quiet before FlowAPI 186. */
   const plans = (typeof postFlow === 'function' ? postFlow('getVisitPlans', { from, to: today }) : Promise.reject(new Error('no')))
     .then(r => (r && r.success ? r.data || [] : [])).catch(() => []);
-  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook, visitPlans] = await Promise.all([
+  /* A407 — the person's follow-up guide (FlowAPI 204): the report's "Follow-ups due" is the guide's own list. Quiet before 204. */
+  const guideP = (typeof postFlow === 'function' ? postFlow('getFollowUpGuide', SR_UI.view ? { user: SR_UI.me.name } : {}) : Promise.reject(new Error('no')))
+    .then(r => (r && r.success && r.planFrom && _srSame(r.user, SR_UI.me.name) ? r : null)).catch(() => null);
+  const [quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, mine, clientBook, visitPlans, guide] = await Promise.all([
     get('quotations', 'getQuotations'), get('sales orders', 'getSalesOrders'), get('quotation emails', 'getQuotationEmails'),
     get('settings', 'getFlowSettings'), get('purchase requests', 'getPricingRequests'),
     get('activity log', 'getActivityLog', { from, to: today }), get('call log', 'getSalesCalls', { from, to: today }),
-    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book, plans
+    get('client visits', 'getClientVisits', { from, to: today }), get('weekly plans', 'getWeeklyItineraries'), saved, book, plans, guideP
   ]);
   if (seq !== SR_UI.seq) return;
   SR_UI.failed = failed;
-  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook, visitPlans });
+  SR_UI.ix = srIndex({ today, quotations, salesOrders, quotationEmails, settings, prs, activity, calls, visits, itineraries, book: clientBook, visitPlans, guide });
   SR_UI.saved = {};
   SR_UI.backend = mine.ok;
   SR_UI.backendMsg = mine.ok ? '' : mine.message;
@@ -276,7 +279,7 @@ function _srRenderDay() {
   body.innerHTML = notes.join('') +
     '<p class="sr-trial">' + (ro ? 'Read only — ' + _srE(me.name) + '\'s own report: the lines they logged, their 4:30 report, and the portal\'s count of their records and sent mail. Their received mail' +
         (SR_UI.view && SR_UI.selfRole !== 'director' ? ' and Client Book stay' : ' stays') + ' private to them.'
-      : SR_UI.own ? 'Your new daily report. Only you and the director see it, and your old daily report still works as before. Nothing here changes the real call log, visits or quotations.'
+      : SR_UI.own ? 'Your daily report. Nothing here changes the real call log, visits or quotations.'
       : 'Trial — only you can see this report. Nothing here changes the real call log, visits or quotations.') + '</p>' +
 
     '<section class="sr-block" aria-labelledby="srNumsH"><h3 id="srNumsH">Today\'s numbers</h3>' +
@@ -369,7 +372,7 @@ function _srTileHtml(t) {
 function _srFuHtml(x) {
   return '<li class="' + (x.done ? 'done' : '') + '"><span class="who"><b>' + _srE(x.client) + '</b><span class="sr-sub">' + _srRef(x.ref) + ' · ' + _srE(srMoney(x.value)) + '</span></span>' +
     (x.extra ? '<span class="sr-daytag other">' + (x.age === null ? 'Older' : 'Day ' + x.age) + '</span>'   // A367 — an older or not-yet-due quotation
-             : '<span class="sr-daytag">Day ' + x.step + '</span>') +
+             : '<span class="sr-daytag">Day ' + x.step + (x.since ? ' · since ' + _srE(srDow(x.since)) : '') + '</span>') +   // A407 — carried from an earlier day
     (x.done ? '<span class="sr-called">' + (x.by.kind === 'Call' ? 'Called ✓' : 'Emailed ✓') + (x.by.result ? ' — ' + _srE(x.by.result) : '') + '</span>'
             : SR_UI.ro ? '<span class="sr-dim">Not yet</span>' : '<button type="button" class="btn-sm primary" data-logcall="' + _srE(x.ref) + '">Log call</button>') + '</li>';
 }

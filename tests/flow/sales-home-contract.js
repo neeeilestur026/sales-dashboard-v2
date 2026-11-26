@@ -11,7 +11,11 @@
  * the hidden ones, 3 what the redesign removed on purpose (the five mirror slots and their
  * observer, inline styles, emoji, the bento classes, colour in the scripts), 4 the stylesheet's
  * scope and motion layer, 5 the page script under a DOM with no observers, and 6 boots
- * dashboard.js against the real markup and checks what it writes. */
+ * dashboard.js against the real markup and checks what it writes.
+ * A407 (Neil, 25 Nov 2026, "two of everything"): the home no longer links the retired pages (the old daily report,
+ * the client tracker, Pending items, the Quotation summary, the weekly itinerary), and the overdue follow-ups card and
+ * the pending-items count are gone — both read the per-rep sheets nothing writes any more; the follow-up guide card is
+ * the one follow-up list. The report tag follows the daily report on my-daily-report.html (new-daily-report-card.js). */
 const fs = require('fs');
 const path = require('path');
 const { page, D } = require('./pageload');
@@ -52,13 +56,13 @@ const TAGS = {
   h1: ['greeting'],
   p: ['todayLabel', 'quietMsg'],
   b: ['dateDay'],
-  span: ['dateMon', 'reportPill', 'reportStatus', 'targetDonutNote', 'inboxCount', 'overdueCount', 'navOverdueCount'],
-  dd: ['monthPRs', 'quotationToday', 'prToday', 'clientCount', 'pendingCount'],
-  div: ['monthQuotations', 'flowActionCenter', 'targetBars', 'overdueList'],
-  section: ['spot', 'inbox', 'followUpGuide', 'leadsForYou', 'myClients', 'comingShutdowns', 'myDeductionCard', 'myPayslipCard', 'today', 'targetSection', 'overdueSection', 'quietState'],
+  span: ['dateMon', 'reportPill', 'reportStatus', 'targetDonutNote', 'inboxCount'],
+  dd: ['monthPRs', 'quotationToday', 'prToday', 'clientCount'],
+  div: ['monthQuotations', 'flowActionCenter', 'targetBars'],
+  section: ['spot', 'inbox', 'followUpGuide', 'leadsForYou', 'myClients', 'comingShutdowns', 'myDeductionCard', 'newDailyReport', 'myPayslipCard', 'today', 'targetSection', 'quietState'],
   circle: ['targetDonutRing'],
   text: ['targetDonutPct'],
-  a: ['prLink', 'quotationLink', 'navTargets', 'navOverdue', 'navLeads'],
+  a: ['prLink', 'quotationLink', 'navTargets', 'navLeads'],
   button: ['themeToggle'],
   header: ['navbar'],
   aside: ['rail'],
@@ -67,17 +71,17 @@ Object.keys(TAGS).forEach(tag => TAGS[tag].forEach(id => eq('#' + id, tagOf(id),
 // every id dashboard.js touches exists in the page
 const REACHED = Array.from(new Set(JS.match(/getElementById\('([^']+)'\)/g).map(s => s.match(/'([^']+)'/)[1]))).concat(['prLink']);
 REACHED.forEach(id => ok('dashboard.js reaches #' + id + ' and it exists', !!tagOf(id)));
-ok('#leadsForYou, #myDeductionCard, #targetSection, #overdueSection start hidden (each loader reveals its own)',
-   ['followUpGuide', 'leadsForYou', 'myClients', 'comingShutdowns', 'myDeductionCard', 'myPayslipCard', 'targetSection', 'overdueSection'].every(id => /style="display:none;"/.test(tagAttrs(id))));
+ok('#leadsForYou, #myDeductionCard, #targetSection and the other cards start hidden (each loader reveals its own)',
+   ['followUpGuide', 'leadsForYou', 'myClients', 'comingShutdowns', 'myDeductionCard', 'newDailyReport', 'myPayslipCard', 'targetSection'].every(id => /style="display:none;"/.test(tagAttrs(id))));
 ok('#quietState starts shown', !/display:none/.test(tagAttrs('quietState')));
-ok('the three rail links that follow a section start hidden', ['navTargets', 'navOverdue', 'navLeads'].every(id => /\shidden>/.test(tagAttrs(id))));
+ok('the two rail links that follow a section start hidden', ['navTargets', 'navLeads'].every(id => /\shidden>/.test(tagAttrs(id))));
 ok('#reportStatus sits inside the slab tag #reportPill', /<span class="tag" id="reportPill"><span id="reportStatus">/.test(HTML));
 ok('the ring keeps r=52 and C=326.7 (the page script\'s maths)', /id="targetDonutRing"[^>]*r="52"[^>]*stroke-dasharray="326\.7" stroke-dashoffset="326\.7"/.test(tagAttrs('targetDonutRing')));
 ok('#prLink opens in a new tab and starts at "#" (setAppLink fills it)', /href="#" target="_blank"/.test(tagAttrs('prLink')));
 ok('#monthQuotations is the slab\'s value', /<div class="v" id="monthQuotations">/.test(HTML));
 {
   // training-mode.js points at these; the rebuild must keep every one
-  const reg = TM.slice(TM.indexOf("'dashboard.html': {"), TM.indexOf("'performance.html': {"));
+  const reg = TM.slice(TM.indexOf("'dashboard.html': {"), TM.indexOf("'leave-request.html': {"));   // A407 — the next entry; performance.html is a stub now
   const sels = (reg.match(/selector: '([^']+)'/g) || []).map(s => s.match(/'([^']+)'/)[1]);
   eq('training-mode.js names four selectors on the sales home', sels.length, 4);
   sels.forEach(sel => {
@@ -97,9 +101,27 @@ ok('no emoji in the page', !EMOJI.test(HTML));
 ok('no "→" in the page', !/→/.test(HTML));
 ok('the bento classes are gone', !/b-card|b-pill|b-btn|b-lbl|b-ic|bento-/.test(HTML));
 ok('dashboard.js writes no hex colour and no inline colour', !/#[0-9a-fA-F]{6}\b/.test(JS) && !/style="color/.test(JS) && !/style\.color/.test(JS));
-ok('  the report status is plain text (the page script tones the tag)', /statusEl\.textContent = \(reportResult\.success && reportResult\.alreadySubmitted\) \? 'Submitted today' : 'Not yet submitted'/.test(JS));
+ok('  A407: the report tag is plain text from the daily report\'s own read (new-daily-report-card.js), not the retired report\'s sheet',
+   !/apiGetTodayCounts|reportStatus'\)/.test(JS) && /getElementById\('reportStatus'\)/.test(fs.readFileSync(D + 'js/new-daily-report-card.js', 'utf8')));
 ok('  target bars carry a tone class and only a width', /class="progress-bar-fill \$\{tone\}" style="width:\$\{pct\}%"/.test(JS) && /'q'\)/.test(JS) && /'p'\)/.test(JS));
-ok('  overdue rows are classed', /class="overdue-item"/.test(JS) && /class="name"/.test(JS) && /class="due"/.test(JS) && /class="overdue-more"/.test(JS));
+{
+  const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  ok('  A407: no overdue follow-ups and no pending-items count: nothing reads the frozen per-rep sheets for them',
+     !/apiGetClientTracker|overdue/i.test(code(JS)) && !/apiGetPendingItems|pendingCount|overdue/i.test(code(PJS)) && !/overdue|pendingCount|navOverdue/i.test(code(HTML)));
+}
+{
+  /* A407 — "two of everything": the home links none of the retired pages; Today keeps eight tools, the old daily report,
+     Pending items, the Quotation summary, the client tracker and the weekly itinerary replaced by what took their place */
+  const RETIRED = ['report.html', 'my-reports.html', 'performance.html', 'client-tracker.html', 'pending-items.html', 'quotation-summary.html', 'weekly-itinerary.html'];
+  const hit = RETIRED.filter(f => new RegExp('href="' + f.replace('.', '\\.') + '"').test(HTML));
+  ok('A407: the home links none of the retired pages', hit.length === 0, hit);
+  const today = HTML.slice(HTML.indexOf('<section class="hx-glass" id="today">'), HTML.indexOf('<div class="sl-stages"'));
+  const tools = (today.match(/<a (?:id="prLink" )?href="([^"]+)"/g) || []).map(a => a.match(/href="([^"]+)"/)[1]);
+  ok('  Today\'s tools: new quotation, pricing request, daily report, PR generator, Client Book, My quotations, inventory, client visits',
+     JSON.stringify(tools) === JSON.stringify(['flow-quotations.html', 'flow-pricing-request.html', 'my-daily-report.html', '#', 'director-client-book.html', 'quotation-status.html', 'flow-inventory.html', 'client-visits.html']), tools);
+  ok('  the mast sends the rep to the daily report', /<a href="my-daily-report\.html" class="btn btn-primary">/.test(HTML));
+  ok('  the quiet card is the month\'s target, with no follow-ups in it', /<section class="hx-glass" id="quietState">\s*<div class="hx-head"><h2>Monthly target<\/h2><\/div>\s*<p id="quietMsg">No target is set for this month yet\./.test(HTML));
+}
 ok('  the "(NN%)" text the ring reads survives', /\(\$\{pct\}%\)/.test(JS) && /\/\\\(\(\\d\+\)%\\\)\/g/.test(PJS));
 ok('leads-for-you.js writes classes, no colour, no emoji, no inline style', /class="lfy-card"/.test(LJS) && !/#[0-9a-fA-F]{6}\b/.test(LJS) && !EMOJI.test(LJS) && !/style="/.test(LJS));
 ok('sales-home-page.js writes no hex colour and defines no global', !/#[0-9a-fA-F]{6}\b/.test(PJS) && !/window\.\w+\s*=/.test(PJS));
@@ -132,7 +154,7 @@ sec('4 · sales-home.css');
   ok('a reduced-motion block kills every transition and animation', /prefers-reduced-motion: reduce[\s\S]*body\.sl \*[\s\S]*animation: none !important/.test(CSS));
   ok('no hover-lift anywhere', !/:hover[^{]*\{[^}]*translateY\(-/.test(CSS));
   ok('the ring fills by stroke transition, the tag has two tones', /\.sl-ring \.fill \{[^}]*transition: stroke-dashoffset/.test(CSS) && /#reportPill\[data-tone="ok"\]/.test(CSS) && /#reportPill\[data-tone="warn"\]/.test(CSS));
-  ok('the dashboard.js output is painted here', /\.progress-bar-fill\.p \{/.test(CSS) && /\.overdue-item \.due \{/.test(CSS) && /\.overdue-more \{/.test(CSS));
+  ok('the dashboard.js output is painted here, and nothing is left for the cards A407 removed', /\.progress-bar-fill\.p \{/.test(CSS) && !/overdue|div\.wide/.test(CSS.replace(/\/\*[\s\S]*?\*\//g, '')));
   ok('the leads card and the deduction card are hooked', /#leadsForYou \.lfy-card \{/.test(CSS) && /#myDeductionCard div\[style\*="width:"\]\[style\*="%"\]/.test(CSS));
   ok('the training banner pushes the sticky rail (training-mode.css)', /body\.tm-active \.hx-rail \{ top: 120px/.test(fs.readFileSync(D + 'css/training-mode.css', 'utf8')));
 }
@@ -147,16 +169,16 @@ sec('5 · sales-home-page.js');
   ok('  the date landed in the rail', /^\d{2}$/.test(p.els.dateDay.textContent) && /\w{3} \w+/.test(p.els.dateMon.textContent), [p.els.dateDay.textContent, p.els.dateMon.textContent]);
   ok('  the day line is the long date', /\w+day, \w+ \d{1,2}, \d{4}/.test(p.els.todayLabel.textContent), p.els.todayLabel.textContent);
   ok('  the quiet card stays while nothing shows', p.els.quietState.style.display === '');
-  ok('  the rail links stay hidden', p.els.navTargets.hidden === true && p.els.navOverdue.hidden === true && p.els.navLeads.hidden === true);
+  ok('  the rail links stay hidden', p.els.navTargets.hidden === true && p.els.navLeads.hidden === true);
   ok('  the ring is untouched with no target ("—")', p.els.targetDonutPct.textContent === '');
   threw = null;
-  try { p.run('flowActionsStrip = function (id) { __strip = id; }; apiGetPendingItems = async function () { return { success: true, data: { prs: [1, 2], quotations: [1] } }; };'); } catch (e) { threw = e.message; }
+  try { p.run('__pi = 0; flowActionsStrip = function (id) { __strip = id; }; apiGetPendingItems = async function () { __pi++; return { success: true, data: { prs: [1, 2], quotations: [1] } }; };'); } catch (e) { threw = e.message; }
   let booted = null;
   (async () => {
     try { await p.boot(); await new Promise(r => setImmediate(r)); } catch (e) { booted = e.message; }
     ok('  its DOMContentLoaded body runs on the stub DOM', booted === null, booted);
     eq('  the strip is mounted on #flowActionCenter', p.run('typeof __strip === "string" ? __strip : null'), 'flowActionCenter');
-    eq('  pending items = prs + quotations', p.els.pendingCount.textContent, '3');
+    eq('  A407: the retired pending-items count is not read', p.run('__pi'), 0);
     await boot6();
   })();
 }
@@ -167,13 +189,13 @@ async function boot6() {
   const p = page(['js/dashboard.js'], 'dashboard.html', { role: 'sales', name: 'Ana Reyes', username: 'ana', quotationSheetId: 'q', prSheetId: 'p' });
   p.run(`clearApiCache = function(){}; getGreeting = n => 'Good morning, <span>' + n + '</span>';
          apiGetStats = async (n, ids, span) => span === 'today' ? { success: true, quotations: 3, prs: 2 } : { success: true, quotations: 27, prs: 14 };
-         apiGetTodayCounts = async () => ({ success: true, alreadySubmitted: true });
+         __old = []; apiGetTodayCounts = async () => { __old.push('getTodayCounts'); return { success: true, alreadySubmitted: true }; };
          apiGetClientCount = async () => ({ success: true, count: 148 });
          apiGetTargets = async () => ({ success: true, data: [{ quotationTarget: 40, prTarget: 20 }] });
-         apiGetClientTracker = async () => ({ success: true, data: [
+         apiGetClientTracker = async () => { __old.push('getClientTracker'); return { success: true, data: [
            { clientName: 'Holcim', type: 'Quotation', documentNumber: 'Q-1', followUpDate: '2020-01-01', status: 'Sent' },
            { clientName: 'Won Co', type: 'Quotation', documentNumber: 'Q-2', followUpDate: '2020-01-01', status: 'Won' },
-           { clientName: 'Later', type: 'PR', documentNumber: 'PR-9', followUpDate: '2999-01-01', status: 'Open' } ] });`);
+           { clientName: 'Later', type: 'PR', documentNumber: 'PR-9', followUpDate: '2999-01-01', status: 'Open' } ] }; };`);
   let threw = null;
   try { await p.boot(); } catch (e) { threw = e.stack; }
   ok('boot does not throw', threw === null, threw);
@@ -183,13 +205,10 @@ async function boot6() {
   eq('  #prToday', String(p.els.prToday.textContent), '2');
   eq('  #monthPRs', String(p.els.monthPRs.textContent), '14');
   eq('  #clientCount', String(p.els.clientCount.textContent), '148');
-  eq('  #reportStatus is plain text', p.els.reportStatus.textContent, 'Submitted today');
+  eq('  A407: dashboard.js reads neither the retired report\'s sheet nor the old tracker', p.run('__old.join(",")'), '');
+  eq('  #reportStatus is left to new-daily-report-card.js', p.els.reportStatus.textContent, '');
   ok('  two toned bars, the "(NN%)" shape intact', /class="progress-bar-fill q" style="width:68%"/.test(p.els.targetBars.innerHTML) && /class="progress-bar-fill p" style="width:70%"/.test(p.els.targetBars.innerHTML) && /27 \/ 40 \(68%\)/.test(p.els.targetBars.innerHTML), p.els.targetBars.innerHTML);
   eq('  #targetSection shown', p.els.targetSection.style.display, 'block');
-  eq('  one overdue row (won and future excluded)', (p.els.overdueList.innerHTML.match(/class="overdue-item"/g) || []).length, 1);
-  ok('  the row is classed name / meta / due', /<span class="name">Holcim<\/span>/.test(p.els.overdueList.innerHTML) && /<span class="due">Due 2020-01-01<\/span>/.test(p.els.overdueList.innerHTML));
-  eq('  #overdueCount', p.els.overdueCount.textContent, 1);
-  eq('  #overdueSection shown', p.els.overdueSection.style.display, 'block');
   eq('  #prLink points at /pr', p.els.prLink.href, '/pr');
   console.log('\n' + N + ' checks, ' + (FAIL ? FAIL + ' FAILURE(S)' : 'all ok'));
   process.exit(FAIL ? 1 : 0);

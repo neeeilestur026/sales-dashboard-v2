@@ -83,16 +83,21 @@ function _fugMark(st) {
   return '<span class="fg-mark ' + (st === 'missed' ? 'missed' : st === 'planned' ? 'planned' : 'open') + '" aria-hidden="true"></span>';
 }
 /** One row. o.readOnly hides the buttons (the director or management reading a rep's week). */
+/** A407 — a client's label chip (the Client Book's Major / Minor / Developing); a plan without labels shows the rank. */
+function fugTag(x) {
+  if (x.label) return '<span class="fg-rank fg-tag t-' + fugEsc(String(x.label).toLowerCase()) + '">' + fugEsc(x.label) + '</span>';
+  return x.rank ? '<span class="fg-rank">' + x.rank + '</span>' : '';
+}
 function fugRowHtml(x, day, o) {
   o = o || {};
   const st = x.status || 'open', q = !!x.quotationNo;
-  const label = q ? x.company + ', quotation ' + x.quotationNo : '#' + x.rank + ' ' + x.company;
+  const label = q ? x.company + ', quotation ' + x.quotationNo : (x.label ? x.label + ' · ' : '#' + x.rank + ' ') + x.company;
   const acts = o.readOnly || st === 'done' || st === 'missed' || st === 'planned' ? '' :
     '<div class="fg-acts">' + (q
       ? '<a class="fg-btn" href="my-daily-report.html?call=' + encodeURIComponent(x.quotationNo) + '">Log call</a><a class="fg-btn quiet" href="quotation-status.html?q=' + encodeURIComponent(x.quotationNo) + '">Update</a>'
       : '<a class="fg-btn" href="my-daily-report.html?client=' + encodeURIComponent(x.clientNo) + '">Log call</a><a class="fg-btn quiet" href="director-client-book.html?client=' + encodeURIComponent(x.clientNo) + '">Open</a>') + '</div>';
   return '<li class="fg-row ' + st + '" aria-label="' + fugEsc(label + ' — ' + (st === 'done' ? 'done' : st)) + '">' + _fugMark(st) +
-    '<div class="fg-main"><div class="fg-l1">' + (q ? '' : '<span class="fg-rank">' + x.rank + '</span>') + '<b>' + fugEsc(x.company) + '</b>' +
+    '<div class="fg-main"><div class="fg-l1">' + (q ? '' : fugTag(x)) + '<b>' + fugEsc(x.company) + '</b>' +
     (q ? '<span class="fg-ref">' + fugEsc(x.quotationNo) + '</span>' : '') + '</div>' +
     '<div class="fg-l2">' + fugEsc(fugLine(x, day)) + '</div></div>' + acts + '</li>';
 }
@@ -119,8 +124,10 @@ function fugStripHtml(g, sel) {
 function fugSubtitle(g, date, own) {
   const i = (g.days || []).findIndex(d => d.date === date), d = g.days[i];
   if (!d) return '';
-  const r = fugRanks(g, i);
-  return (d.today ? FUG_DOW_LONG[d.dow] : fugDayLabel(d.date)) + (r ? ' · ' + r + ' of ' + (own ? 'your' : 'the') + ' top ' + (g.planSize || 0) : '');
+  const r = fugRanks(g, i), name = d.today ? FUG_DOW_LONG[d.dow] : fugDayLabel(d.date);
+  /* A407 — the plan is the Client Book (Major, Minor, Developing): say how many of the clients this day holds, not ranks */
+  if (g.planFrom === 'book') { const n = (d.clients || []).length; return name + (n ? ' · ' + n + ' of ' + (own ? 'your' : 'the') + ' ' + g.planSize + ' clients' : ''); }
+  return name + (r ? ' · ' + r + ' of ' + (own ? 'your' : 'the') + ' top ' + (g.planSize || 0) : '');
 }
 /** done / total of a day, and its share 0..1 */
 function fugProgress(g, date) {
@@ -129,5 +136,5 @@ function fugProgress(g, date) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fugEsc, fugStartLabel, fugSoonText, fugDayLabel, fugShort, fugMoney, fugHow, fugRanks, fugDefaultDay, fugGroups, fugLeft, fugLine, fugRowHtml, fugGroupsHtml, fugStripHtml, fugSubtitle, fugProgress };
+  module.exports = { fugTag, fugEsc, fugStartLabel, fugSoonText, fugDayLabel, fugShort, fugMoney, fugHow, fugRanks, fugDefaultDay, fugGroups, fugLeft, fugLine, fugRowHtml, fugGroupsHtml, fugStripHtml, fugSubtitle, fugProgress };
 }

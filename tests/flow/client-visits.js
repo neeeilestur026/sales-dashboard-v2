@@ -11,6 +11,7 @@
  *   4 · before FlowAPI 186
  *   5 · the guard, both navbars, the bell
  *   6 · the sheet: tokens only, scoped under body.dh; no hex, emoji or inline style anywhere
+ *   9 · A407: client visits where the weekly itineraries were (management-itinerary.html, the director's approvals)
  */
 const fs = require('fs');
 const path = require('path');
@@ -157,7 +158,7 @@ function fakeForm(date, stops, no) {
     ok('  a day heads its visits, with Today, and a way to add a company to it', /<h3 class="cv-dhead">Tue 27 Oct <span class="cv-today">Today<\/span><button type="button" class="cv-link cv-dact" data-addday="2026-10-27">Add a company to this day<\/button><\/h3>/.test(b), b.slice(0, 300));
     ok('  a row: the time, the company, the status; where and who; the director\'s note when sent back',
        /<span class="cv-time">9:30 AM<\/span><span class="cv-co">Back Co<\/span><span class="cv-badge bad">Sent back<\/span>/.test(b) && /<span class="cv-r2">Plant · Norzagaray, Bulacan · Ana Cruz<\/span>/.test(b) && /Sent back: Go on Thursday/.test(b), b);
-    ok('  Plan a visit is on, beside the weekly itinerary; no checkboxes, no rep names', /data-plan>Plan a visit<\/button>/.test(s.els.cvActions.innerHTML) && /href="weekly-itinerary\.html"/.test(s.els.cvActions.innerHTML) && !/data-pick/.test(b) && !/cv-r3">Gerald/.test(b));
+    ok('  Plan a visit is on, alone (A407: the weekly itinerary is retired); no checkboxes, no rep names', /data-plan>Plan a visit<\/button>/.test(s.els.cvActions.innerHTML) && !/weekly-itinerary/.test(s.els.cvActions.innerHTML) && !/data-pick/.test(b) && !/cv-r3">Gerald/.test(b));
     s.run('CV.seg = "upcoming"; cvRender();');
     eq('  coming up, earliest first', opens(s.els.cvBody.innerHTML), ['VP-1', 'VP-2']);
     ok('  a visit with no time says any time; the head office shows its town', /<span class="cv-time">Any time<\/span><span class="cv-co">Zeta Mining<\/span><span class="cv-badge mid">With the director<\/span>/.test(s.els.cvBody.innerHTML) &&
@@ -282,7 +283,7 @@ function fakeForm(date, stops, no) {
   sec('4 · before FlowAPI 186');
   {
     const o = await boot('sales', { v: 185 });
-    ok('it says so, reads nothing, and hides the lists', /version 186/.test(o.els.cvNotice.innerHTML) && /weekly itinerary works as before/.test(o.els.cvNotice.innerHTML) && o.posts().length === 0 && o.els.cvBar.hidden === true && o.els.cvBody.hidden === true);
+    ok('it says so, reads nothing, and hides the lists (A407: no word of the retired weekly itinerary)', /version 186/.test(o.els.cvNotice.innerHTML) && !/weekly itinerary/.test(o.els.cvNotice.innerHTML) && o.posts().length === 0 && o.els.cvBar.hidden === true && o.els.cvBody.hidden === true);
   }
 
   sec('5 · the guard, both navbars, the bell');
@@ -294,10 +295,15 @@ function fakeForm(date, stops, no) {
     const has = (role) => JSON.stringify(ctx.__N[role]).indexOf('client-visits.html') >= 0;
     eq('the new navigation: sales, the director, accounting and management, nobody else', ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'].filter(has), ['director', 'accounting', 'management', 'sales']);
     const field = ctx.__N.sales.filter(s => s[0] === 'Field')[0][2];
-    eq('  a rep\'s Field: Client visits first, the weekly itinerary still there', field.slice(0, 2).map(x => x[0]), ['client-visits.html', 'weekly-itinerary.html']);
+    eq('  a rep\'s Field: Client visits first, and no weekly itinerary (A407)', field.map(x => x[0]), ['client-visits.html', 'flow-travel.html', 'flow-commissions.html', 'sales-emails.html']);
+    const older = (role) => ctx.__N[role].filter(s => s[0] === 'Team')[0][2].map(x => x.join(':')).filter(x => /client-visits|management-itinerary/.test(x));
+    ok('  the director and management: Client visits, then the weekly itineraries as "Older itineraries" (A407), in both looks',
+       ['director', 'management'].every(r => JSON.stringify(older(r)) === JSON.stringify(['client-visits.html:Client visits', 'management-itinerary.html:Older itineraries'])) &&
+       (A.match(/Client Visits<\/a>   <!-- A369 -->\s*<a href="management-itinerary\.html" class="\$\{activePage === 'management-itinerary' \? 'active' : ''\}">Older Itineraries<\/a>/g) || []).length === 2 && !/Weekly Itineraries</.test(A));
     ok('  accounting: under Pay, after the travel allowance', JSON.stringify(ctx.__N.accounting.filter(s => s[0] === 'Pay')[0][2]).indexOf('"flow-travel.html","Travel allowance"],["client-visits.html"') >= 0);
     ok('the classic navbar carries it for the four roles', (A.match(/<a href="client-visits\.html" class="\$\{activePage === 'client-visits' \? 'active' : ''\}">Client Visits<\/a>/g) || []).length === 4);
     const bell = A.slice(A.indexOf('A369 — client visits, the new itinerary: the director sees'), A.indexOf('A209 — for a role commissions'));
+    ok('the bell: a rep is no longer told about a weekly itinerary sent back (A407)', !/weekly-itinerary\.html/.test(A) && !/getWeeklyItineraries', \{ user: session\.name \}/.test(A));
     ok('the bell: the director\'s waiting visits, a rep\'s visits sent back, only from 186, by a private read',
        /flowVersionAtLeast\(186\)/.test(bell) && /postFlow\('getVisitPlans', \{\}\)/.test(bell) && /isDir \? 'Pending Director' : 'Rejected'/.test(bell) &&
        /client visit' \+ \(n === 1 \? '' : 's'\) \+ ' awaiting your approval', 'client-visits\.html'/.test(bell) && /' sent back', 'client-visits\.html'/.test(bell));
@@ -413,6 +419,73 @@ function fakeForm(date, stops, no) {
     const a = await boot('accounting', { plans: PLANS.concat([V('VP-12', { date: '2026-10-28', time: '15:00', company: 'Second Co', clientNo: 'CB-2' })]) });
     ok('accounting: a rep\'s day of several companies is one row — its itinerary, how many stops, and the day\'s estimate', /<td class="cv-wrep">Gerald Lucena<span class="cv-sub">2 stops<\/span><\/td><td class="cv-wvis"><ul><li><button type="button" class="cv-link" data-open="VP-1">Philcement Corporation<\/button>.*?data-open="VP-5".*?data-open="VP-12">Second Co<\/button>.*?<\/ul><\/td><td class="cv-west unset" data-label="Estimated travel allowance">To be set<\/td>/.test(a.els.cvBody.innerHTML), a.els.cvBody.innerHTML.slice(0, 200));
     ok('  a day of one company (with a cancelled one beside it) does not say "1 stops"', !/1 stops/.test(a.els.cvBody.innerHTML));
+  }
+
+  /* A407 — Neil, 25 Nov 2026: the weekly itinerary is retired for reps; management and the director see client visits
+     where they used to see the weekly itineraries: on top of management-itinerary.html (the older itineraries kept
+     below it) and in the director's approvals strip. Both only read (getVisitPlans); deciding stays on this page. */
+  sec('9 · A407: client visits where the weekly itineraries were');
+  {
+    const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const WEEK = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'];
+    async function mi(role, reply) {
+      const els = { miVisits: { hidden: true, innerHTML: '' } }, posts = [];
+      const c = vm.createContext({ console, Math, JSON, Date, Set, Promise, encodeURIComponent, hxEsc: esc,
+        document: { addEventListener() {}, getElementById: (id) => els[id] || null },
+        postFlow: (a, p) => { posts.push([a, p]); return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply); } });
+      vm.runInContext(fs.readFileSync(D + 'js/management-itinerary.js', 'utf8'), c, { filename: 'management-itinerary.js' });
+      vm.runInContext('miSession = ' + JSON.stringify({ name: 'X', role }) + ';', c);
+      c.__w = WEEK;
+      await vm.runInContext('miLoadVisits(__w, miSeq)', c);
+      return { el: els.miVisits, posts };
+    }
+    const dir = await mi('director', { success: true, data: PLANS });
+    const h = dir.el.innerHTML, nos = (h.match(/visit=VP-\d+/g) || []).map(x => x.slice(6));
+    eq('management-itinerary: one read of the shown week\'s visits', dir.posts, [['getVisitPlans', { from: '2026-10-26', to: '2026-11-01' }]]);
+    eq('  the week\'s visits by day, then rep, then time; no draft, nothing outside the week', nos, ['VP-7', 'VP-8', 'VP-1', 'VP-10', 'VP-5', 'VP-6', 'VP-4', 'VP-2']);
+    ok('  the head counts them and, for the director, offers the waiting ones on client-visits.html', dir.el.hidden === false && /<h2 id="miVisitsH">Client visits<\/h2>/.test(h)
+      && /8 visits from 2 reps: 2 with the director, 2 approved, 1 done, 1 sent back, 2 cancelled\./.test(h) && /<a class="btn btn-sm btn-primary" href="client-visits\.html">Review 2 waiting<\/a>/.test(h), h.slice(0, 600));
+    ok('  a day heads its visits; a row is rep, time, company (and what for), where, who, and the status in the page\'s colours',
+      /<span class="d">Wed<\/span>\s*<span class="dt">28 Oct<\/span>\s*<span class="n">4 visits<\/span>/.test(h)
+      && /<td>Gerald Lucena<\/td><td class="t">9:30 AM<\/td>\s*<td class="k"><a href="client-visits\.html\?visit=VP-1">Philcement Corporation<\/a><div class="mi-sub">Hose audit<\/div><\/td>\s*<td>Plant · Norzagaray, Bulacan<\/td><td>Ana Cruz<\/td><td><span class="mi-chip b-approved">Approved<\/span><\/td>/.test(h)
+      && /<td class="t">—<\/td>[\s\S]*?Zeta Mining[\s\S]*?The plant manager<\/td><td><span class="mi-chip b-pending">With the director<\/span>/.test(h) && /b-rejected">Sent back</.test(h) && /b-idle">Cancelled</.test(h), h.slice(0, 1200));
+    const mg = await mi('management', { success: true, data: PLANS });
+    ok('  management: the same list, read only, with the way into client visits', /btn-secondary" href="client-visits\.html">Open client visits</.test(mg.el.innerHTML) && !/Review \d/.test(mg.el.innerHTML) && /visit=VP-2/.test(mg.el.innerHTML));
+    const hr = await mi('hr', { success: true, data: PLANS });
+    ok('  HR reads them but is not sent to a page it cannot open', hr.el.hidden === false && !/client-visits\.html/.test(hr.el.innerHTML) && /Philcement Corporation/.test(hr.el.innerHTML));
+    const ad = await mi('admin', { success: true, data: PLANS });
+    ok('  admin (whom getVisitPlans does not answer): the section stays hidden and nothing is read', ad.el.hidden === true && ad.posts.length === 0);
+    const bad = await mi('management', new Error('down'));
+    ok('  a failed read says so', /mi-banner bad">Could not read the client visits/.test(bad.el.innerHTML));
+    const none = await mi('director', { success: true, data: [] });
+    ok('  an empty week says so, and the director is not asked to review anything', /No client visits sent for this week\./.test(none.el.innerHTML) && /Open client visits/.test(none.el.innerHTML));
+    const MH = fs.readFileSync(D + 'management-itinerary.html', 'utf8');
+    ok('  the page: the visits first, then "Older weekly itineraries" over the old week; its own small sheet before the page\'s <style>',
+      /<section class="mi-pane mi-visits" id="miVisits" aria-labelledby="miVisitsH" hidden><\/section>\s*<h2 class="mi-older">Older weekly itineraries<\/h2>[\s\S]*id="miMsg"[\s\S]*id="miKpis"[\s\S]*class="mi-wrap"/.test(MH)
+      && /href="css\/flow-screen\.css">\s*<link rel="stylesheet" href="css\/management-itinerary\.css">/.test(MH));
+    const MC = fs.readFileSync(D + 'css/management-itinerary.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    ok('  the sheet: scoped to body.flow-screen, tokens only', !/#[0-9a-fA-F]{3,6}\b|rgba?\(/.test(MC) && MC.split('}').map(r => r.split('{')[0].trim()).filter(x => x && !/^@media/.test(x)).every(x => x.split(',').every(y => /^body\.flow-screen /.test(y.trim()))));
+
+    async function da(plans) {
+      const el = { innerHTML: '' }, posts = [];
+      const c = vm.createContext({ console, Math, JSON, Date, Promise, encodeURIComponent, hxEsc: esc, setTimeout: () => 0,
+        document: { addEventListener() {}, getElementById: (id) => (id === 'dirApprovals' ? el : null) },
+        flowCommissionsLiveFor: () => false,
+        fetchFlow: () => Promise.resolve({ success: true, data: [] }),
+        postFlow: (a, p) => { posts.push(a); return Promise.resolve(a === 'getVisitPlans' ? { success: true, data: plans } : { success: true, data: [] }); } });
+      vm.runInContext(fs.readFileSync(D + 'js/director-approvals.js', 'utf8'), c, { filename: 'director-approvals.js' });
+      await vm.runInContext('daLoad()', c);
+      return { html: el.innerHTML, posts };
+    }
+    const one = await da(PLANS);
+    ok('the director\'s approvals: the visits waiting on him, one row per rep, each to its visit on client-visits.html',
+      (one.html.match(/Client visit<\/span>/g) || []).length === 2 && /<td class="da-who">Gerald Lucena<\/td>\s*<td class="da-amt da-n">Zeta Mining<div class="da-sub">Thu 29 Oct<\/div><\/td>/.test(one.html)
+      && /<a class="link-btn" href="client-visits\.html\?visit=VP-2">Review<\/a>/.test(one.html) && /href="client-visits\.html\?visit=VP-6">Review</.test(one.html) && one.posts.indexOf('getVisitPlans') >= 0, one.html.slice(0, 900));
+    const two = await da(PLANS.concat([V('VP-11', { user: K, status: 'Pending Director', decision: '', date: '2026-10-30', time: '15:00', company: 'Kim Second Co', clientNo: 'CB-8' })]));
+    ok('  several from one rep: how many, the companies, the days, and the Waiting list', /<td class="da-no">2 visits<\/td>\s*<td class="da-who">Kim Reyes<\/td>\s*<td class="da-amt da-n">Kim Client Co, Kim Second Co<div class="da-sub">Wed 28 Oct to Fri 30 Oct<\/div>/.test(two.html)
+      && /Client visits<\/span>/.test(two.html) && /<a class="link-btn" href="client-visits\.html">Review<\/a>/.test(two.html), two.html.slice(0, 1500));
+    const zero = await da(PLANS.filter(v => v.status !== 'Pending Director'));
+    ok('  nothing waiting: nothing waiting on you', /Nothing waiting on you\./.test(zero.html));
   }
 
   console.log(FAIL ? `\n${FAIL} of ${N} FAILED\n` : `\nall ${N} passed\n`);

@@ -3,8 +3,9 @@
  * dashboard.js writes the figures by id; this file only DERIVES from what it wrote: the date in
  * the rail, the action strip's mount and its count, the report tag's tone, the target ring drawn
  * from the bars, the rail links that follow the sections that show themselves, the quiet card
- * that steps aside, the pending-items count, the rail jumps, and the one load moment. It defines
- * no globals. Every browser API is feature-checked so the script also runs inside the test
+ * that steps aside, the rail jumps, and the one load moment. It defines no globals. A407: the
+ * overdue follow-ups card and the pending-items count are gone (both read the per-rep sheets
+ * nothing writes any more). Every browser API is feature-checked so the script also runs inside the test
  * harness's bare DOM (no observers, no matchMedia, no setInterval). */
 (function () {
   'use strict';
@@ -56,7 +57,7 @@
     recount();
   })();
 
-  // ── The report tag's tone follows the text dashboard.js writes ──
+  // ── The report tag's tone follows the text new-daily-report-card.js writes (A407) ──
   (function () {
     var st = $('reportStatus'), pill = $('reportPill');
     if (!st || !pill) return;
@@ -90,41 +91,17 @@
 
   // ── Sections that show themselves: the rail follows them, the quiet card steps aside ──
   (function () {
-    var quiet = $('quietState'), overdue = $('overdueSection'), target = $('targetSection'), leads = $('leadsForYou');
-    var navT = $('navTargets'), navO = $('navOverdue'), navL = $('navLeads'), navOC = $('navOverdueCount'), oc = $('overdueCount');
+    var quiet = $('quietState'), target = $('targetSection'), leads = $('leadsForYou');
+    var navT = $('navTargets'), navL = $('navLeads');
     function sync() {
-      var o = shown(overdue), t = shown(target), l = shown(leads);
-      setHidden(navT, !t); setHidden(navO, !o); setHidden(navL, !l);
-      if (navOC && oc) navOC.textContent = oc.textContent || '0';
-      if (quiet) quiet.style.display = (o || t) ? 'none' : '';
+      var t = shown(target), l = shown(leads);
+      setHidden(navT, !t); setHidden(navL, !l);
+      if (quiet) quiet.style.display = t ? 'none' : '';
     }
-    [overdue, target, leads].forEach(function (el) { observe(el, sync, { attributes: true, attributeFilter: ['style'] }); });
-    observe(oc, sync, { childList: true, characterData: true, subtree: true });
+    [target, leads].forEach(function (el) { observe(el, sync, { attributes: true, attributeFilter: ['style'] }); });
     sync();
     // A short poll as well: the loaders write in their own time, and a DOM without observers still syncs.
     if (typeof setInterval === 'function') { var n = 0; var t = setInterval(function () { sync(); if (++n > 24) clearInterval(t); }, 250); }
-  })();
-
-  // ── Pending items — best effort, silent on failure. Same request pending-items.html makes. ──
-  (function () {
-    var el = $('pendingCount');
-    if (!el) return;
-    ready(function () {
-      var session = null;
-      try { session = JSON.parse(sessionStorage.getItem('session') || 'null') || JSON.parse(localStorage.getItem('session') || 'null'); } catch (e) {}
-      if (!session || typeof apiGetPendingItems !== 'function') return;
-      var p;
-      try {
-        p = apiGetPendingItems({ role: 'sales', agentName: session.name, prSheetId: session.prSheetId || '', quotationSheetId: session.quotationSheetId || '' });
-      } catch (e) { return; }
-      if (!p || typeof p.then !== 'function') return;
-      p.then(function (r) {
-        var d = r && r.success && r.data;
-        if (!d) return;
-        el.textContent = String(((d.prs || []).length) + ((d.quotations || []).length));
-        if (el.classList) { el.classList.remove('sl-tick'); void el.offsetWidth; el.classList.add('sl-tick'); }
-      }).catch(function () {});
-    });
   })();
 
   // ── Rail jumps and the active section link ──
@@ -146,7 +123,7 @@
         links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id); });
       });
     }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
-    ['inbox', 'leadsForYou', 'today', 'targetSection', 'overdueSection'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
+    ['inbox', 'leadsForYou', 'today', 'targetSection'].forEach(function (id) { var el = $(id); if (el) io.observe(el); });
   })();
 
   // ── The one load moment: when the month's figure lands, or after 1.5 s ──

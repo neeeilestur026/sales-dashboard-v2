@@ -646,6 +646,7 @@ SECURED_ACTIONS = [
     "getProofReports", "saveProofReport", "submitProofReport",   # A347 / A348 — the private sales daily report (a trial)
     "archiveClientBookClient", "getClientBook", "saveClientBookClient", "setClientBookStatus",   # A350 — the Client Book trial
     "linkClientBookRecords", "unlinkClientBookRecord",   # A360 — connecting old PRs and quotations to a client
+    "saveClientBookNames", "getOrderQuotationLinks", "linkOrderQuotations",   # A407 — other spellings; orders to their quotations
     "cancelVisitPlan", "decideVisitPlans", "getVisitPlans", "markVisitPlanDone", "saveVisitPlan", "submitVisitPlans",   # A369 — client visits
     "getTravelFloats", "getTravelReceipts", "getTravelReplenishments", "importCollections", "importExpenses",
     "importInventory", "importPricingSubmissions", "importSOCostDetails", "importSalesOrders", "linkQuotationEmail",

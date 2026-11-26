@@ -70,11 +70,13 @@ function spKpis(r) {
     activeAccounts: accounts.filter(a => a.status === 'Active').length, accountsWithSales: accounts.filter(a => _spN(a.actual) > 0).length, accounts: accounts.length
   };
 }
-/** Sales target by account tier: A, B, C, then the accounts with no tier. */
-function spTierRows(accounts) {
+/** A407 — a tier's name: the Client Book's label (names = lists.tierNames, Major / Minor / Developing), else 'Tier A'. */
+function spTierName(t, names) { return t ? ((names && names[t]) || 'Tier ' + t) : (names && names.A === 'Major' ? 'No label' : 'No tier'); }
+/** Sales target by account tier: A, B, C, then the accounts with no tier (named by `names` when given). */
+function spTierRows(accounts, names) {
   const rows = SP_TIERS.concat(['']).map(t => {
     const list = (accounts || []).filter(a => (a.tier || '') === t), target = _spR2(list.reduce((s, a) => s + _spN(a.target), 0)), actual = _spR2(list.reduce((s, a) => s + _spN(a.actual), 0));
-    return { tier: t, label: t ? 'Tier ' + t : 'No tier', accounts: list.length, target, actual, achievement: spRatio(actual, target) };
+    return { tier: t, label: spTierName(t, names), accounts: list.length, target, actual, achievement: spRatio(actual, target) };
   });
   return rows.filter(r => r.tier || r.accounts);
 }
@@ -128,6 +130,8 @@ function spSharesFromAmounts(amounts, annual) {
 /* ── accounts ───────────────────────────────────────────────────────────────────────────────────── */
 
 const SP_ACCOUNT_SEGS = [['all', 'All'], ['A', 'Tier A'], ['B', 'Tier B'], ['C', 'Tier C'], ['none', 'No tier'], ['Active', 'Active'], ['Prospect', 'Prospect'], ['Dormant', 'Dormant'], ['On Hold', 'On hold']];
+/** A407 — the account chips with the tiers named as the Client Book names them. */
+function spAccountSegs(names) { return SP_ACCOUNT_SEGS.map(([k, l]) => [k, SP_TIERS.indexOf(k) >= 0 ? spTierName(k, names) : k === 'none' ? spTierName('', names) : l]); }
 function spAccountMatch(a, seg) {
   if (!seg || seg === 'all') return true;
   if (SP_TIERS.indexOf(seg) >= 0) return a.tier === seg;
@@ -222,6 +226,6 @@ function spHomeLines(r, today) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { spMoney, spShort, spPct, spDay, spKpis, spTierRows, spAccountsTotal, spMonthRows, spEvenSplit, spSplitCheck, spSharesFromAmounts, spAccountsFilter,
+  module.exports = { spMoney, spShort, spPct, spDay, spKpis, spTierRows, spTierName, spAccountSegs, spAccountsTotal, spMonthRows, spEvenSplit, spSplitCheck, spSharesFromAmounts, spAccountsFilter,
                      spAccountCounts, spVisitText, spPipeFilter, spPipeCounts, spStageSummary, spCloseState, spActivityCounts, spActivityRange, spHomeLines, spDaysBetween };
 }

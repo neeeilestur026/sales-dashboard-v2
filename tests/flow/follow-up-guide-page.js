@@ -23,7 +23,7 @@ function guide(user, actor) {
   const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
   const cos = ['Alpha Power <b>Corp</b>', 'Bravo Cement', 'Charlie Mining', 'Delta Steel', 'Echo Shipyard', 'Foxtrot Hydro'];
   const store = {
-    FlowSettings: [{ 'Key': 'followUpPerDay', 'Value': 2 }, { 'Key': 'followUpStart', 'Value': 'off' }],
+    FlowSettings: [{ 'Key': 'followUpPerDay', 'Value': 2 }, { 'Key': 'followUpStart', 'Value': 'off' }, { 'Key': 'followUpPlanFrom', 'Value': 'plan' }],   // A407: the saved plan here; the book's labels in sales-cleanup-page.js
     ClientBook: cos.map((co, i) => ({ 'Client No': 'CB-' + (i + 1), 'Company': co, 'Owner': 'Gerald Lucena', 'Archived At': '' })),
     Quotations: [{ 'Quotation No': 'Q1', 'Customer': 'Charlie Mining', 'Status': 'Sent', 'Total': 245000, 'Salesperson': 'Gerald Lucena', 'Sent At': Dt(10, 28), 'Created At': Dt(9, 1) }],
     ClientBookLog: [{ 'Client No': 'CB-1', 'Kind': 'status', 'By': 'Gerald Lucena', 'At': Dt(11, 2, 9) }],
@@ -139,7 +139,7 @@ function guide(user, actor) {
   const all = guide('', { actorRole: 'management', actorName: 'Larry Estur', actorUsername: 'mgmt' });
   const allReply = (() => {
     const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
-    const st = { ClientBook: [{ 'Client No': 'CB-1', 'Company': 'Alpha', 'Owner': 'Gerald Lucena', 'Archived At': '' }, { 'Client No': 'CB-9', 'Company': 'Kilo', 'Owner': 'Kimberlyn Blones', 'Archived At': '' }], FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }] };
+    const st = { ClientBook: [{ 'Client No': 'CB-1', 'Company': 'Alpha', 'Owner': 'Gerald Lucena', 'Archived At': '' }, { 'Client No': 'CB-9', 'Company': 'Kilo', 'Owner': 'Kimberlyn Blones', 'Archived At': '' }], FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }, { 'Key': 'followUpPlanFrom', 'Value': 'plan' }] };
     const c = load(GS, st); c._now = () => Dt(11, 4);
     call(c, 'setFollowUpPlan', { owner: 'Gerald Lucena', items: [{ rank: 1, clientNo: 'CB-1' }], actorRole: 'director', actorName: 'Neil Estur' });
     call(c, 'setFollowUpPlan', { owner: 'Kimberlyn Blones', items: [{ rank: 1, clientNo: 'CB-9' }], actorRole: 'director', actorName: 'Neil Estur' });
@@ -173,7 +173,7 @@ function guide(user, actor) {
   sec('4b · A395: before the start day');
   const soonG = (() => {
     const Dt = (m, d, h) => new Date(2026, m - 1, d, h || 10);
-    const st = { ClientBook: Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Co ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' })) };
+    const st = { ClientBook: Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Co ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' })), FlowSettings: [{ 'Key': 'followUpPlanFrom', 'Value': 'plan' }] };
     const c = load(GS, st); c._now = () => Dt(11, 4);
     call(c, 'setFollowUpPlan', { owner: 'Kimberlyn Blones', items: st.ClientBook.map((b, i) => ({ rank: i + 1, clientNo: b['Client No'] })), actorRole: 'director', actorName: 'Neil Estur' });
     return { rep: call(c, 'getFollowUpGuide', { actorRole: 'sales', actorName: 'Kimberlyn Blones', actorUsername: 'sales1' }), all: call(c, 'getFollowUpGuide', { all: true, actorRole: 'director', actorName: 'Neil Estur' }) };

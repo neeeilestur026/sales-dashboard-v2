@@ -103,6 +103,7 @@
   .qc-createhead h3 { margin: 0; font-size: .95rem; font-weight: 700; }
   #qcCreate[hidden] { display: none; }
 </style>
+  <link rel="stylesheet" href="css/client-pick.css">
   <link rel="stylesheet" href="css/sales-lists.css">
   <link rel="stylesheet" href="css/ledger.css">
   <link rel="stylesheet" href="css/apple.css">
@@ -165,6 +166,8 @@
                 <div><label>Quotation No *</label><input type="text" id="qcNo" placeholder="your own code">
                   <div class="qc-note" id="qcNoHint" hidden>Suggested: the next number this year, your initials, the client and the item. Change any part.</div></div>
                 <div><label>Date</label><input type="date" id="qcDate"></div>
+                <!-- A407 — a sales rep names the client from their Client Book (js/client-pick.js, shown by the configurator) -->
+                <div class="full" id="qcClientPickRow" hidden></div>
                 <div class="full"><label>Customer *</label><input type="text" id="qcCustomer" placeholder="Company name"></div>
                 <div class="full"><label>Subject *</label><input type="text" id="qcSubject" placeholder="e.g. KITO ELECTRIC CHAIN HOIST"></div>
                 <div><label>Discount % <span style="text-transform:none;font-weight:500;">(off the total, before VAT)</span></label>
@@ -327,6 +330,7 @@
               <label class="qc-tog" id="qcSubmitWrap" hidden><input type="checkbox" id="qcSubmitNow" checked> Send for approval now</label>
               <button type="button" class="btn btn-primary" onclick="qcFinalize()" id="qcFinalizeBtn">Finalize quotation</button>
               <button type="button" class="btn btn-secondary" onclick="qcResetForm()">Reset</button>
+              <span class="cp-why" id="qcClientWhy" aria-live="polite" hidden></span>
               <span id="qcModeHint" class="qc-note" style="display:none;flex-basis:100%;margin-top:.2rem;">
                 The figures above are locked to the saved quotation — only the document changes. Saved
                 product photos are restored automatically.</span>
@@ -521,6 +525,7 @@
   <script src="js/client-rollup.js"></script>
   <script src="js/sales-lists-model.js"></script>
   <script src="js/sales-lists.js"></script>
+  <script src="js/client-pick.js"></script>
   <script src="js/flow-quote-configurator.js"></script>
   <script src="js/flow-quotations.js"></script>
 

@@ -11,6 +11,9 @@
  *       before FlowAPI 184 it says so and mounts nothing; the old daily report is linked, never replaced
  *   4 · the home card: hidden before 184; not started / saved / submitted; the person's own kind; nothing for other roles
  *   5 · the navbars: "New daily report" beside each role's old one, for the four roles only; the old links stay
+ * A407 (Neil, 25 Nov 2026): a rep's old daily report (report.html) is retired — a stub that sends them here. For sales the
+ * card says "Daily report" and writes the sales home's report tag, and both navbars have one "Daily report" link; the
+ * other three roles keep their old report beside the new one.
  */
 const fs = require('fs');
 const path = require('path');
@@ -79,7 +82,9 @@ function world(role, version) {
   sec('3 · it mounts the person\'s own report');
   const s = world('sales', 184); await s.boot();
   ok('a rep: the Sales Daily Report, their own, in the shown #proof section', s.calls.indexOf('sales:proof:{"own":true}') >= 0 && s.els.proof.hidden === false && s.els.myReport.hidden === true && s.calls[0] === 'nav:my-daily-report', s.calls);
-  ok('  with their old daily report one click away', s.els.mdrOld.hidden === false && s.els.mdrOld.href === 'report.html');
+  /* A407 — a rep has one daily report: the old report.html only forwards here, so no "Old daily report" button */
+  ok('  A407: a rep gets no "Old daily report" button (report.html only sends a rep back here)',
+     s.els.mdrOld.hidden !== false && /<script src="js\/page-moved\.js" data-to="my-daily-report\.html"/.test(read('report.html')));
   for (const [r, old] of [['accounting', 'accounting-daily-report.html'], ['leadgen', 'leadgen-daily-report.html'], ['admin', 'admin-daily-report.html']]) {
     const w = world(r, 184); await w.boot();
     ok(r + ': its own role report in #myReport, and its old report linked', w.calls.indexOf('team:myReport:' + r + ':{"own":true}') >= 0 && w.els.myReport.hidden === false && w.els.proof.hidden === true && w.els.mdrOld.href === old, w.calls);
@@ -89,20 +94,20 @@ function world(role, version) {
      !early.calls.some(x => /^(sales|team):/.test(x)) && early.els.proof.hidden && early.els.myReport.hidden);
 
   sec('4 · the card on the home');
-  async function card(role, version, rows, hhmm) {
-    const el = { innerHTML: '', style: { display: 'none' } }, posts = [];
-    const c = { console, Promise, JSON, Math, String, Object, Array, document: { getElementById: (id) => (id === 'newDailyReport' ? el : null), addEventListener: (e, f) => { if (e === 'DOMContentLoaded') c.__boot = f; } } };
+  async function card(role, version, rows, hhmm, failRead) {
+    const el = { innerHTML: '', style: { display: 'none' } }, posts = [], tag = { textContent: 'Loading…' };   // A407 — #reportStatus, the sales home's tag
+    const c = { console, Promise, JSON, Math, String, Object, Array, document: { getElementById: (id) => (id === 'newDailyReport' ? el : id === 'reportStatus' ? tag : null), addEventListener: (e, f) => { if (e === 'DOMContentLoaded') c.__boot = f; } } };
     const RealDate = Date, fixed = new RealDate('2026-10-22T' + (hhmm || '09:00') + ':00+08:00');
     c.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [fixed.getTime()])); } static now() { return fixed.getTime(); } };
     c.window = c; vm.createContext(c);
     c.getSession = () => ({ name: 'P', username: 'p', role });
     c.flowVersionAtLeast = (n) => Promise.resolve(n <= version);
     c.flowToday = () => '2026-10-22';
-    c.postFlow = (a, p) => { posts.push({ a, p }); return Promise.resolve({ success: true, data: rows || [] }); };
+    c.postFlow = (a, p) => { posts.push({ a, p }); return failRead ? Promise.reject(new Error('down')) : Promise.resolve({ success: true, data: rows || [] }); };
     vm.runInContext(read('js/new-daily-report-card.js'), c);
     if (c.__boot) c.__boot();
     for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r));
-    return { el, posts };
+    return { el, posts, tag: tag.textContent };
   }
   const pre = await card('sales', 183);
   ok('before 184: hidden, and nothing read', pre.el.style.display === 'none' && !pre.posts.length);
@@ -115,6 +120,11 @@ function world(role, version) {
   ok('  after 4:30, "due now" in the warning colour', /class="due">Saved 11:12 AM — 4:30 report due now/.test(late.el.innerHTML), late.el.innerHTML);
   const done = await card('leadgen', 184, [{ date: '2026-10-22', user: 'P', kind: 'leadgen', updatedAt: '2026-10-22T08:31:00.000Z', submittedAt: '2026-10-22T08:31:00.000Z' }]);
   ok('submitted: the time, in green, and Open', /class="ok">4:30 report submitted 4:31 PM/.test(done.el.innerHTML) && />Open</.test(done.el.innerHTML) && done.posts[0].p.kind === 'leadgen', done.el.innerHTML);
+  ok('A407: a rep\'s card says "Daily report"; the other roles\' still say "New daily report"', /<b>Daily report<\/b>/.test(none.el.innerHTML) && /<b>New daily report<\/b>/.test(saved.el.innerHTML) && /<b>New daily report<\/b>/.test(done.el.innerHTML));
+  const sSaved = await card('sales', 184, [{ date: '2026-10-22', user: 'P', kind: 'sales', updatedAt: '2026-10-22T03:12:00.000Z' }]);
+  const sDone = await card('sales', 184, [{ date: '2026-10-22', user: 'P', kind: 'sales', updatedAt: '2026-10-22T08:31:00.000Z', submittedAt: '2026-10-22T08:31:00.000Z' }]);
+  eq('  the same read writes the sales home\'s report tag: not started, saved, submitted, before 184, a failed read',
+     [none.tag, sSaved.tag, sDone.tag, pre.tag, (await card('sales', 184, [], '09:00', true)).tag], ['Not yet submitted', 'Saved, not submitted', 'Submitted today', '—', '—']);
   const mg = await card('management', 184, []);
   ok('a role with no report: no card, no read', mg.el.style.display === 'none' && !mg.posts.length);
   for (const [f, cls] of [['dashboard.html', 'hx-glass'], ['accounting-home.html', 'hx-glass'], ['admin.html', 'hx-glass'], ['leadgen-home.html', 'lg-panel']]) {
@@ -123,17 +133,20 @@ function world(role, version) {
        new RegExp('<section class="' + cls + ' hx-ndr" id="newDailyReport" style="display:none;"></section>').test(h) && /href="css\/payslip-card\.css">\s*<link rel="stylesheet" href="css\/new-daily-report-card\.css">/.test(h) &&
        /src="js\/my-payslip-card\.js"><\/script>[^\n]*\n\s*<script src="js\/new-daily-report-card\.js">/.test(h));
   }
-  ok('  and the old daily report links on the homes are untouched', /<a href="report\.html" class="sl-link">/.test(read('dashboard.html')));
+  ok('  A407: the sales home links the daily report, and report.html nowhere', /<a href="my-daily-report\.html" class="btn btn-primary">/.test(read('dashboard.html')) && /<a href="my-daily-report\.html" class="sl-link">/.test(read('dashboard.html')) && !/href="report\.html"/.test(read('dashboard.html')));
 
   sec('5 · the navbars');
   const AUTH = read('js/auth.js'), NAV = read('js/ledger-nav.js');
-  ok('the classic navbar: "New Daily Report" right after each role\'s old one', /Admin Daily Report<\/a>\s*<a href="my-daily-report\.html"/.test(AUTH) && /My Daily Report<\/a>\s*<a href="my-daily-report\.html"/.test(AUTH) &&
-     />Daily Report<\/a>\s*<a href="my-daily-report\.html"/.test(AUTH) && /leadgen-daily-report\.html[\s\S]{0,600}<a href="my-daily-report\.html"/.test(AUTH));
-  ok('  and the active-page lists know it', /'admin-daily-report', 'my-daily-report'\]/.test(AUTH) && /\['accounting-daily-report', 'my-daily-report',/.test(AUTH) && /\['report', 'my-reports', 'my-daily-report'\]/.test(AUTH));
+  ok('the classic navbar: "New Daily Report" right after admin\'s, accounting\'s and lead gen\'s old one', /Admin Daily Report<\/a>\s*<a href="my-daily-report\.html"/.test(AUTH) && /My Daily Report<\/a>\s*<a href="my-daily-report\.html"/.test(AUTH) &&
+     /leadgen-daily-report\.html[\s\S]{0,600}<a href="my-daily-report\.html"/.test(AUTH));
+  ok('  and the active-page lists know it', /'admin-daily-report', 'my-daily-report'\]/.test(AUTH) && /\['accounting-daily-report', 'my-daily-report',/.test(AUTH));
+  ok('  A407: a rep has one "Daily Report" link straight to it, marked current by itself; no old report, no My reports',
+     /<a href="my-daily-report\.html" class="\$\{activePage === 'my-daily-report' \? 'active' : ''\}">\s*<svg[^>]*>[\s\S]*?<\/svg>\s*Daily Report\s*<\/a>/.test(AUTH) && !/href="report\.html"/.test(AUTH) && !/my-reports/.test(AUTH));
   const navFor = (role) => { const c = {}; vm.createContext(c); vm.runInContext(NAV + ';this.__l = LEDGER_NAV;', c); return JSON.stringify(c.__l[role] || []); };
   eq('the Apple sidebar links it for the four roles, and nobody else', ['admin', 'director', 'accounting', 'management', 'sales', 'marketing', 'leadgen', 'hr'].filter(r => /my-daily-report\.html/.test(navFor(r))),
      ['admin', 'accounting', 'sales', 'leadgen']);
-  ok('  the old reports stay linked', ['report.html', 'accounting-daily-report.html', 'admin-daily-report.html', 'leadgen-daily-report.html'].every(f => NAV.includes("'" + f + "'")));
+  ok('  the other roles\' old reports stay linked; a rep\'s (report.html) is retired (A407)', ['accounting-daily-report.html', 'admin-daily-report.html', 'leadgen-daily-report.html'].every(f => NAV.includes("'" + f + "'")) && !NAV.includes("'report.html'"));
+  ok('  a rep\'s Apple sidebar: one "Daily report" section straight to it', /\['Daily report', 'clip', 'my-daily-report\.html'\]/.test(NAV) && !/my-reports\.html/.test(NAV));
 
   console.log(FAIL ? `\nFAIL — ${FAIL} of ${N}\n` : `\nall ${N} passed\n`);
   process.exit(FAIL ? 1 : 0);

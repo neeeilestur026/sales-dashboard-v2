@@ -28,7 +28,7 @@ FLOW_DRIVE_FOLDER_ID = _fprop('FLOW_DRIVE_FOLDER_ID') || FLOW_DRIVE_FOLDER_ID;  
 
 // Deployed-code version, surfaced by getVersion. Front-end tools whose safety depends on NEW backend
 // behavior (e.g. the year-scoped deleteMigratedRecords) check this before running destructive steps.
-var FLOW_VERSION = 203;   // A404 — the client hub's sales view (status, reps, Major / Minor). History: see CHANGELOG.
+var FLOW_VERSION = 204;   // A407 — the sales clean-up (one ranking, spellings, orders win quotations). History: see CHANGELOG.
 
 function getVersion(p) { return { success: true, version: FLOW_VERSION }; }
 
@@ -593,6 +593,10 @@ var SCHEMA = {
   // A360 — which client a PR or quotation belongs to, one row per record (the latest decision; blank Client No = none).
   // Written only by linkClientBookRecords / unlinkClientBookRecord.
   ClientBookLinks: ['Kind', 'Record No', 'Client No', 'By', 'At'],
+  // A407 — "also written as": the other spellings of a Client Book client (ITOGON SOYUC RESOURCES INC is Itogon Suyoc).
+  // One row per decision, the latest row per Name Key wins; a blank Client No takes the spelling off. Written only by
+  // saveClientBookNames. Every reader that matches a record to a client by its name reads it first.
+  ClientBookNames: ['Name', 'Name Key', 'Client No', 'By', 'At'],
   // A369 — client visits (the new itinerary): one row per planned visit to a Client Book client, and a log that is only
   // ever appended to. Written only by saveVisitPlan / submitVisitPlans / decideVisitPlans / cancelVisitPlan /
   // markVisitPlanDone; submitTravelReplenishment reads it (an approved visit in the week stands for the itinerary).
@@ -904,6 +908,7 @@ var _SECURED = {
   submitProofReport: 1,   // A348
   getClientBook: 1, saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350 — the Client Book trial; its read is private too
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360 — connecting old PRs and quotations to a client
+  saveClientBookNames: 1, getOrderQuotationLinks: 1, linkOrderQuotations: 1,   // A407 — other spellings; orders to their quotations (director)
   getVisitPlans: 1, saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369 — client visits
   getSupplierBook: 1, saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374 — the supplier list (contacts and buy prices, so its read is secured too)
   updateAPAging: 1, updateARAging: 1, updateCommissionRequest: 1, updateExpense: 1, updateInventoryItem: 1, updatePRSourcing: 1,
@@ -2187,7 +2192,8 @@ function _fugCfg() {
   var cad = String(blank(d.followUpCadence) ? '3,5,7,14' : d.followUpCadence).split(',').map(function (x) { return parseInt(x, 10); })
     .filter(function (x) { if (!(x > 0 && x < 400) || seen[x]) return false; seen[x] = 1; return true; }).sort(function (a, b) { return a - b; });
   return { on: _bbSwitch(d.followUpGuide), roles: _bbList(d.followUpGuideRoles, _FUG_ROLES), perDay: per >= 1 && per <= 20 ? per : 10,
-           cadence: cad.length ? cad : [3, 5, 7, 14], then: then >= 0 && then < 100 ? then : 7, start: _lgDayOf(d.followUpStart) };
+           cadence: cad.length ? cad : [3, 5, 7, 14], then: then >= 0 && then < 100 ? then : 7, start: _lgDayOf(d.followUpStart),
+           from: String(d.followUpPlanFrom || 'book').trim().toLowerCase() === 'plan' ? 'plan' : 'book' };   // A407
 }
 function _fugDenied(p, cfg) {
   if (!cfg.on) return 'The follow-up guide is switched off (FlowSettings followUpGuide).';
@@ -2258,8 +2264,10 @@ function _fugData(owners, since) {
     if (mine(_quoOwner(r))) m.qRows.push(r);
   });
   _sbRows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
-  _fugCols('SalesOrders', ['Quotation No']).forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q) m.hasSO[q] = true; });
-  m.book = _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Next Step', 'Archived At', 'Sector']).filter(function (r) { return mine(r['Owner']); });
+  // A407 — an order naming a quotation loosely ("2026-374") still closes it
+  var soMap = _soQuoteMap(_fugCols('SalesOrders', ['SO No', 'Quotation No', 'Status']), Object.keys(m.quotes));
+  Object.keys(soMap).forEach(function (q) { m.hasSO[q] = true; });
+  m.book = _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Next Step', 'Archived At', 'Sector', 'Tier']).filter(function (r) { return mine(r['Owner']); });
   m.plan = _sbRows('FollowUpPlan');
   m.reports = _fugReports(owners, since);
   m.emails = _fugCols('QuotationEmails', ['Quotation No', 'Sent At', 'Kind', 'Status']);
@@ -2287,8 +2295,25 @@ function _fugGuide(m, who, cfg, today) {
     live[no] = r; full[_fugNorm(co)] = no;
     var k = _canonKey(co); if (k) { keyN[k] = (keyN[k] || 0) + 1; keyNo[k] = no; }
   });
-  var byName = function (name) { var f = _fugNorm(name); if (!f) return ''; if (full[f]) return full[f]; var k = _canonKey(name); return k && keyN[k] === 1 ? keyNo[k] : ''; };
-  var planRows = m.plan.filter(function (r) { return me(r['Owner']); }).sort(function (a, b) { return _num(a['Rank']) - _num(b['Rank']); });
+  var byName = function (name) {
+    var a = _cbAliasClient(name); if (a && live[a]) return a;   // A407 — a saved spelling first
+    var f = _fugNorm(name); if (!f) return ''; if (full[f]) return full[f]; var k = _canonKey(name); return k && keyN[k] === 1 ? keyNo[k] : '';
+  };
+  var saved = m.plan.filter(function (r) { return me(r['Owner']); }).sort(function (a, b) { return _num(a['Rank']) - _num(b['Rank']); });
+  /* A407 — one ranking: the plan is the rep's live Client Book clients with a label, Major then Minor then Developing; the saved
+     plan (the old top 50, or the order of Neil's lists) only orders clients within a label, then A to Z. A client moved, archived
+     or unlabelled simply is not in it, so no dead account can stay. FlowSettings followUpPlanFrom 'plan' = the A393 list. */
+  var planRows = saved;
+  if (cfg.from !== 'plan') {
+    var savedRank = {}; saved.forEach(function (r) { savedRank[String(r['Client No'] || '').trim()] = _num(r['Rank']); });
+    planRows = Object.keys(live).filter(function (no) { return _A407_TIER_ORDER.hasOwnProperty(String(live[no]['Tier'] || '')); }).map(function (no) {
+      return { 'Owner': who, 'Client No': no, 'Company': String(live[no]['Company'] || ''), 'Next Step': '', 'Tier': String(live[no]['Tier']), 'Saved Rank': savedRank[no] || 0 };
+    }).sort(function (a, b) {
+      return _A407_TIER_ORDER[a['Tier']] - _A407_TIER_ORDER[b['Tier']] || (a['Saved Rank'] || 9999) - (b['Saved Rank'] || 9999) ||
+             a['Company'].toLowerCase().localeCompare(b['Company'].toLowerCase());
+    });
+    planRows.forEach(function (r, i) { r['Rank'] = i + 1; });
+  }
   // A394 — a longer list is spread over the five days (Kimberlyn's 74: 15 a day), never piled onto Friday
   var per = Math.max(cfg.perDay, Math.ceil(planRows.length / 5));
   var plan = [], inPlan = {}, notLive = [];
@@ -2296,7 +2321,7 @@ function _fugGuide(m, who, cfg, today) {
     var no = String(r['Client No'] || '').trim(), c = live[no];
     if (!c) { notLive.push({ rank: _num(r['Rank']), clientNo: no, company: String(r['Company'] || '') }); return; }
     inPlan[no] = true;
-    plan.push({ rank: _num(r['Rank']), clientNo: no, company: String(c['Company'] || ''), sector: String(c['Sector'] || ''),
+    plan.push({ rank: _num(r['Rank']), clientNo: no, company: String(c['Company'] || ''), sector: String(c['Sector'] || ''), label: String(c['Tier'] || ''),
                 nextStep: String(c['Next Step'] || '').trim() || String(r['Next Step'] || '').trim() });
   });
   var rankOf = {}; plan.forEach(function (c) { rankOf[c.clientNo] = c; });
@@ -2314,13 +2339,15 @@ function _fugGuide(m, who, cfg, today) {
     if (!day || day < since || day > today) return;
     var t = { day: day, kind: kind, time: at && typeof at.getTime === 'function' && !isNaN(at.getTime()) ? _lgHHmm(at) : '' };
     if (quoteNo) (byQuote[quoteNo] = byQuote[quoteNo] || []).push(t);
-    if (clientNo && inPlan[clientNo]) (byClient[clientNo] = byClient[clientNo] || []).push(t);
+    if (clientNo && live[clientNo]) (byClient[clientNo] = byClient[clientNo] || []).push(t);   // A407 — any live client of the rep
   };
   var openQuotes = [], quoteRows = {};
   m.qRows.forEach(function (r) {
     if (!me(_quoOwner(r))) return;
     var no = String(r['Quotation No']).trim(), cno = quoteClient(no, r['Customer']);
-    if (!inPlan[cno]) return;
+    /* A407 — every open quotation of the rep is followed up, the plan's clients or not, so the daily report's list and this
+       guide are one list (A393 followed only the plan's clients). */
+    if (cfg.from === 'plan' && !inPlan[cno]) return;
     quoteRows[no] = cno;
     touch(cno, no, _lgDayOf(r['Created At'] || r['Date']), 'Quotation made', r['Created At']);
     var lf = _lgDayOf(r['Last Follow Up']);
@@ -2354,7 +2381,7 @@ function _fugGuide(m, who, cfg, today) {
   });
   m.emails.forEach(function (r) {
     var no = String(r['Quotation No'] || '').trim(), st = String(r['Status'] || 'Active').trim();
-    if (!quoteRows[no] || String(r['Kind'] || '') === 'Initial' || (st && st !== 'Active')) return;
+    if (!quoteRows.hasOwnProperty(no) || String(r['Kind'] || '') === 'Initial' || (st && st !== 'Active')) return;
     var at = _fugAt(r['Sent At']);
     touch(quoteRows[no], no, _lgDayOf(r['Sent At']), 'Email follow-up', at);
   });
@@ -2382,19 +2409,20 @@ function _fugGuide(m, who, cfg, today) {
   // the quotation checkpoints: done (a touch from the checkpoint until the next), missed (the next has come), open, planned
   var quoted = {}, checks = [];
   openQuotes.forEach(function (o) {
-    quoted[o.clientNo] = true;
-    var cps = _fugCheckpoints(o.sent, horizon, cfg).filter(function (cp) { return !cfg.start || cp.date >= cfg.start; }), c = rankOf[o.clientNo], all = (byQuote[o.no] || []).concat(byClient[o.clientNo] || []).sort(sortT);
+    if (o.clientNo) quoted[o.clientNo] = true;
+    var c = rankOf[o.clientNo] || { company: String(o.row['Customer'] || ''), rank: null, label: o.clientNo && live[o.clientNo] ? String(live[o.clientNo]['Tier'] || '') : '' };
+    var cps = _fugCheckpoints(o.sent, horizon, cfg).filter(function (cp) { return !cfg.start || cp.date >= cfg.start; }), all = (byQuote[o.no] || []).concat(byClient[o.clientNo] || []).sort(sortT);
     cps.forEach(function (cp, i) {
       var next = cps[i + 1] ? cps[i + 1].date : '', by = cp.date <= today ? firstFrom(all, cp.date, next) : null;
       var status = cp.date > today ? 'planned' : by ? 'done' : next && next <= today ? 'missed' : 'open';
-      checks.push({ quotationNo: o.no, clientNo: o.clientNo, company: c.company, rank: c.rank, value: _num(o.row['Total']), sent: o.sent, step: cp.step,
+      checks.push({ quotationNo: o.no, clientNo: o.clientNo, company: c.company, rank: c.rank, label: c.label || '', value: _num(o.row['Total']), sent: o.sent, step: cp.step,
                     date: cp.date, next: next, status: status, by: by, lastFollowUp: _lgDayOf(o.row['Last Follow Up']), result: String(o.row['Result'] || '') });
     });
   });
   // the ranked clients with no open quotation, one day each by rank
   var clients = plan.map(function (c) {
     var by = firstFrom(byClient[c.clientNo], monday, '');
-    return { rank: c.rank, clientNo: c.clientNo, company: c.company, sector: c.sector, nextStep: c.nextStep, quoted: !!quoted[c.clientNo],
+    return { rank: c.rank, clientNo: c.clientNo, company: c.company, sector: c.sector, label: c.label, nextStep: c.nextStep, quoted: !!quoted[c.clientNo],
              bucket: Math.min(4, Math.floor((c.rank - 1) / per)), done: by };
   });
   var ranked = clients.filter(function (c) { return !c.quoted; });
@@ -2421,7 +2449,7 @@ function _fugGuide(m, who, cfg, today) {
   var td = days.filter(function (d) { return d.today; })[0];
   var weekDone = clients.filter(function (c) { return !!c.done; }).length;
   return { user: who, today: today, monday: monday, friday: friday, weekend: weekend, perDay: per, cadence: cfg.cadence, then: cfg.then,
-           planSize: planRows.length, live: plan.length, notLive: notLive, days: days, next: next, clients: clients,
+           planSize: planRows.length, live: plan.length, notLive: notLive, days: days, next: next, clients: clients, planFrom: cfg.from === 'plan' ? 'plan' : 'book',
            summary: { todayDone: td ? td.done : 0, todayTotal: td ? td.total : 0, weekDone: weekDone, weekTotal: plan.length,
                       quotesDue: checks.filter(function (x) { return x.status === 'open'; }).length, quoted: Object.keys(quoted).length } };
 }
@@ -2432,12 +2460,20 @@ function getFollowUpGuide(p) {
   var cfg = _fugCfg(), no = _fugDenied(p, cfg);
   if (no) return { success: false, message: no };
   var over = _powReadsAll(p), today = _lgDay(_now()), since = _fugSince(today), plan = _sbRows('FollowUpPlan');
-  var owners = [], seen = {};
-  plan.forEach(function (r) { var o = String(r['Owner'] || '').trim(), k = o.toLowerCase(); if (o && !seen[k]) { seen[k] = 1; owners.push(o); } });
+  var owners = [], seen = {}, sized = {};
+  var addOwner = function (v) { var o = String(v || '').trim(), k = o.toLowerCase(); if (o && !seen[k]) { seen[k] = 1; owners.push(o); } if (k) sized[k] = (sized[k] || 0) + 1; };
+  /* A407 — with the plan taken from the Client Book (followUpPlanFrom 'book'), every rep with a live client has a guide: its
+     labelled clients are the plan, and every open quotation is followed up whatever its client's label */
+  if (cfg.from === 'plan') plan.forEach(function (r) { addOwner(r['Owner']); });
+  else _fugCols('ClientBook', ['Owner', 'Archived At', 'Tier']).forEach(function (r) {
+    if (r['Archived At']) return;
+    if (_A407_TIER_ORDER.hasOwnProperty(String(r['Tier'] || '').trim())) addOwner(r['Owner']);
+    else { var o = String(r['Owner'] || '').trim(), k = o.toLowerCase(); if (o && !seen[k]) { seen[k] = 1; owners.push(o); } }
+  });
   owners.sort();
   // A395 — before the start day: who has a plan and how big, and when it starts; nothing is counted yet
   if (cfg.start && today < cfg.start) {
-    var sizeOf = function (o) { return plan.filter(function (r) { return _cbSame(r['Owner'], o); }).length; };
+    var sizeOf = function (o) { return sized[String(o || '').trim().toLowerCase()] || 0; };
     var soon = function (o) { var n = sizeOf(o); return { user: o, live: n, planSize: n, notStarted: true, startsOn: cfg.start, perDay: Math.max(cfg.perDay, Math.ceil(n / 5)),
       summary: { todayDone: 0, todayTotal: 0, weekDone: 0, weekTotal: n, quotesDue: 0, quoted: 0 } }; };
     if (over && (p.all === true || String(p.all) === 'true')) return { success: true, today: today, startsOn: cfg.start, people: owners.map(soon) };
@@ -2450,7 +2486,7 @@ function getFollowUpGuide(p) {
   }
   var who = over && String(p.user || '').trim() ? String(p.user).trim() : String(p.actorName).trim();
   // A394 — the plan is read first: a rep with none (the card stays hidden) costs one small read, not every tab
-  var has = owners.some(function (o) { return _cbSame(o, who); });
+  var has = cfg.from !== 'plan' || owners.some(function (o) { return _cbSame(o, who); });   // A407 — from the book, every rep's quotations count
   var g = _fugGuide(has ? _fugData([who], since) : _fugEmpty(plan, since), who, cfg, today);
   g.success = true; g.readOnly = !_cbSame(who, p.actorName); g.people = over ? owners : [];
   return g;
@@ -2485,6 +2521,258 @@ function setFollowUpPlan(p) {
   return { success: true, owner: owner, count: rows.length, refNo: owner, message: 'Follow-up plan set for ' + owner + ': ' + rows.length + ' clients.' };
 }
 /* ═══ end A393 ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ A407 · the sales clean-up ══════════════════════════════════════════════════════════════════
+ * Neil, 25 Nov 2026, on a review of the sales side: "two of everything", three ways to rank a client, client names typed
+ * freely (Itogon-Suyoc four ways), quotations outside the Client Book, wins not linked to orders, a top 50 holding dead
+ * accounts. His answers: one ranking (the Client Book's Major / Minor / Developing); an order that names a quotation marks
+ * it Won; every client may carry its other spellings, and a rep's new request or quotation names a client from the book.
+ * Each part is a FlowSettings switch (followUpPlanFrom, salesPlanTierFrom, soMarksQuoteWon, requireClientPick). */
+function _a407Set(key) {
+  var d = {};
+  try { d = getFlowSettings().data || {}; } catch (e) { d = {}; }
+  return String(d[key] == null ? '' : d[key]).trim().toLowerCase();
+}
+var _A407_TIER_ORDER = { Major: 0, Minor: 1, Developing: 2 }, _A407_TIER_LETTER = { Major: 'A', Minor: 'B', Developing: 'C' };
+
+/* ── "also written as" ─────────────────────────────────────────────────────────────────────────── */
+/** A spelling as a lookup key: lower case, letters and digits only ("ITOGON-SUYOC RESOURCES, INC." → "itogon suyoc resources inc"). */
+function _cbNameKey(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+var _CBN_MEMO = null;
+/** {map: {nameKey: {clientNo, name}}, company: {clientNo: live company}} — read once per call; empty when no spelling was ever saved. */
+function _cbNameIndex() {
+  if (_CBN_MEMO) return _CBN_MEMO;
+  var map = {}, company = {}, owner = {}, any = false;
+  _sbRows('ClientBookNames').forEach(function (r) {
+    var k = String(r['Name Key'] || '').trim() || _cbNameKey(r['Name']);
+    if (!k) return;
+    map[k] = { clientNo: String(r['Client No'] || '').trim(), name: String(r['Name'] || '') }; any = true;
+  });
+  if (any) _fugCols('ClientBook', ['Client No', 'Company', 'Owner', 'Archived At']).forEach(function (r) {
+    if (r['Archived At']) return;
+    var no = String(r['Client No'] || '').trim(); if (no) { company[no] = String(r['Company'] || ''); owner[no] = String(r['Owner'] || ''); }
+  });
+  _CBN_MEMO = { map: map, company: company, owner: owner };
+  return _CBN_MEMO;
+}
+/** The live client a spelling was saved for, or ''. */
+function _cbAliasClient(name) {
+  var k = _cbNameKey(name); if (!k) return '';
+  var x = _cbNameIndex(), e = x.map[k];
+  return e && e.clientNo && x.company[e.clientNo] ? e.clientNo : '';
+}
+/** The Client Book's own name for a spelling saved as one of a client's, else the name as given. Matchers key on this. */
+function _cbAliasName(name) { var c = _cbAliasClient(name); return c ? _cbNameIndex().company[c] : name; }
+/** Each client's saved spellings: {clientNo: [name, …]}. */
+function _cbNamesByClient() {
+  var x = _cbNameIndex(), out = {};
+  Object.keys(x.map).forEach(function (k) { var e = x.map[k]; if (e.clientNo) (out[e.clientNo] = out[e.clientNo] || []).push(e.name); });
+  Object.keys(out).forEach(function (c) { out[c].sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); }); });
+  return out;
+}
+/** saveClientBookNames({clientNo, names: ['…'] | '…\n…'}) — a client's other spellings, the whole list (the client's own
+ *  name is left out). A spelling already saved for another live client is refused; one removed is kept as a blank row. */
+function saveClientBookNames(p) {
+  p = p || {};
+  var no = _cbDenied(p);
+  if (no) return { success: false, message: no };
+  var row = _cbRow(p.clientNo), by = String(p.actorName).trim();
+  if (!row || row['Archived At']) return { success: false, message: 'Client ' + (p.clientNo || '') + ' is not a live client in the Client Book.' };
+  if (!_cbOwns(p, row)) return { success: false, message: 'Client ' + p.clientNo + ' is not in your Client Book.' };
+  var list = p.names;
+  if (typeof list === 'string') { var t = list.trim(); if (t.charAt(0) === '[') { try { list = JSON.parse(t); } catch (e) { list = null; } } else list = t.split(/\n|;/); }
+  if (!Array.isArray(list)) return { success: false, message: 'Send the spellings as a list.' };
+  var cno = String(row['Client No']), own = _cbNameKey(row['Company']), want = {}, order = [];
+  for (var i = 0; i < list.length; i++) {
+    var n = _webCell(list[i]).slice(0, 160), k = _cbNameKey(n);
+    if (!k || k === own || want[k]) continue;
+    want[k] = n; order.push(k);
+  }
+  if (order.length > 30) return { success: false, message: 'A client can have up to 30 other spellings.' };
+  _CBN_MEMO = null;
+  var x = _cbNameIndex(), live = {};
+  _fugCols('ClientBook', ['Client No', 'Company', 'Archived At']).forEach(function (r) { if (!r['Archived At']) live[_cbNameKey(r['Company'])] = String(r['Client No']); });
+  for (var j = 0; j < order.length; j++) {
+    var key = order[j], e = x.map[key], other = live[key];
+    if (other && other !== cno) return { success: false, message: '"' + want[key] + '" is the name of another client in the Client Book (' + other + ').' };
+    if (e && e.clientNo && e.clientNo !== cno && x.company[e.clientNo]) return { success: false, message: '"' + want[key] + '" is already saved as a spelling of ' + x.company[e.clientNo] + '.' };
+  }
+  var now = _now(), added = [], gone = [];
+  order.forEach(function (key) { var e = x.map[key]; if (!e || e.clientNo !== cno) { _append('ClientBookNames', [want[key], key, cno, by, now]); added.push(want[key]); } });
+  Object.keys(x.map).forEach(function (key) { var e = x.map[key]; if (e.clientNo === cno && !want[key]) { _append('ClientBookNames', [e.name, key, '', by, now]); gone.push(e.name); } });
+  if (added.length || gone.length) _cbLog(cno, 'details', '', '', [added.length ? 'Also written as: ' + added.join('; ') : '', gone.length ? 'No longer: ' + gone.join('; ') : ''].filter(Boolean).join('. ') + '.', '', by);
+  _CBN_MEMO = null;
+  return { success: true, refNo: cno, clientNo: cno, names: _cbNamesByClient()[cno] || [], added: added.length, removed: gone.length,
+           message: added.length || gone.length ? 'Spellings saved.' : 'No change.' };
+}
+
+/* ── an order and its quotation ──────────────────────────────────────────────────────────────────
+ * The order book names its quotation loosely: "2026-374" for 2026-374-KIM-…, or nothing at all (40 of 2026's 55 orders).
+ * A reference is the quotation when it is its number, or the start of exactly one number. */
+function _soQuoteResolver(nos) {
+  var exact = {}, lower = {}, list = [], memo = {};
+  (nos || []).forEach(function (n) { n = String(n == null ? '' : n).trim(); if (n && !exact[n]) { exact[n] = n; lower[n.toLowerCase()] = n; list.push(n); } });
+  return function (ref) {
+    var r = String(ref == null ? '' : ref).trim();
+    if (!r) return '';
+    if (memo[r] !== undefined) return memo[r];
+    var hit = exact[r] || lower[r.toLowerCase()] || '';
+    if (!hit && r.length >= 6) {
+      var low = r.toLowerCase(), c = list.filter(function (n) { var x = n.toLowerCase(); return x.indexOf(low) === 0 && /^[-_ ]/.test(x.slice(low.length)); });
+      if (c.length === 1) hit = c[0];
+    }
+    memo[r] = hit;
+    return hit;
+  };
+}
+/** {quotationNo: soNo} for the orders that name a quotation (cancelled or voided orders left out). */
+function _soQuoteMap(soRows, quoteNos) {
+  var res = _soQuoteResolver(quoteNos), out = {};
+  (soRows || []).forEach(function (r) {
+    if (/cancel|void/i.test(String(r['Status'] || ''))) return;
+    var q = res(r['Quotation No']);
+    if (q && !out[q]) out[q] = String(r['SO No'] || '') || 'a sales order';
+  });
+  return out;
+}
+/** Mark a quotation row Won by a sales order: Result Won (a closed one goes back to the status it was closed from). */
+function _quoWonBySO(q, soNo, by) {
+  if (!q) return '';
+  var st = String(q['Status'] || ''), closed = _QUOTE_CLOSED.indexOf(st) !== -1;
+  if (String(q['Result'] || '') === 'Won' && !closed) return 'already';
+  var cells = { 'Result': 'Won', 'Result At': _now(), 'Result By': String(by || ''), 'Result Note': 'Sales order ' + soNo };
+  if (closed) {
+    cells['Status'] = _quoRestoreStatus(q) || 'Sent'; cells['Closed From'] = ''; cells['Result Reason'] = '';
+    cells['Approval Note'] = 'Won: sales order ' + soNo + (by ? ' (' + by + ')' : '');
+  }
+  var sh = _sheet('Quotations');
+  Object.keys(cells).forEach(function (h) { var col = SCHEMA.Quotations.indexOf(h) + 1; if (col > 0) sh.getRange(q.rowIndex, col, 1, 1).setValues([[cells[h]]]); });
+  return 'marked';
+}
+/** After an order is written: store the quotation's full number on it and mark that quotation Won (soMarksQuoteWon). */
+function _soLinkQuote(soNo, ref, by) {
+  if (_a407Set('soMarksQuoteWon') === 'off') return '';
+  var r = String(ref || '').trim();
+  if (!r || !soNo) return '';
+  var quotes = _rows('Quotations'), res = _soQuoteResolver(quotes.map(function (q) { return q['Quotation No']; })), full = res(r);
+  if (!full) return '';
+  if (full !== r) {
+    var so = _rows('SalesOrders').filter(function (s) { return String(s['SO No']) === String(soNo); })[0];
+    if (so) _sheet('SalesOrders').getRange(so.rowIndex, SCHEMA.SalesOrders.indexOf('Quotation No') + 1, 1, 1).setValues([[full]]);
+  }
+  var q = quotes.filter(function (x) { return String(x['Quotation No']) === full; })[0];
+  return _quoWonBySO(q, soNo, by) ? full : '';
+}
+/** The year's orders and their quotations, for the director to put right: orders whose quotation is not marked Won yet
+ *  (`named`), and orders that name none (`unnamed`) with the likeliest quotations of the same client (same rep's book
+ *  client, its saved spellings, the company name), sent before the order. */
+function _soLinkPicture(year) {
+  var y0 = year + '-01-01', y1 = year + '-12-31';
+  var quotes = _fugCols('Quotations', ['Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Discount %', 'Created By', 'Salesperson', 'Result', 'PR No']);
+  var byNo = {}; quotes.forEach(function (q) { var n = String(q['Quotation No'] || '').trim(); if (n) byNo[n] = q; });
+  var res = _soQuoteResolver(Object.keys(byNo)), sos = _fugCols('SalesOrders', ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total']);
+  var taken = {};
+  sos.forEach(function (r) { var q = res(r['Quotation No']); if (q && !/cancel|void/i.test(String(r['Status'] || ''))) taken[q] = String(r['SO No']); });
+  var key = function (name) { return _canonKey(_cbAliasName(name)); };
+  var qByKey = {};
+  quotes.forEach(function (q) { var k = key(q['Customer']); if (k) (qByKey[k] = qByKey[k] || []).push(q); });
+  var named = [], unnamed = [], unknown = [];
+  sos.forEach(function (r) {
+    var so = String(r['SO No'] || '').trim(), day = _lgDayOf(r['Date']), st = String(r['Status'] || '');
+    if (!so || !day || day < y0 || day > y1 || /cancel|void/i.test(st)) return;
+    var ref = String(r['Quotation No'] || '').trim(), amount = Math.round(_num(r['Total']) * 100) / 100;
+    var base = { soNo: so, date: day, customer: String(r['Customer'] || ''), amount: amount, ref: ref };
+    if (ref) {
+      var full = res(ref), q = full ? byNo[full] : null;
+      if (q) {
+        var won = String(q['Result'] || '') === 'Won' && _QUOTE_CLOSED.indexOf(String(q['Status'] || '')) === -1;
+        if (!won || full !== ref) named.push(Object.assign(base, { quotationNo: full, quoteCustomer: String(q['Customer'] || ''), quoteStatus: String(q['Status'] || ''),
+                                                                    quoteResult: String(q['Result'] || ''), owner: _quoOwner(q), fixNumber: full !== ref }));
+        return;
+      }
+    }
+    var cands = (qByKey[key(r['Customer'])] || []).map(function (q) {
+      var n = String(q['Quotation No']).trim(), qd = _lgDayOf(q['Date']);
+      if (!qd || qd > _lgAddDays(day, 3) || qd < _lgAddDays(day, -240) || (taken[n] && taken[n] !== so)) return null;
+      var disc = Math.max(0, Math.min(100, _num(q['Discount %']))), v = _num(q['Total']) * (1 - disc / 100);
+      var fit = function (a, b) { return a > 0 && b > 0 ? Math.min(a, b) / Math.max(a, b) : 0; };
+      var near = Math.max(fit(v, amount), fit(v, amount * 1.12), fit(v * 1.12, amount));
+      var score = Math.round((near * 70 + Math.max(0, 30 - _lgDaysBetween(qd, day) / 8)) * 10) / 10;
+      return { quotationNo: n, date: qd, customer: String(q['Customer'] || ''), value: Math.round(v * 100) / 100, status: String(q['Status'] || ''),
+               result: String(q['Result'] || ''), owner: _quoOwner(q), amountFit: Math.round(near * 100), score: score };
+    }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 3);
+    (ref ? unknown : unnamed).push(Object.assign(base, { candidates: cands }));
+  });
+  var by = function (a, b) { return b.date.localeCompare(a.date) || a.soNo.localeCompare(b.soNo); };
+  return { named: named.sort(by), unnamed: unnamed.sort(by), unknown: unknown.sort(by) };
+}
+/** getOrderQuotationLinks({year?}) — the director's list of orders to connect to their quotations (read only). */
+function getOrderQuotationLinks(p) {
+  p = p || {};
+  if (_ibRole(p) !== 'director') return { success: false, message: 'Only the director connects orders to quotations.' };
+  var today = _lgDay(_now()), year = parseInt(p.year, 10) || parseInt(today.slice(0, 4), 10);
+  var pic = _soLinkPicture(year);
+  return { success: true, year: year, today: today, named: pic.named, unnamed: pic.unnamed, unknown: pic.unknown,
+           on: _a407Set('soMarksQuoteWon') !== 'off' };
+}
+/** linkOrderQuotations({links: [{soNo, quotationNo}], all?}) — the director connects orders to quotations: the order keeps
+ *  the quotation's full number and the quotation is marked Won. `all` does every order whose quotation is known but not
+ *  marked Won yet. An order already naming another quotation is refused. At most 60 per call. */
+function linkOrderQuotations(p) {
+  p = p || {};
+  if (_ibRole(p) !== 'director') return { success: false, message: 'Only the director connects orders to quotations.' };
+  var links = p.links;
+  if (typeof links === 'string') { try { links = JSON.parse(links); } catch (e) { links = null; } }
+  var all = p.all === true || String(p.all) === 'true';
+  if (all) {
+    var year = parseInt(p.year, 10) || parseInt(_lgDay(_now()).slice(0, 4), 10);
+    links = _soLinkPicture(year).named.map(function (x) { return { soNo: x.soNo, quotationNo: x.quotationNo }; });
+  }
+  if (!Array.isArray(links) || !links.length) return { success: false, message: all ? 'Every order\'s quotation is already marked won.' : 'Say which orders and quotations.' };
+  if (links.length > 60) return { success: false, message: 'At most 60 at a time.' };
+  var quotes = _rows('Quotations'), byNo = {}; quotes.forEach(function (q) { byNo[String(q['Quotation No']).trim()] = q; });
+  var res = _soQuoteResolver(Object.keys(byNo)), soBy = {}; _rows('SalesOrders').forEach(function (s) { soBy[String(s['SO No']).trim()] = s; });
+  var by = String(p.actorName || '').trim(), done = [], refused = [], col = SCHEMA.SalesOrders.indexOf('Quotation No') + 1, sh = _sheet('SalesOrders');
+  links.forEach(function (l) {
+    var so = soBy[String((l && l.soNo) || '').trim()], qn = String((l && l.quotationNo) || '').trim(), q = byNo[qn];
+    if (!so) { refused.push({ soNo: l && l.soNo, message: 'Order ' + (l && l.soNo) + ' was not found.' }); return; }
+    if (!q) { refused.push({ soNo: so['SO No'], message: 'Quotation ' + qn + ' was not found.' }); return; }
+    var cur = String(so['Quotation No'] || '').trim(), curFull = res(cur);
+    if (cur && curFull !== qn) { refused.push({ soNo: so['SO No'], message: so['SO No'] + ' already names ' + cur + '.' }); return; }
+    if (cur !== qn) { sh.getRange(so.rowIndex, col, 1, 1).setValues([[qn]]); so['Quotation No'] = qn; }
+    var w = _quoWonBySO(q, String(so['SO No']), by);
+    done.push({ soNo: String(so['SO No']), quotationNo: qn, marked: w === 'marked' });
+  });
+  if (!done.length) return { success: false, message: refused[0].message, refused: refused };
+  return { success: true, refNo: done.map(function (d) { return d.soNo; }).join(', ').slice(0, 120), done: done, refused: refused,
+           message: done.length + (done.length === 1 ? ' order connected' : ' orders connected') + ' to ' + (done.length === 1 ? 'its quotation' : 'their quotations') + '.' };
+}
+/* ── the client named from the Client Book ────────────────────────────────────────────────────────
+ * A rep's new purchase request, and a quotation typed without one, name the client from the rep's own Client Book (a new
+ * client is added there first), so the name is the book's and the record is the client's from the start. FlowSettings
+ * requireClientPick 'off' = optional again (A358). Other roles, and a website request turned into a PR, are never asked. */
+function _a407ClientPick(p, required) {
+  var cno = String((p && p.clientNo) || '').trim(), role = _ibRole(p);
+  if (!cno) {
+    if (required && role === 'sales' && _a407Set('requireClientPick') !== 'off')
+      return { error: 'Choose the client from your Client Book. A client that is not there yet is added first (Add a client).', needClient: true };
+    return { clientNo: '' };
+  }
+  if (_cbRoles().indexOf(role) < 0) return { error: 'Only the Client Book\'s users can name a client from it.' };
+  var row = _cbRow(cno);
+  if (!row || row['Archived At']) return { error: 'Client ' + cno + ' is not a live client in the Client Book.' };
+  if (!_cbOwns(p, row)) return { error: 'Client ' + cno + ' is not in your Client Book.' };
+  return { clientNo: cno, row: row };
+}
+/** Put a quotation or PR on a client (ClientBookLinks row + the client's log), as linkClientBookRecords does. */
+function _a407Link(kind, no, clientNo, by) {
+  if (!kind || !no || !clientNo) return;
+  var m = { links: {} };
+  _sbRows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
+  _cbSetLink(m, kind, String(no), clientNo, by);
+  _cbLog(clientNo, 'linked', '', String(no), _cbRecName(kind) + ' ' + no + ' is this client\'s (named when it was made).', String(no), by);
+}
+/* ═══ end A407 helpers ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ═══ A396 · the client information hub ═════════════════════════════════════════════════════════
  * Neil, 5 Nov 2026: one place with every detail of every client — information only, no quotation status and no POs —
@@ -2814,10 +3102,13 @@ function _chsBuild(cfg, today) {
                                        'Result', 'Result At', 'Result Reason', 'Last Follow Up']);
   quotes.forEach(function (q) { var no = String(q['Quotation No'] || '').trim(), pr = String(q['PR No'] || '').trim(); if (no) qmeta[no] = { prNo: pr }; if (pr) quotedPr[pr] = true; });
   var m = { links: links, prs: prs, quotes: qmeta };
-  var keyOf = function (kind, no, customer) { var cn = no ? _cbLinkOf(m, kind, no) : ''; return (cn && book[cn]) || _cdKey(customer); };
+  // A407 — a spelling saved for a client files a record under that client
+  var nameKey = function (name) { var a = _cbAliasClient(name); return (a && book[a]) || _cdKey(name); };
+  var keyOf = function (kind, no, customer) { var cn = no ? _cbLinkOf(m, kind, no) : ''; return (cn && book[cn]) || nameKey(customer); };
   var sos = _fugCols('SalesOrders', ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Client PO No']), soOf = {}, qBy = {};
   quotes.forEach(function (q) { var no = String(q['Quotation No'] || '').trim(); if (no) qBy[no] = q; });
-  sos.forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q && !/cancel|void/i.test(String(r['Status'] || ''))) soOf[q] = String(r['SO No'] || ''); });
+  soOf = _soQuoteMap(sos, Object.keys(qBy));   // A407 — "2026-374" names 2026-374-KIM-…
+  var soRes = _soQuoteResolver(Object.keys(qBy));
   quotes.forEach(function (q) {
     var no = String(q['Quotation No'] || '').trim(), c = no ? put(keyOf('quotation', no, q['Customer'])) : null;
     if (!c) return;
@@ -2843,9 +3134,9 @@ function _chsBuild(cfg, today) {
                 stage: open ? 'RFQ received' : '', rank: 3 });
   });
   sos.forEach(function (r) {
-    var no = String(r['SO No'] || '').trim(), st = String(r['Status'] || ''), qno = String(r['Quotation No'] || '').trim();
+    var no = String(r['SO No'] || '').trim(), st = String(r['Status'] || ''), qno = soRes(r['Quotation No']);
     if (!no || /cancel|void/i.test(st)) return;
-    var c = put(qno ? keyOf('quotation', qno, r['Customer']) : _cdKey(r['Customer']));
+    var c = put(qno ? keyOf('quotation', qno, r['Customer']) : nameKey(r['Customer']));
     if (!c) return;
     var q = qno ? qBy[qno] : null;
     c.ev.push({ day: _lgDayOf(r['Date']), kind: 'Order', by: q ? _quoOwner(q) : '', text: 'Sales order ' + no + ' · ' + _chsPeso(r['Total']) + (String(r['Client PO No'] || '').trim() ? ' · their PO ' + String(r['Client PO No']).trim() : ''),
@@ -2866,7 +3157,7 @@ function _chsBuild(cfg, today) {
         (rep.lines || []).forEach(function (l) {
           if (!l || l.voidedAt) return;
           var lt = String(l.linkType || ''), lid = String(l.linkId || '').trim();
-          var key = lt === 'client' && book[lid] ? book[lid] : lt === 'quotation' || lt === 'pr' ? keyOf(lt, lid, l.company) : _cdKey(l.company);
+          var key = lt === 'client' && book[lid] ? book[lid] : lt === 'quotation' || lt === 'pr' ? keyOf(lt, lid, l.company) : nameKey(l.company);
           var c = put(key), day = rday || _lgDayOf(l.loggedAt);
           if (!c || !day) return;
           var res = String(l.result || '').trim(), type = String(l.type || 'Call');
@@ -2880,7 +3171,7 @@ function _chsBuild(cfg, today) {
     }
   }
   _fugCols('VisitPlans', ['Visit Plan No', 'Date', 'User', 'Client No', 'Company', 'Status', 'Done At']).forEach(function (r) {
-    var no = String(r['Client No'] || '').trim(), c = put((no && book[no]) || _cdKey(r['Company']));
+    var no = String(r['Client No'] || '').trim(), c = put((no && book[no]) || nameKey(r['Company']));
     if (!c) return;
     var st = String(r['Status'] || ''), day = _lgDayOf(r['Date']), by = String(r['User'] || '').trim();
     if (st === 'Done') {
@@ -2944,11 +3235,11 @@ function saveClientHubTier(p) {
     want = {};
     for (var i = 0; i < list.length; i++) {
       var t = norm(list[i] && list[i].tier);
-      if (t && CB_TIERS.indexOf(t) < 0) return { success: false, message: 'A client is Major or Minor.' };
+      if (t && CB_TIERS.indexOf(t) < 0) return { success: false, message: CB_TIER_SAY };
       want[String((list[i] && list[i].clientNo) || '').trim()] = t;
     }
   }
-  if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: 'A client is Major or Minor.' };
+  if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: CB_TIER_SAY };
   var key = _cdKey(p.key || p.company);
   if (!key) return { success: false, message: 'Say which client.' };
   var rows = _rows('ClientBook').filter(function (r) { return !r['Archived At'] && _cdKey(r['Company']) === key; });
@@ -3121,7 +3412,8 @@ function _spCfg() {
   return { on: _bbSwitch(d.salesPlan), roles: _bbList(d.salesPlanRoles, _SP_ROLES), targetRoles: _bbList(d.salesPlanTargetRoles, _SP_OVER),
            costRoles: _bbList(d.salesPlanCostRoles, _SP_OVER), defTarget: n(d.salesPlanDefaultTarget, 25000000, 0, 1e10),
            tiers: _spPairs(d.salesPlanTierTargets, { A: 1000000, B: 600000, C: 240000 }), ranks: ranks, odds: odds,
-           closeDays: n(d.salesPipelineCloseDays, 30, 1, 365), dormantDays: n(d.salesPlanDormantDays, 365, 30, 2000), fu: _fugCfg(), prDays: _prArchiveDays() };
+           closeDays: n(d.salesPipelineCloseDays, 30, 1, 365), dormantDays: n(d.salesPlanDormantDays, 365, 30, 2000), fu: _fugCfg(), prDays: _prArchiveDays(),
+           tierFrom: String(d.salesPlanTierFrom || 'book').trim().toLowerCase() === 'rank' ? 'rank' : 'book' };   // A407
 }
 function _spDenied(p, cfg) {
   if (!cfg.on) return 'The sales plan is switched off (FlowSettings salesPlan).';
@@ -3172,7 +3464,10 @@ function _spData(owners, year, full, cost, today) {
     var no = String(r['Quotation No'] || '').trim(); if (no) { m.quotes[no] = r; m.qmeta[no] = { prNo: String(r['PR No'] || '').trim() }; }
   });
   m.so = _fugCols('SalesOrders', ['SO No', 'Quotation No', 'Date', 'Customer', 'Status', 'Total', 'Client PO No', 'Type', 'VAT Type']);
-  m.so.forEach(function (r) { var q = String(r['Quotation No'] || '').trim(); if (q) { m.hasSO[q] = true; m.soOf[q] = String(r['SO No'] || ''); } });
+  // A407 — an order naming its quotation loosely ("2026-374") is that quotation's; its number is read as the full one
+  m.soRes = _soQuoteResolver(Object.keys(m.quotes));
+  m.soOf = _soQuoteMap(m.so, Object.keys(m.quotes));
+  Object.keys(m.soOf).forEach(function (q) { m.hasSO[q] = true; });
   _sbRows('ClientBookLinks').forEach(function (r) { m.links[String(r['Kind']) + ':' + String(r['Record No']).trim()] = r; });
   m.prRows = _fugCols('PricingRequests', ['PR No', 'Date', 'Requested By', 'Customer', 'Status', 'Created At', 'Updated At', 'Salesperson', 'Client Book No']);
   m.prRows.forEach(function (r) { var no = String(r['PR No'] || '').trim(); if (no) m.prs[no] = { owners: [_prOwner(r)], clientNo: String(r['Client Book No'] || '').trim() }; });
@@ -3219,16 +3514,17 @@ function _spAttribute(m) {
   });
   var owners = function (list) { var s = {}; (list || []).forEach(function (e) { s[e.owner.toLowerCase()] = e.owner; }); return Object.keys(s).map(function (k) { return s[k]; }); };
   var clientOf = function (owner, customer) {
+    customer = _cbAliasName(customer);   // A407 — a saved spelling is its client's name
     var a = (byCd[_cdKey(customer)] || []).filter(function (e) { return _cbSame(e.owner, owner); });
     if (a.length) return a[0];
     var b = (byCanon[_canonKey(customer)] || []).filter(function (e) { return _cbSame(e.owner, owner); });
     return b.length === 1 ? b[0] : null;
   };
   var latestQuoteOwner = function (cands, customer, day) {
-    var k = _canonKey(customer), best = null, bestDay = '';
+    var k = _canonKey(_cbAliasName(customer)), best = null, bestDay = '';
     Object.keys(m.quotes).forEach(function (no) {
       var q = m.quotes[no], d = _lgDayOf(q['Date']);
-      if (_canonKey(q['Customer']) !== k || !d || d > day) return;
+      if (_canonKey(_cbAliasName(q['Customer'])) !== k || !d || d > day) return;
       var o = _quoOwner(q);
       if (cands.some(function (c) { return _cbSame(c, o); }) && d > bestDay) { best = o; bestDay = d; }
     });
@@ -3236,9 +3532,9 @@ function _spAttribute(m) {
   };
   m.soOwner = {}; m.byCd = byCd; m.byCanon = byCanon; m.clientOf = clientOf;
   m.so.forEach(function (r) {
-    var no = String(r['SO No'] || '').trim(), cust = String(r['Customer'] || ''), day = _lgDayOf(r['Date']);
+    var no = String(r['SO No'] || '').trim(), cust = _cbAliasName(String(r['Customer'] || '')), day = _lgDayOf(r['Date']);
     if (!no) return;
-    var qn = String(r['Quotation No'] || '').trim(), q = qn ? m.quotes[qn] : null, who = q ? _quoOwner(q) : '';
+    var qn = m.soRes ? m.soRes(r['Quotation No']) : String(r['Quotation No'] || '').trim(), q = qn ? m.quotes[qn] : null, who = q ? _quoOwner(q) : '';
     if (who && !_commIsMigratedName(who)) { var c0 = clientOf(who, cust); m.soOwner[no] = { owner: who, via: 'quotation', clientNo: c0 ? c0.clientNo : '', shared: false }; return; }
     var hit = byCd[_cdKey(cust)], list = owners(hit);
     if (!list.length) { hit = byCanon[_canonKey(cust)]; list = owners(hit); }
@@ -3274,7 +3570,7 @@ function _spSales(m, who, today) {
     var names = itemsBy[no] || [], amount = Math.round(_num(r['Total']) * 100) / 100;
     var row = { soNo: no, date: day, customer: String(r['Customer'] || ''), clientNo: a.clientNo, via: a.via, shared: a.shared, poNo: String(r['Client PO No'] || ''),
                 invNos: invBy[no] || [], products: names.slice(0, 4).join('; ') + (names.length > 4 ? ' +' + (names.length - 4) + ' more' : ''), itemCount: names.length,
-                amount: amount, quotationNo: String(r['Quotation No'] || ''), status: st, vatType: _sgVatType(r['VAT Type']), type: String(r['Type'] || '') };
+                amount: amount, quotationNo: (m.soRes && m.soRes(r['Quotation No'])) || String(r['Quotation No'] || ''), status: st, vatType: _sgVatType(r['VAT Type']), type: String(r['Type'] || '') };
     var pay = _spPayment(arBy[no], today); row.payment = pay.status || (row.invNos.length ? 'Unpaid' : 'Not invoiced'); row.outstanding = pay.outstanding;
     if (m.cost) { var c = costBy[no] || invCogs[no] || 0; row.cost = c > 0 ? Math.round(c * 100) / 100 : null; row.gp = c > 0 ? Math.round((amount - c) * 100) / 100 : null; row.costFrom = costBy[no] ? 'cost sheet' : invCogs[no] ? 'invoice' : ''; }
     out.push(row);
@@ -3388,6 +3684,9 @@ function _spAccounts(m, who, cfg, plan, sales, today) {
   m.rank.forEach(function (r) { if (_cbSame(r['Owner'], who)) rank[String(r['Client No'] || '').trim()] = _num(r['Rank']); });
   m.accts.forEach(function (r) { if (_cbSame(r['Owner'], who) && Number(r['Year']) === m.year) rows[String(r['Client No'] || '').trim()] = r; });
   var tierOf = function (k) { return !k ? '' : k <= cfg.ranks[0] ? 'A' : k <= cfg.ranks[1] ? 'B' : k <= cfg.ranks[2] ? 'C' : ''; };
+  /* A407 — one ranking: the tier IS the Client Book's label (Major A, Minor B, Developing C); nothing else sets it.
+     FlowSettings salesPlanTierFrom 'rank' = A403 (ranks of the follow-up plan, overridable per account). */
+  var fromBook = cfg.tierFrom !== 'rank';
   var actual = {}, count = {};
   sales.rows.forEach(function (s) { if (s.clientNo) { actual[s.clientNo] = (actual[s.clientNo] || 0) + s.amount; count[s.clientNo] = (count[s.clientNo] || 0) + 1; } });
   var lastVisit = {}, nextVisit = {};
@@ -3416,8 +3715,8 @@ function _spAccounts(m, who, cfg, plan, sales, today) {
   });
   var book = m.book.filter(function (r) { return _cbSame(r['Owner'], who); });
   return book.map(function (r) {
-    var no = String(r['Client No']), o = rows[no], k = rank[no] || 0, tAuto = tierOf(k);
-    var tier = o && _SP_TIERS.indexOf(String(o['Tier'] || '')) >= 0 ? String(o['Tier']) : o && String(o['Tier']) === '-' ? '' : tAuto;
+    var no = String(r['Client No']), o = rows[no], k = fromBook ? 0 : (rank[no] || 0), tAuto = fromBook ? (_A407_TIER_LETTER[String(r['Tier'] || '').trim()] || '') : tierOf(k);
+    var tier = fromBook ? tAuto : o && _SP_TIERS.indexOf(String(o['Tier'] || '')) >= 0 ? String(o['Tier']) : o && String(o['Tier']) === '-' ? '' : tAuto;
     var tgtAuto = tier ? plan.tierTargets[tier] : 0;
     var tgtSet = !!(o && String(o['Target']) !== '' && isFinite(Number(o['Target'])));
     var cbSt = String(r['Status'] || ''), last = sales.lastSale[no] || '';
@@ -3426,12 +3725,15 @@ function _spAccounts(m, who, cfg, plan, sales, today) {
     var hints = (quoteSubj[no] || []).sort(function (a, b) { return String(b.day).localeCompare(String(a.day)); }).map(function (x) { return x.s; })
       .filter(function (s, i, a) { return a.indexOf(s) === i; }).slice(0, 4);
     return { clientNo: no, company: String(r['Company'] || ''), sector: String(r['Sector'] || ''), bookTier: String(r['Tier'] || ''), rank: k,
-             tier: tier, tierAuto: tAuto, tierSet: !!(o && String(o['Tier'] || '') !== ''), target: tgtSet ? Number(o['Target']) : tgtAuto, targetAuto: tgtAuto, targetSet: tgtSet,
+             tier: tier, tierAuto: tAuto, tierSet: !fromBook && !!(o && String(o['Tier'] || '') !== ''), target: tgtSet ? Number(o['Target']) : tgtAuto, targetAuto: tgtAuto, targetSet: tgtSet,
              actual: Math.round((actual[no] || 0) * 100) / 100, orders: count[no] || 0, lastSale: last,
              contact: m.full ? _spContact(r['Contacts JSON']) : null, lastVisit: lastVisit[no] || '', nextVisit: nextVisit[no] || '',
              focus: o ? String(o['Focus'] || '') : '', focusHints: hints, status: st, statusAuto: stAuto, statusSet: !!(o && String(o['Status'] || '') !== ''),
              bookStatus: cbSt, nextStep: String(r['Next Step'] || ''), updatedAt: o ? _webIso(o['Updated At']) : '', updatedBy: o ? String(o['Updated By'] || '') : '' };
-  }).sort(function (a, b) { return (a.rank || 9999) - (b.rank || 9999) || a.company.toLowerCase().localeCompare(b.company.toLowerCase()); });
+  }).sort(function (a, b) {
+    var t = function (x) { return x.tier ? 'ABC'.indexOf(x.tier) : 9; };
+    return (fromBook ? t(a) - t(b) : 0) || (a.rank || 9999) - (b.rank || 9999) || a.company.toLowerCase().localeCompare(b.company.toLowerCase());
+  });
 }
 /** The quotations of the year for the workbook's Quotation Tracker and the dashboard's win rate. */
 function _spQuotes(m, who) {
@@ -3463,7 +3765,8 @@ function getSalesPlan(p) {
   if (no) return { success: false, message: no };
   var today = _lgDay(_now()), year = _spYear(p.year, today), over = _spOver(p, cfg), role = _ibRole(p), cost = cfg.costRoles.indexOf(role) >= 0;
   var may = { target: cfg.targetRoles.indexOf(role) >= 0, cost: cost, oversight: over };
-  var lists = { stages: _SP_STAGES, openStages: _SP_OPEN_STAGES, statuses: _SP_STATUSES, tiers: _SP_TIERS, categories: _SP_CATEGORIES, odds: cfg.odds, ranks: cfg.ranks };
+  var lists = { stages: _SP_STAGES, openStages: _SP_OPEN_STAGES, statuses: _SP_STATUSES, tiers: _SP_TIERS, categories: _SP_CATEGORIES, odds: cfg.odds, ranks: cfg.ranks,
+                tierFrom: cfg.tierFrom, tierNames: cfg.tierFrom === 'rank' ? { A: 'Tier A', B: 'Tier B', C: 'Tier C' } : { A: 'Major', B: 'Minor', C: 'Developing' } };   // A407
   if (over && (p.all === true || String(p.all) === 'true')) {
     var ma = _spData([], year, false, cost, today), reps = _spOwners(ma);
     _spAttribute(ma);
@@ -3565,7 +3868,9 @@ function saveSalesPlanAccount(p) {
     return { success: false, stale: true, message: (row['Updated By'] || 'Someone') + ' changed this account just now. Open it again to see the change.' };
   var obj = {};
   SCHEMA.SalesPlanAccounts.forEach(function (h) { obj[h] = row ? row[h] : ''; });
-  if (has('tier')) { var t = String(p.tier == null ? '' : p.tier).trim().toUpperCase(); if (t && t !== '-' && _SP_TIERS.indexOf(t) < 0) return { success: false, message: 'The tier is A, B or C.' }; obj['Tier'] = t; }
+  if (has('tier') && cfg.tierFrom !== 'rank' && String(p.tier == null ? '' : p.tier).trim() !== '')   // A407 — one ranking
+    return { success: false, message: 'Major, Minor or Developing is set in the Client Book, not here.' };
+  if (has('tier') && cfg.tierFrom === 'rank') { var t = String(p.tier == null ? '' : p.tier).trim().toUpperCase(); if (t && t !== '-' && _SP_TIERS.indexOf(t) < 0) return { success: false, message: 'The tier is A, B or C.' }; obj['Tier'] = t; }
   if (has('target')) {
     var s = String(p.target == null ? '' : p.target).replace(/,/g, '').trim(), v = Number(s);
     if (s !== '' && !(isFinite(v) && v >= 0 && v <= 1e9)) return { success: false, message: 'The target must be an amount in pesos.' };
@@ -4291,6 +4596,8 @@ function createQuotation(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   var dup = _refSeen('createQuotation', p.clientRef);
   if (dup) return { success: true, quotationNo: dup, duplicate: true, message: 'Quotation created.' };
+  var qPick = _a407ClientPick(p, !String(p.prNo || '').trim());   // A407 — a quotation typed without a request names its client
+  if (qPick.error) return { success: false, needClient: !!qPick.needClient, message: qPick.error };
   // Explicit numbers are the company's own quotation codes — reject a collision with an existing record.
   // (Placed AFTER the clientRef idempotency return so a safe retry of the same create still succeeds.)
   if (p.quotationNo) {
@@ -4352,7 +4659,8 @@ function createQuotation(p) {
             _num(it.duration) || ''];   // trailing: A145 Supplier VAT, A147 UOM, A159 Item ID, A172 Line Key, A205 Option No, A276 hire
   });
   _refStore('createQuotation', p.clientRef, no);
-  return { success: true, quotationNo: no, message: 'Quotation created.' };
+  if (qPick.clientNo) { try { _a407Link('quotation', no, qPick.clientNo, String(p.actorName || '').trim()); } catch (e) { /* the quotation stands; the link can be made on the Client Book */ } }
+  return { success: true, quotationNo: no, clientNo: qPick.clientNo || '', message: 'Quotation created.' };
 }
 
 /** A quotation is editable only while it is the creator's to change. Once it enters approval it is
@@ -4881,6 +5189,11 @@ function createSalesOrder(p) {
   var no = p.soNo || _nextNumber('SalesOrders', 1, 'SO');
   var total = 0;
   items.forEach(function (it) { total += _lineAmount(it); });
+  /* A407 — "2026-374" typed for 2026-374-KIM-…: the order keeps the full number, so its type and its win follow the quotation */
+  if (String(p.quotationNo || '').trim() && _a407Set('soMarksQuoteWon') !== 'off') {
+    var fullQ = _soQuoteResolver(_fugCols('Quotations', ['Quotation No']).map(function (r) { return r['Quotation No']; }))(p.quotationNo);
+    if (fullQ) p.quotationNo = fullQ;
+  }
   var _soType = _orderTypeFrom(p);
   _append('SalesOrders', [no, p.quotationNo || '', p.date || _now(), p.customer, p.status || 'Open',
     total, p.createdBy || '', _now(), p.supplierType || '',
@@ -4908,7 +5221,9 @@ function createSalesOrder(p) {
   _registerClient(p.customer);   // A193 — pin the spelling before it names a folder
   _adoptSoDocs(no);              // A193 — pull the quotation/PR documents out of _Pre-Sales Order
   _refStore('createSalesOrder', p.clientRef, no);
-  return { success: true, soNo: no, vatType: sgVat, message: 'Sales Order created.' };
+  var wonQ = '';
+  try { wonQ = _soLinkQuote(no, p.quotationNo, p.actorName || p.createdBy); } catch (e) { wonQ = ''; }   // A407 — never block the order
+  return { success: true, soNo: no, vatType: sgVat, quotationNo: wonQ || String(p.quotationNo || ''), quoteWon: !!wonQ, message: 'Sales Order created.' };
 }
 
 /** Create a Shipment row for a Sales Order if one doesn't already exist (keyed by SO No). */
@@ -5254,7 +5569,12 @@ function updateSalesOrder(p) {
   // appears, so re-file here too. Idempotent — a file already in place is left alone.
   _registerClient(p.customer);
   _adoptSoDocs(no);
-  return { success: true, soNo: no, message: 'Sales Order updated.' };
+  var wonQ = '';
+  try {   // A407 — the order's quotation (the one sent, else the one it already names) is marked Won; never blocks the edit
+    var curQ = p.quotationNo != null && String(p.quotationNo).trim() !== '' ? p.quotationNo : (cur ? cur['Quotation No'] : '');
+    wonQ = _soLinkQuote(no, curQ, p.actorName);
+  } catch (e) { wonQ = ''; }
+  return { success: true, soNo: no, quotationNo: wonQ, quoteWon: !!wonQ, message: 'Sales Order updated.' };
 }
 
 /* A220 — RENAME a sales order, carrying every reference with it.
@@ -13055,8 +13375,7 @@ function setQuotationResult(p) {
 
   var byNo = {};
   _rows('Quotations').forEach(function (q) { byNo[String(q['Quotation No'])] = q; });
-  var soOf = {};
-  _rows('SalesOrders').forEach(function (s) { var k = String(s['Quotation No'] || '').trim(); if (k && !soOf[k]) soOf[k] = String(s['SO No'] || '') || 'a sales order'; });
+  var soOf = _soQuoteMap(_rows('SalesOrders'), Object.keys(byNo));   // A407 — "2026-374" is 2026-374-KIM-…'s order
   var who = String(p.actorName || ''), now = _now();
   var plan = [], results = [], refused = [];
 
@@ -15329,7 +15648,15 @@ var _FLOW_SETTING_DEFAULTS = {
   salesPipelineOdds: 'Lead 10; Qualified 20; Technical Review 30; Quotation 40; Negotiation 60', salesPipelineCloseDays: 30, salesPlanDormantDays: 365,
   /* A404 — the client hub's sales view: who sees it, who sets Major / Minor there, the days without an update that read
      Quiet, and how many days of daily reports it reads. */
-  clientHubSalesRoles: 'director,management', clientHubTierRoles: 'director,management', clientHubQuietDays: 30, clientHubSalesDays: 180
+  clientHubSalesRoles: 'director,management', clientHubTierRoles: 'director,management', clientHubQuietDays: 30, clientHubSalesDays: 180,
+  /* A407 — the sales clean-up, each a switch so it can be turned back without a paste:
+     followUpPlanFrom 'book' = each rep's follow-up plan is their live Client Book clients, Major then Minor then Developing
+       (the saved FollowUpPlan only orders clients within a label); 'plan' = the A393 saved top-50 list.
+     salesPlanTierFrom 'book' = the Sales plan's tiers A / B / C are the Client Book's Major / Minor / Developing; 'rank' = A403.
+     soMarksQuoteWon 'on' = a sales order that names a quotation marks it Won (and its full number is stored on the order).
+     requireClientPick 'on' = a sales rep's new purchase request, and a quotation typed without one, must name the client
+       from the rep's Client Book (a new client is added there first). */
+  followUpPlanFrom: 'book', salesPlanTierFrom: 'book', soMarksQuoteWon: 'on', requireClientPick: 'on'
 };
 function getFlowSettings() {
   var out = {};
@@ -18196,6 +18523,7 @@ var _MODULE_MAP = {
   saveSalesPlanTarget: ['Sales plan', 'Target set'], saveSalesPlanAccount: ['Sales plan', 'Account updated'], saveSalesOpp: ['Sales plan', 'Pipeline updated'],
   archiveSalesOpp: ['Sales plan', 'Lead archived'],   // A403
   saveClientHubTier: ['Client hub', 'Major / Minor set'],   // A404
+  linkOrderQuotations: ['Sales Order', 'Quotation won'],   // A407 — the director connects orders to their quotations
   voidCollection: ['Collection', 'Voided'],
   voidInvoice: ['Invoice', 'Voided'],
   retireDuplicateReceivables: ['AR Aging', 'Duplicates retired'],   // A334
@@ -18835,7 +19163,8 @@ function getProofReports(p) {
 var CB_ACCRED = ['Accredited', 'On process', 'Not accredited'];
 var CB_STEPS = ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'];
 var CB_STATUS = ['RFQ pending', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];   // A354: "RFQ pending" (was Pending RFQ)
-var CB_TIERS = ['Major', 'Minor'];   // A354 — Neil, 22 Oct: every client is labelled Major or Minor
+var CB_TIERS = ['Major', 'Minor', 'Developing'];   // A354 — Neil, 22 Oct: Major or Minor; A407 (25 Nov): his lists' third tier, Developing, back as a label
+var CB_TIER_SAY = 'A client is Major, Minor or Developing.';
 var CB_SECTORS = ['Oil and gas', 'Cement', 'Power', 'Aviation', 'Automotive', 'Construction', 'Mining', 'Others'];   // A354 — and its industry
 /** A sector from the list (any case), or the name typed for "Others" (kept as typed, at most 60 characters). */
 function _cbSector(v) {
@@ -18945,7 +19274,9 @@ function getClientBook(p) {
   var links = lk && lk.getLastRow() >= 2 ? _rows('ClientBookLinks').filter(function (r) { var c = String(r['Client No'] || '').trim(); return !c || mine[c]; }).map(function (r) {
     return { kind: String(r['Kind'] || ''), no: String(r['Record No'] || ''), clientNo: String(r['Client No'] || '').trim(), by: String(r['By'] || ''), at: _webIso(r['At']) };
   }) : [];
-  return { success: true, clients: clients, log: log, links: links, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
+  var names = _cbNamesByClient();   // A407 — each client's other spellings
+  clients.forEach(function (c) { c.names = names[c.clientNo] || []; });
+  return { success: true, clients: clients, log: log, links: links, names: true, lists: { accreditation: CB_ACCRED, steps: CB_STEPS, status: CB_STATUS, tiers: CB_TIERS, sectors: CB_SECTORS } };
 }
 
 /** saveClientBookClient({clientNo?, company, tier, sector, siteAddress, headOfficeAddress, owner, contactsJson, notes, nextStep, nextStepDate, accreditation?, allowDuplicate?})
@@ -18967,8 +19298,8 @@ function saveClientBookClient(p) {
   var accred = String(p.accreditation || '').trim();
   if (!row && accred && CB_ACCRED.indexOf(accred) < 0) return { success: false, message: 'Accreditation must be one of: ' + CB_ACCRED.join(', ') + '.' };
   var tier = _cbTier(p.tier);
-  if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: 'A client is Major or Minor.' };
-  if (!row && !tier) return { success: false, message: 'Say whether the client is Major or Minor.' };
+  if (tier && CB_TIERS.indexOf(tier) < 0) return { success: false, message: CB_TIER_SAY };
+  if (!row && !tier) return { success: false, message: 'Say whether the client is Major, Minor or Developing.' };
   var sector = _cbSector(p.sector);
   if (!row && !sector) return { success: false, message: 'Say which industry the client is in.' };
   var site = p.siteAddress === undefined || p.siteAddress === null ? null : _webCell(p.siteAddress, true).slice(0, 300);
@@ -20549,13 +20880,10 @@ function createPricingRequest(p) {
   if (!items.length) return { success: false, message: 'At least one item is required.' };
   /* A358 — the Client Book client the request is for, when the rep picks one (optional). It must be a live client the
      person may use: the director any, a rep their own. Refused before anything is written. */
-  var cbNo = String(p.clientNo || '').trim();
-  if (cbNo) {
-    if (_cbRoles().indexOf(String(p.actorRole || '').trim().toLowerCase()) < 0) return { success: false, message: 'Only the Client Book\'s users can link a purchase request to a client.' };
-    var cbRow = _cbRow(cbNo);
-    if (!cbRow || cbRow['Archived At']) return { success: false, message: 'Client ' + cbNo + ' is not a live client in the Client Book.' };
-    if (!_cbOwns(p, cbRow)) return { success: false, message: 'Client ' + cbNo + ' is not in your Client Book.' };
-  }
+  /* A407 — and a sales rep's new request must name one (requireClientPick); a website request is never asked. */
+  var cbPick = _a407ClientPick(p, String(p.clientRef || '').indexOf('web:') !== 0);
+  if (cbPick.error) return { success: false, needClient: !!cbPick.needClient, message: cbPick.error };
+  var cbNo = cbPick.clientNo;
   // Idempotency: a retried submission (transport bounce → the client re-POSTs) carries the same
   // clientRef — return the already-created PR instead of writing a duplicate. The ScriptProperties
   // check is authoritative (strongly consistent, immune to the Sheets read-after-write staleness that
@@ -21007,6 +21335,14 @@ function createQuotationFromPR(p) {
   if (prStatus !== 'Returned to Sales' && prStatus !== 'Partly Quoted') {
     return { success: false, message: 'This request is "' + prStatus +
       '" — it must be Returned to Sales (or Partly Quoted, for the items still outstanding) before it can be quoted.' };
+  }
+  /* A407 — a request made before the client had to be named can be put on one while it is quoted (optional here: the
+     request, not the quotation, carries the client). */
+  var prPick = _a407ClientPick(p, false);
+  if (prPick.error) return { success: false, message: prPick.error };
+  if (prPick.clientNo && !String(hdr['Client Book No'] || '').trim()) {
+    var prLinked = _sbRows('ClientBookLinks').some(function (r) { return String(r['Kind']) === 'pr' && String(r['Record No']).trim() === String(p.prNo); });
+    if (!prLinked) { try { _a407Link('pr', String(p.prNo), prPick.clientNo, String(p.actorName || '').trim()); } catch (e) { /* the quotation goes ahead */ } }
   }
 
   var quoByNo = {};
@@ -23583,6 +23919,7 @@ var HANDLERS = {
   getClientBook: getClientBook, saveClientBookClient: saveClientBookClient, setClientBookStatus: setClientBookStatus,
   archiveClientBookClient: archiveClientBookClient,   // A350
   linkClientBookRecords: linkClientBookRecords, unlinkClientBookRecord: unlinkClientBookRecord,   // A360
+  saveClientBookNames: saveClientBookNames, getOrderQuotationLinks: getOrderQuotationLinks, linkOrderQuotations: linkOrderQuotations,   // A407
   getVisitPlans: getVisitPlans, saveVisitPlan: saveVisitPlan, submitVisitPlans: submitVisitPlans, decideVisitPlans: decideVisitPlans,
   cancelVisitPlan: cancelVisitPlan, markVisitPlanDone: markVisitPlanDone,   // A369
   getSupplierBook: getSupplierBook, saveSupplierBookSupplier: saveSupplierBookSupplier, mergeSupplierBookSupplier: mergeSupplierBookSupplier,   // A374
@@ -23713,6 +24050,7 @@ var MUTATIONS = {
   submitProofReport: 1,   // A348
   saveClientBookClient: 1, setClientBookStatus: 1, archiveClientBookClient: 1,   // A350
   linkClientBookRecords: 1, unlinkClientBookRecord: 1,   // A360
+  saveClientBookNames: 1, linkOrderQuotations: 1,   // A407
   saveVisitPlan: 1, submitVisitPlans: 1, decideVisitPlans: 1, cancelVisitPlan: 1, markVisitPlanDone: 1,   // A369
   saveSupplierBookSupplier: 1, mergeSupplierBookSupplier: 1, archiveSupplierBookSupplier: 1, importSupplierBookHistory: 1, importSupplierBookList: 1,   // A374
   saveCollectionDetails: 1,   // A384 — one client's collection details, and its log row
@@ -23752,6 +24090,7 @@ var MUTATIONS = {
 };
 
 /* ─── CHANGELOG (moved off the FLOW_VERSION line in AS-2; oldest first at the far right) ───
+A407 THE SALES CLEAN-UP (204; A327 takes 205 or later). Neil, 25 Nov 2026, on a review of the sales side ("two of everything", three rankings, names typed freely, quotations outside the Client Book, wins not linked to orders, a top 50 holding dead accounts, a 24-link menu): one ranking — CB_TIERS gains Developing (his lists' third tier); the follow-up guide's plan is each rep's live labelled Client Book clients, Major then Minor then Developing (the saved FollowUpPlan only orders clients within a label, then A to Z), so a moved, archived or unlabelled client is never in it, and every rep with a live client has a guide; every open quotation of the rep is followed up, the plan's clients or not, so the daily report reads the same list (FlowSettings followUpPlanFrom 'plan' = A393). The Sales plan's tier is the client's label (Major A, Minor B, Developing C) and is no longer set per account (salesPlanTierFrom 'rank' = A403). Other spellings: new tab ClientBookNames (Name, Name Key, Client No, By, At; the latest row per key wins, blank = removed), saveClientBookNames (owner rep or director, a spelling of another live client refused, each change a ClientBookLog row); getClientBook returns each client's names; the guide, the Sales plan's attribution and the client hub's sales view read a saved spelling first. Orders and quotations: _soQuoteResolver reads an order's Quotation No as the quotation it is, or the start of exactly one number ("2026-374"); createSalesOrder stores the full number and, like updateSalesOrder, marks that quotation Won (Result Note 'Sales order X'; a closed one is restored first; soMarksQuoteWon 'off' = not); the guide, the Sales plan, the client hub and setQuotationResult read orders through it; getOrderQuotationLinks (director, read) lists the year's orders whose quotation is not marked Won and the orders naming none, with the likeliest quotations of the same client (spelling, date, amount); linkOrderQuotations (director, up to 60, or all) writes the order's Quotation No cell and marks the quotation Won. The client named from the book: a sales rep's createPricingRequest, and a createQuotation with no PR, must carry clientNo (a live client of theirs; needClient: true otherwise; a website request is never asked); the quotation is then linked (ClientBookLinks); createQuotationFromPR takes an optional clientNo and puts an unlinked request on it (requireClientPick 'off' = optional). New FlowSettings followUpPlanFrom, salesPlanTierFrom, soMarksQuoteWon, requireClientPick. One new tab, no Script Property.
 A404 THE CLIENT HUB'S SALES VIEW (203; it carries 202; A327 takes 204 or later). Neil, 23 Nov 2026: in the client hub, for the director and management, each client's update status from the latest sales activity, who owns it, and Major / Minor. getClientHubSales (secured read, clientHubSalesRoles): per _cdKey the live Client Book owners and their rows' Major / Minor, a status worked out from the records newest first (sales order or won quotation → PO received; quotation sent → Quotation sent, a follow-up or a call after it → Following up; purchase request not yet quoted → RFQ received; RFQ promised → RFQ pending; No need → No requirement now; lost → Lost; a call after a closed status → Contacted; calls only → Contacted / Not reached; the rep's own Client Book status counts as that day's newest record), the latest update, the next date promised (daily report next date, visit plan, Client Book next step; overdue when nothing happened since), the days since the last update and the last ten updates; daily reports read for clientHubSalesDays (180). saveClientHubTier (clientHubTierRoles): Major / Minor / '' on every live Client Book row of the client, whole rows via _cbPut, each change in ClientBookLog; ifTier refuses a change made meanwhile. getClientHub's may gains sales and tier. FlowSettings clientHubSalesRoles, clientHubTierRoles, clientHubQuietDays, clientHubSalesDays. No new tab, no Script Property.
 A403 THE SALES PLAN (202; A327 takes 203 or later). Neil, 23 Nov 2026: his 2027 Individual Sales Strategy Workbook (50 customer accounts, a ₱25M year) in the portal, filled in by itself wherever the portal knows. New tabs SalesPlan (a rep's year target, month split and tier targets; director and management), SalesPlanAccounts (an account's tier, target, focus and status where the rep changed the automatic one) and SalesOpps (typed leads, and the rep's own stage / odds / close / decision maker / next action on a quotation or purchase request). getSalesPlan (secured read; a rep their own, the director and management any rep or `all` with the orders credited to nobody): accounts from the live Client Book in follow-up rank order (1-10 A, 11-25 B, 26-50 C; target by tier), main contact, last and next visit, status (On hold / Active within 365 days of an order / Dormant / Prospect) and the year's orders; sales = every sales order of the year (its total as recorded: before VAT) credited to the quotation's owner, else the one Client Book owner of the customer, with invoices, products and payment status, and cost / gross profit only for salesPlanCostRoles (left out of anyone else's reply); pipeline = open quotations net of discount, live purchase requests not yet quoted and typed leads, stage, odds, expected close and the next follow-up by default; the year's quotations; month by month. saveSalesPlanTarget, saveSalesPlanAccount, saveSalesOpp, archiveSalesOpp (+ restore); getSalesActivity (secured read, at most 92 days): the daily report's lines and sent-email counts, visits done, the old call log. FlowSettings salesPlan*, salesPipelineOdds, salesPipelineCloseDays. No Script Property.
 A400 RECRUITMENT EVALUATION FORMS (201; A327 takes 202 or later). Neil, 16 Nov 2026: "an option to upload evaluation form under the recruitment" on the HR dashboard. New tab CandidateEvals; getCandidateEvals (every form on file, archived ones left out), saveCandidateEval (one file per call: a private Drive file under _Internal/Recruitment evaluations/<candidate>, the bulletin's allow-list and 10 MB), archiveCandidateEval (off the list, kept in Drive; restore is the Undo) and getCandidateEvalFile (base64; the type checked again on the way out). The candidates live in Code.gs and are addressed by a row number that shifts on a delete, so a form is filed under the candidate's key: C + the yyyyMMddHHmmss they were added (Created At, never edited; distinct for all 159 live candidates); the name, position and stage go with each form. Every action is secured: FlowSettings candidateEvalRoles (hr, admin, management, director) see the forms, candidateEvalEditRoles (hr, management) add and archive them, candidateEvals off closes it.

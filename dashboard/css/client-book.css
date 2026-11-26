@@ -74,6 +74,10 @@ textarea.cb-in { resize: vertical; min-height: 54px; }
 .cb-badge.tier-major { background: var(--hx-navy); border-color: var(--hx-navy); color: var(--hx-card); }
 .cb-badge.tier-minor { background: var(--hx-inset); color: var(--hx-ink-2); }
 .cb-badge.tier-none { background: var(--hx-warn-soft); border-color: var(--hx-warn-line); color: var(--hx-ink); }
+.cb-badge.tier-developing { background: transparent; border-style: dashed; color: var(--hx-ink-2); }   /* A407 — the third tier: lighter than Minor */
+/* A407 — the client's other spellings, as quiet chips */
+.cb-aliases { display: flex; flex-wrap: wrap; gap: 4px; }
+.cb-alias { padding: 1px 8px; border-radius: 999px; background: var(--hx-inset); color: var(--hx-ink-2); font-size: 12px; line-height: 1.6; }
 .cb-labels { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .cb-mhead .cb-sub .cb-labels { display: inline-flex; margin-top: 0; vertical-align: middle; }
 .cb-badge.sector { background: var(--hx-card); border-color: var(--hx-hair); color: var(--hx-ink); }   /* the industry: outlined, so it never reads as a status */

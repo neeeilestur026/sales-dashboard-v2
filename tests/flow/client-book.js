@@ -125,7 +125,7 @@ ok('an accreditation past its date is expired, not expiring', (f => f.expired &&
 eq('each log row reads in words', ['created', 'accreditation', 'status', 'contacts', 'details', 'archived', 'restored'].map(k => run('cbLogText(' + JSON.stringify({ kind: k, from: k === 'contacts' ? '1' : '', to: k === 'contacts' ? '2' : k === 'status' ? 'Quotation sent' : 'X' }) + ')')),
    ['Added to the Client Book', 'Accreditation: X', 'Status: Quotation sent', 'Contact people: 1 → 2', 'Details changed', 'Archived', 'Restored']);
 eq('an accreditation update shows its own last update', J('cbAccredLast(byNo("CB-0001"), LOG)'), { at: '2026-10-05T02:00:00.000Z', note: 'Vendor number issued' });
-eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, noLabel: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
+eq('the summary leaves archived clients out', J('cbSummary(CL, LOG, "2026-10-21")'), { total: 3, major: 1, minor: 1, developing: 0, noLabel: 1, accredited: 1, onProcess: 1, notAccredited: 1, needsUpdate: 1, expiring: 1, nextOverdue: 1, archived: 1 });
 const ids = (f) => J('cbFilter(CL, LOG, IX, ' + JSON.stringify(f) + ').map(function (c) { return c.clientNo; })');
 eq('newest update first by default', ids({}), ['CB-0003', 'CB-0001', 'CB-0002']);
 eq('search finds a contact\'s second email', ids({ q: 'ana.cruz@gmail' }), ['CB-0001']);
@@ -258,7 +258,7 @@ async function boot(o) {
   eq('  and the model filters the same way', J('cbFilter(CL, LOG, IX, { tier: "Minor" }).map(function (c) { return c.clientNo; })'), ['CB-0002']);
   pt.run('cbAddDialog(null)');
   const ta = pt.run('__shown');
-  ok('adding a client asks Major or Minor, and requires it', /<legend>Major or minor client<\/legend>/.test(ta) && /name="tier" value="Major" required>/.test(ta) && /name="tier" value="Minor" required>/.test(ta));
+  ok('adding a client asks its label (Major or Minor; Developing from FlowAPI 204, A407), and requires it', /<legend>Label<\/legend>/.test(ta) && /name="tier" value="Major" required>/.test(ta) && /name="tier" value="Minor" required>/.test(ta));
   pt.run('cbDetail("CB-0001", null)');
   const td = pt.run('__shown');
   ok('the detail shows the label, and the details form can change it', /<p class="cb-sub"><span class="cb-labels"><span class="cb-badge tier-major">Major<\/span><span class="cb-badge sector">Cement<\/span>/.test(td) && /Plant: Norzagaray, Bulacan · Head office: Ortigas, Pasig/.test(td) && /name="tier" value="Major" checked>/.test(td) && !/value="Major" checked required/.test(td));
@@ -464,7 +464,7 @@ async function boot(o) {
   const GS = fs.readFileSync(path.join(__dirname, '../../apps-script/FlowAPI.gs'), 'utf8');
   const HANDLERS = Object.keys(eval('({' + GS.match(/var HANDLERS = \{([\s\S]*?)\n\};/)[1].replace(/\/\/.*$/mg, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/:\s*\w+/g, ': 1') + '})'));
   const named = (src) => { const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/mg, ''); return HANDLERS.filter(h => new RegExp("'" + h + "'").test(code)).sort(); };
-  eq('of ' + HANDLERS.length + ' FlowAPI actions the page names only its own six (A360: link and take off), the daily reports and plain reads', named(JS + M), ['archiveClientBookClient', 'getActivityLog', 'getClientBook', 'getClients', 'getPricingRequests', 'getProofReports', 'getQuotations', 'getSalesOrders', 'linkClientBookRecords', 'saveClientBookClient', 'setClientBookStatus', 'unlinkClientBookRecord']);
+  eq('of ' + HANDLERS.length + ' FlowAPI actions the page names only its own six (A360: link and take off), the daily reports and plain reads', named(JS + M), ['archiveClientBookClient', 'getActivityLog', 'getClientBook', 'getClients', 'getFollowUpGuide', 'getPricingRequests', 'getProofReports', 'getQuotations', 'getSalesOrders', 'linkClientBookRecords', 'saveClientBookClient', 'saveClientBookNames', 'setClientBookStatus', 'unlinkClientBookRecord']);   // A407: + the guide's follow-ups, + other spellings
   eq('  the card names only getClientBook', named(CARD), ['getClientBook']);
   ok('  nothing writes the real client list, PRs or quotations', !/addClient|updateClient|saveClient\b|savePricingRequest|updateQuotation|closeQuotation|setLgAccred|logSalesCall/.test(JS + M + CARD));
   const SRC = H + JS + M + CARD;

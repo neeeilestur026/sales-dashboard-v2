@@ -10,8 +10,9 @@
  * A370 — Neil, 25 Oct 2026: "the new plan a visit can add multiple companies to visit in a day": the form takes a day and
  * up to 10 companies, saved all or none (FlowAPI 187; before it, one company at a time as in A369).
  * The week view is js/client-visits-week.js, loaded only for the director, accounting and management (never a rep).
- * The server (FlowAPI 186) checks every action again; this page only offers what it would allow. The weekly itinerary
- * keeps working beside it. The model is js/client-visits-model.js. */
+ * The server (FlowAPI 186) checks every action again; this page only offers what it would allow. The model is
+ * js/client-visits-model.js. A407 (Neil, 25 Nov 2026): the weekly itinerary is retired for reps — weekly-itinerary.html
+ * sends a saved link here — so the page no longer links it; management reads the older ones on management-itinerary.html. */
 const CV = { me: null, role: '', today: '', plans: [], log: [], book: null, ok: true, seg: '', rep: '', week: '', sel: {}, busy: false, seq: 0, flash: null, send: '1', v187: false, stopN: 0 };
 
 function _cvE(s) { return typeof flowEsc === 'function' ? flowEsc(s) : String(s == null ? '' : s); }
@@ -34,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }, typeof CV_WEEK !== 'undefined' ? CV_WEEK.lede : {})[CV.role] || '';
   const ready = typeof flowVersionAtLeast === 'function' ? await flowVersionAtLeast(186).catch(() => false) : false;
   if (!ready) {
-    _cvId('cvNotice').innerHTML = '<div class="dh-banner warn">Client visits open here with the next FlowAPI update (version 186). The weekly itinerary works as before meanwhile.</div>';
+    _cvId('cvNotice').innerHTML = '<div class="dh-banner warn">Client visits open here with the next FlowAPI update (version 186).</div>';
     _cvId('cvBar').hidden = true;
     _cvId('cvBody').hidden = true;
     return;
@@ -91,7 +92,7 @@ function cvRender() {
   if (CV.role === 'sales' && !CV.book) notes.push('<div class="dh-banner warn">Your Client Book could not be read, so no visit can be planned just now. Reload the page.</div>');
   _cvId('cvNotice').innerHTML = notes.join('');
   _cvId('cvActions').innerHTML = CV.role === 'sales'
-    ? '<a class="dh-btn" href="weekly-itinerary.html">Weekly itinerary</a><button type="button" class="dh-btn primary" data-plan' + (cvClients(CV.book, CV.me).length ? '' : ' disabled title="Add a client to your Client Book first"') + '>Plan a visit</button>'
+    ? '<button type="button" class="dh-btn primary" data-plan' + (cvClients(CV.book, CV.me).length ? '' : ' disabled title="Add a client to your Client Book first"') + '>Plan a visit</button>'
     : '';
   _cvId('cvSeg').innerHTML = cvSegments().map(s => '<button type="button" class="cv-segb' + (s.key === CV.seg ? ' on' : '') + '" role="tab" aria-selected="' + (s.key === CV.seg) + '" data-seg="' + s.key + '">' +
     _cvE(s.label) + (s.n === undefined ? '' : ' <span class="n">' + s.n + '</span>') + '</button>').join('');

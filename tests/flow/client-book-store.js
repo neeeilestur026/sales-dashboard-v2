@@ -25,7 +25,7 @@ sec('1 · the version, and nothing else is touched');
 {
   const store = {};
   const c = load(GS, store);
-  ok('getVersion = 203', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 203);
+  ok('getVersion = 204', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 204);
   const g = call(c, 'getClientBook', NEIL);
   ok('a read of an empty book answers empty and creates no tab', g.success && g.clients.length === 0 && g.log.length === 0 && !('ClientBook' in store) && !('ClientBookLog' in store), g);
   ok('  and gives the page the server\'s lists', g.lists.accreditation.join() === 'Accredited,On process,Not accredited' && g.lists.status.length === 9 && g.lists.steps.length === 4);
@@ -173,11 +173,11 @@ sec('9 · A354: every client is Major or Minor, with its industry and site addre
   const store = {};
   const c = load(GS, store);
   const none = call(c, 'saveClientBookClient', Object.assign({ company: 'No Label Co', sector: 'Power' }, NEIL));
-  ok('a new client without a label is refused, and nothing is written', !none.success && /Major or Minor/.test(none.message) && !(store.ClientBook || []).length, none);
+  ok('a new client without a label is refused, and nothing is written', !none.success && /Major, Minor or Developing/.test(none.message) && !(store.ClientBook || []).length, none);
   const odd = call(c, 'saveClientBookClient', Object.assign({ company: 'Odd Label Co', tier: 'Medium', sector: 'Power' }, NEIL));
   const nosec = call(c, 'saveClientBookClient', Object.assign({ company: 'No Sector Co', tier: 'Minor' }, NEIL));
   ok('a new client without its industry is refused', !nosec.success && /which industry/.test(nosec.message) && !(store.ClientBook || []).length, nosec);
-  ok('  only Major or Minor', !odd.success && /Major or Minor/.test(odd.message));
+  ok('  only Major, Minor or Developing (A407)', !odd.success && /Major, Minor or Developing/.test(odd.message));
   const maj = call(c, 'saveClientBookClient', Object.assign({ company: 'Big Plant Co', tier: 'major', sector: 'cement', siteAddress: 'Brgy. Bigte, Norzagaray, Bulacan' }, NEIL));
   const row = store.ClientBook[0];
   ok('saved as Major and Cement (any case), with the site address, every write 27 wide', maj.success && row['Tier'] === 'Major' && row['Sector'] === 'Cement' &&
@@ -194,7 +194,7 @@ sec('9 · A354: every client is Major or Minor, with its industry and site addre
   call(c, 'archiveClientBookClient', Object.assign({ clientNo: maj.clientNo, reason: 'test' }, NEIL));
   ok('  and an accreditation update or an archive keeps them', store.ClientBook[0]['Tier'] === 'Minor' && store.ClientBook[0]['Sector'] === 'Geothermal drilling' && store.ClientBook[0].__arity === 27);
   const g = call(c, 'getClientBook', NEIL);
-  ok('the read returns the labels and the lists', g.clients[0].tier === 'Minor' && g.clients[0].siteAddress === 'Plant 2, Bataan' && g.lists.tiers.join() === 'Major,Minor' &&
+  ok('the read returns the labels and the lists', g.clients[0].tier === 'Minor' && g.clients[0].siteAddress === 'Plant 2, Bataan' && g.lists.tiers.join() === 'Major,Minor,Developing' &&
      g.lists.sectors.join() === 'Oil and gas,Cement,Power,Aviation,Automotive,Construction,Mining,Others' && g.lists.status[0] === 'RFQ pending');
 }
 

@@ -13,7 +13,7 @@
 const CB_ACCRED = ['Accredited', 'On process', 'Not accredited'];
 const CB_STEPS = ['Requirements received', 'Documents submitted', 'Under evaluation', 'Site audit'];
 const CB_STATUS = ['RFQ pending', 'RFQ received', 'Quotation sent', 'Following up', 'Negotiating', 'PO received', 'Lost', 'On hold', 'No requirement now'];
-const CB_TIERS = ['Major', 'Minor'];   // A354 — every client is labelled Major or Minor
+const CB_TIERS = ['Major', 'Minor', 'Developing'];   // A354 — every client is labelled Major or Minor; A407 — and Developing, Neil's lists' third tier
 const CB_SECTORS = ['Oil and gas', 'Cement', 'Power', 'Aviation', 'Automotive', 'Construction', 'Mining', 'Others'];   // A354 — and its industry
 /** A sector off the list (typed for "Others") counts as Others. */
 function cbSectorGroup(sector) { const s = _cbS(sector); return !s ? '' : CB_SECTORS.indexOf(s) >= 0 ? s : 'Others'; }
@@ -114,7 +114,7 @@ function cbIndex(raw) {
   [by, linked].forEach(m => Object.keys(m).forEach(k => ['prs', 'quotes', 'sos'].forEach(t => m[k][t].sort((a, b) => b.date.localeCompare(a.date)))));
   ['prs', 'quotes'].forEach(t => all[t].sort((a, b) => b.date.localeCompare(a.date)));
   return { today: _cbS(r.today) || (typeof flowToday === 'function' ? flowToday() : new Date().toISOString().slice(0, 10)), by, linked, all,
-           names: cbNames(r) };
+           names: cbNames(r), fugDue: r.fugDue || null };   // A407 — the follow-up guide's due quotations, when the page read it
 }
 
 /** The company names the portal already uses (quotations, PRs, sales orders, the Clients sheet), for the add form. */
@@ -134,7 +134,10 @@ function cbNames(raw) {
  *  A360: also those connected by hand (`how` says which way); a record taken off a client is no client's, so it is
  *  not matched by name either. */
 function cbRecords(ix, client) {
-  const byName = ix.by[_cbKey(client.company)] || { prs: [], quotes: [], sos: [] };
+  /* A407 — and the records under any of the client's other spellings ("ITOGON SOYUC RESOURCES INC" for Itogon Suyoc) */
+  const keys = [client.company].concat(client.names || []).map(_cbKey).filter((k, i, a) => k && a.indexOf(k) === i);
+  const byName = { prs: [], quotes: [], sos: [] };
+  keys.forEach(k => { const b = ix.by[k]; if (b) ['prs', 'quotes', 'sos'].forEach(t => { byName[t] = byName[t].concat(b[t]); }); });
   const L = (ix.linked && ix.linked[_cbS(client.clientNo)]) || { prs: [], quotes: [], sos: [] };
   const take = (type) => {
     const seen = {}, out = [];
@@ -148,7 +151,8 @@ function cbRecords(ix, client) {
   const g = { prs: take('prs'), quotes: take('quotes'), sos: take('sos') };
   const quotes = g.quotes.map(q => {
     let due = null;
-    if (q.bucket === 'sent' && q.sent) {
+    if (ix.fugDue) due = ix.fugDue[q.ref] || null;   // A407 — the follow-up guide's own list, so the two never differ
+    else if (q.bucket === 'sent' && q.sent) {
       const step = cbFollowStep(q.sent, ix.today);
       if (step) due = step;
     }
@@ -273,7 +277,7 @@ function cbFilter(clients, log, ix, f) {
     if (o.owner && c.owner !== o.owner) return false;
     if (o.flag) { const fl = cbFlags(c, log, clients, ix.today); if (o.flag === 'expiring' ? !(fl.expiring || fl.expired) : !fl[o.flag]) return false; }
     if (!q) return true;
-    const hay = [c.company, c.tier, c.sector, c.siteAddress, c.headOfficeAddress, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
+    const hay = [c.company, (c.names || []).join(' '), c.tier, c.sector, c.siteAddress, c.headOfficeAddress, c.owner, c.status, c.accreditation, c.notes, c.nextStep].concat((c.contacts || []).reduce((a, p) =>
       a.concat([p.name, p.position, p.note]).concat(p.emails || []).concat(p.phones || []).concat((p.phones || []).map(x => String(x).replace(/\D/g, ''))), [])).join(' ').toLowerCase();
     return hay.indexOf(q) >= 0 || (q.replace(/\D/g, '').length >= 4 && hay.indexOf(q.replace(/\D/g, '')) >= 0);
   });
@@ -290,7 +294,8 @@ function cbFilter(clients, log, ix, f) {
 function cbSummary(clients, log, today) {
   const live = (clients || []).filter(c => !c.archivedAt);
   const fl = live.map(c => cbFlags(c, log, clients, today));
-  return { total: live.length, major: live.filter(c => c.tier === 'Major').length, minor: live.filter(c => c.tier === 'Minor').length, noLabel: live.filter(c => !c.tier).length,
+  return { total: live.length, major: live.filter(c => c.tier === 'Major').length, minor: live.filter(c => c.tier === 'Minor').length,
+           developing: live.filter(c => c.tier === 'Developing').length, noLabel: live.filter(c => !c.tier).length,   // A407
            accredited: live.filter(c => c.accreditation === 'Accredited').length,
            onProcess: live.filter(c => c.accreditation === 'On process').length, notAccredited: live.filter(c => c.accreditation === 'Not accredited').length,
            needsUpdate: fl.filter(x => x.needsUpdate).length, expiring: fl.filter(x => x.expiring || x.expired).length,
@@ -301,13 +306,13 @@ function cbSummary(clients, log, today) {
 function cbCsv(rows, log, ix) {
   const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['Client No', 'Company', 'Major or minor', 'Sector', 'Plant address', 'Head office address', 'Owner', 'Accreditation', 'Step', 'Accredited until', 'Accreditation last update', 'Status', 'Status since', 'Status ref',
-                'Primary contact', 'Position', 'Emails', 'Phones', 'Other contacts', 'Open PRs', 'Open quotations', 'Open quotations value', 'Next step', 'Next step date', 'Last update'];
+                'Primary contact', 'Position', 'Emails', 'Phones', 'Other contacts', 'Open PRs', 'Open quotations', 'Open quotations value', 'Next step', 'Next step date', 'Last update', 'Also written as'];
   const lines = rows.map(c => {
     const p = cbPrimary(c) || {}, others = (c.contacts || []).filter(x => x !== p), r = cbRecords(ix, c), fl = cbFlags(c, log, rows, ix.today);
     return [c.clientNo, c.company, c.tier, c.sector, c.siteAddress, c.headOfficeAddress, c.owner, c.accreditation, c.accreditationStep, c.accreditedUntil, _cbDate(cbAccredLast(c, log).at), c.status, _cbDate(c.statusUpdatedAt), c.statusRef,
             p.name || '', p.position || '', (p.emails || []).join('; '), (p.phones || []).join('; '),
             others.map(o => [o.name, o.position, (o.emails || []).join(' / '), (o.phones || []).join(' / ')].filter(Boolean).join(', ')).join(' | '),
-            r.openPrs, r.openQuotes, Math.round(r.openValue), c.nextStep, c.nextStepDate, fl.lastUpdate].map(q).join(',');
+            r.openPrs, r.openQuotes, Math.round(r.openValue), c.nextStep, c.nextStepDate, fl.lastUpdate, (c.names || []).join('; ')].map(q).join(',');
   });
   return [head.join(',')].concat(lines).join('\n');
 }

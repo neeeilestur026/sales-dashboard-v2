@@ -118,7 +118,23 @@ function qsRepUrl() {
 }
 function qsRows() { return QS.over ? QS.all.filter(q => (typeof flowQuotationOwner === 'function' ? flowQuotationOwner(q) : '') === QS.rep) : QS.all; }
 function qsBuildRows() {
-  QS.built = qsBuild(qsRows(), { hasSO: QS.hasSO, links: QS.links, cfg: QS.cfg, salesOrders: QS.so, today: QS.today });
+  const who = (QS.over ? QS.rep : QS.me).toLowerCase(), g = (QS.guide || {})[who];
+  QS.built = qsBuild(qsRows(), { hasSO: QS.hasSO, links: QS.links, cfg: QS.cfg, salesOrders: QS.so, today: QS.today, guideDue: g || undefined });
+  if (g === undefined) qsGuideFor(QS.over ? QS.rep : QS.me);
+}
+/* A407 — the follow-up guide (FlowAPI 204) decides which quotations are due a follow-up, so this list, the daily report and the
+   guide name the same ones. Read once per rep, after the list is drawn; until then (or before 204) the 7-day rule stands. */
+async function qsGuideFor(name) {
+  const key = String(name || '').toLowerCase();
+  QS.guide = QS.guide || {};
+  if (!key || QS.guide[key] !== undefined || ['sales', 'director', 'management'].indexOf(String(QS.role).toLowerCase()) < 0 || typeof postFlow !== 'function') return;
+  QS.guide[key] = null;
+  const r = await postFlow('getFollowUpGuide', QS.over ? { user: name } : {}).catch(() => null);
+  if (!r || !r.success || !r.planFrom || !Array.isArray(r.days)) return;
+  const due = {}, td = r.days.find(d => d.today);
+  ((td && td.quotes) || []).concat((td && td.carryQuotes) || []).forEach(x => { if (x && x.status === 'open' && x.quotationNo) due[x.quotationNo] = x.step || 1; });
+  QS.guide[key] = due;
+  if ((QS.over ? QS.rep : QS.me).toLowerCase() === key) { qsBuildRows(); qsRender(); }
 }
 function qsRow(no) { return (QS.built.rows || []).find(r => String(r.q.quotationNo) === String(no)) || null; }
 

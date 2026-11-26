@@ -57,7 +57,9 @@ function world(settings) {
     ],
     QuotationEmails: [], ClientBookLinks: [], SalesCalls: [], ClientVisits: []
   };
-  const st = Object.assign({ followUpStart: 'off' }, settings || {});   // A395: these sections test the guide itself, not its start day
+  /* A395: these sections test the guide itself, not its start day. A407: and the A393 saved plan (followUpPlanFrom 'plan', the
+     switch back); the plan taken from the Client Book is pinned in sales-cleanup-store.js */
+  const st = Object.assign({ followUpStart: 'off', followUpPlanFrom: 'plan' }, settings || {});
   store.FlowSettings = Object.keys(st).map(k => ({ 'Key': k, 'Value': st[k] }));
   const c = load(GS, store);
   c._now = () => new Date(NOW.getTime());
@@ -69,7 +71,7 @@ const set = (c, owner, items, actor) => call(c, 'setFollowUpPlan', Object.assign
 sec('1 · the version and who may open it');
 {
   const { c, store } = world();
-  ok('getVersion = 203', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 203);
+  ok('getVersion = 204', JSON.parse(c._dispatch({ action: 'getVersion' }).getContent()).version === 204);
   [GER, NEIL, LARRY].forEach(a => ok(a.actorRole + ' opens it', call(c, 'getFollowUpGuide', a).success));
   ['hr', 'admin', 'accounting', 'warehouse', 'marketing', 'leadgen'].forEach(r => ok(r + ' is refused', !call(c, 'getFollowUpGuide', who(r, 'X', r + '1')).success));
   ok('the read is secured', !call(c, 'getFollowUpGuide', Object.assign({ flowSecret: '' }, GER)).success);
@@ -234,7 +236,7 @@ sec('9 · A394: faster, and a long list spread over the week');
   set(one, 'Gerald Lucena', plan());
   ok('ten clients at one a day still fill the week: two a day', call(one, 'getFollowUpGuide', GER).perDay === 2);
   const big = Array.from({ length: 74 }, (_, i) => ({ 'Client No': 'K-' + (i + 1), 'Company': 'Kim Client ' + (i + 1), 'Owner': 'Kimberlyn Blones', 'Archived At': '' }));
-  const w = load(GS, { ClientBook: big, FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }] });
+  const w = load(GS, { ClientBook: big, FlowSettings: [{ 'Key': 'followUpStart', 'Value': 'off' }, { 'Key': 'followUpPlanFrom', 'Value': 'plan' }] });
   w._now = () => new Date(NOW.getTime());
   const r = set(w, 'Kimberlyn Blones', big.map((b, i) => ({ rank: i + 1, clientNo: b['Client No'] })));
   const g = call(w, 'getFollowUpGuide', KIM);
@@ -246,7 +248,7 @@ sec('9 · A394: faster, and a long list spread over the week');
 sec('10 · A395: the guide counts from its start day (Monday 9 Nov 2026)');
 {
   const { c, store } = world();
-  store.FlowSettings = [];   // the default start day
+  store.FlowSettings = [{ 'Key': 'followUpPlanFrom', 'Value': 'plan' }];   // the default start day (A407: on the saved plan)
   ok('the default start day is Monday 9 Nov', c._fugCfg().start === '2026-11-09');
   set(c, 'Gerald Lucena', plan());
   let read = 0;

@@ -170,6 +170,7 @@ async function prLoadFromInquiry(id) {
   if (rows) rows.innerHTML = '';
   const cust = document.getElementById('customer');
   if (cust && inq.client) { cust.value = inq.client; prFillContacts(); }   // fills blanks from the client master
+  if (typeof prPick !== 'undefined' && prPick && inq.client) prPick.suggest(inq.client);   // A407 — the book's client when the name is exactly one of them
   items.forEach(it => addRow({
     itemNo: it.model || 'N/A',              // A333: a Power Team model is a real order number; family picks are not
     itemName: it.name,
@@ -300,19 +301,21 @@ async function loadClientBook() {
   prBook = [];
   const row = document.getElementById('prClientBookRow'), sel = document.getElementById('prClientBook');
   if (!row || !sel || typeof postFlow !== 'function') return;
+  let r = null;
   try {
     if (typeof flowVersionAtLeast === 'function' && !(await flowVersionAtLeast(182))) return;
-    const r = await postFlow('getClientBook', {});
+    r = await postFlow('getClientBook', {});
     if (!r || !r.success) return;
     prBook = (r.clients || []).filter(c => !c.archivedAt && c.company).sort((a, b) => String(a.company).localeCompare(String(b.company)));
   } catch (e) { return; }
+  if (await prMountPick(r)) return;                     // A407 — a sales rep: the shared picker, even with an empty book
   if (!prBook.length) return;
   sel.innerHTML = '<option value="">— not linked —</option>' + prBook.map(c => '<option value="' + flowEsc(c.clientNo) + '">' +
     flowEsc(c.company + (c.siteAddress || c.headOfficeAddress ? ' — ' + (c.siteAddress || c.headOfficeAddress) : '') + (c.tier ? ' · ' + c.tier : '')) + '</option>').join('');
   row.hidden = false;
 }
-function prPickClientBook() {
-  const sel = document.getElementById('prClientBook'), c = prBook.find(x => x.clientNo === (sel && sel.value));
+function prPickClientBook(picked) {
+  const sel = document.getElementById('prClientBook'), c = (picked && picked.clientNo) ? picked : prBook.find(x => x.clientNo === (sel && sel.value));
   if (!c) return;
   const cust = document.getElementById('customer');
   if (cust) cust.value = c.company;
@@ -323,6 +326,32 @@ function prPickClientBook() {
   fill('prContact', p.name); fill('prDesignation', p.position); fill('prEmail', (p.emails || [])[0]); fill('prPhone', (p.phones || [])[0]);
   fill('prAddress', c.siteAddress || c.headOfficeAddress);   // A369 — the plant, or the head office when there is no plant
   prFillContacts();
+}
+
+/* A407 — Neil, 25 Nov 2026: "New purchase requests and quotations must pick the client from the rep's book; a new client
+   can be added there in place." On FlowAPI 204 a sales rep gets the shared picker (js/client-pick.js) in the row above:
+   required (FlowSettings requireClientPick 'off' = optional), searchable, with Add a client in a sheet. Picking fills
+   the customer as the book spells it, through prPickClientBook above; the Client No sits in a hidden #prClientBook, so
+   the request reads it as before. Every other role keeps the optional A358 select; an older FlowAPI, or a book that
+   cannot be read, keeps the form as it was and says nothing. */
+let prPick = null;
+async function prMountPick(r) {
+  if (prRole !== 'sales' || typeof cpMount !== 'function') return false;
+  try { if (typeof flowVersionAtLeast === 'function' && !(await flowVersionAtLeast(204))) return false; } catch (e) { return false; }
+  const row = document.getElementById('prClientBookRow');
+  if (!row) return false;
+  if (!prSettings) { try { const s = await fetchFlow('getFlowSettings'); prSettings = (s && s.data) || null; } catch (e) { /* the default: required */ } }
+  prPick = cpMount(row, { inputId: 'prClientBook', required: cpRequired(prRole, prSettings || {}), clients: prBook, lists: r && r.lists,
+    what: 'request', onPick: prPickClientBook, submitId: 'saveBtn', whyId: 'prSaveWhy' });
+  if (!prPick) return false;
+  row.hidden = false;
+  return true;
+}
+/** The server still asked for the client (needClient): say it at the picker — reading the book again if it had not loaded. */
+async function prNeedClient(message) {
+  if (!prPick && prRole === 'sales') await loadClientBook();
+  if (prPick) { prPick.showError(message, true); return; }
+  flowMsg('formMsg', message, false);
 }
 
 // ─── Sales: request form ─────────────────────────
@@ -439,6 +468,7 @@ async function saveRequest() {
     return true;
   });
   const droppedDupes = before - items.length;
+  if (prPick && !prPick.check()) return;               // A407 — the client first: the picker says what to do, the button's note too
   const customer = document.getElementById('customer').value.trim();
   if (!customer) { flowMsg('formMsg', 'Customer is required.', false); return; }
   if (!items.length) { flowMsg('formMsg', 'Add at least one item.', false); return; }
@@ -467,6 +497,7 @@ async function saveRequest() {
   btn.disabled = true; btn.textContent = 'Submitting...';
   try {
     const res = await postFlow('createPricingRequest', payload);
+    if (res && !res.success && res.needClient) { await prNeedClient(res.message); return; }   // A407 — inline, at the picker
     if (!res.success) throw new Error(res.message);
     // A169: close the loop — stamp the PR number back on the Product Finder inquiry so the rep can
     // see which searches became real business. Never allowed to break the request that just saved.
@@ -564,6 +595,7 @@ function resetForm() {
   document.getElementById('date').value = flowToday();
   ['prContact', 'prDesignation', 'prEmail', 'prPhone', 'prAddress', 'prDateNeeded', 'prUrgency', 'prClientNo', 'prClientBook']
     .forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; if (el.dataset) el.dataset.cbfill = ''; } });
+  if (prPick) prPick.clear();                           // A407
   document.getElementById('itemRows').innerHTML = '';
   document.getElementById('formMsg').style.display = 'none';
   prFromInquiry = '';                                   // A169: a second Save must not re-stamp the inquiry

@@ -67,7 +67,7 @@
 
   /* the four sections on the bar, per role: [the LEDGER_NAV section, the tab's own label] (Neil, 27 Oct 2026) */
   var TABS = {
-    sales: [['Quote', 'Quotes'], ['Clients'], ['Reports', 'Report']],
+    sales: [['Quote', 'Quotes'], ['Clients'], ['Daily report', 'Report']],   // A407 — the daily report is one link now
     admin: [['Sell'], ['Buy & pay'], ['Stock']],
     accounting: [['Collect'], ['Pay'], ['Books']],
     management: [['Approvals'], ['Sell'], ['Money']],
@@ -96,7 +96,7 @@
     'hr-home': [['#hrmods', 'HR modules', 'users'], ['#mkmods', 'Marketing modules', 'pen'], ['#teamDailyReports', 'New daily reports', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'clip']],
     'marketing-home': [['#trackers', 'Trackers', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'users']],
     'leadgen-home': [['#trackers', 'Trackers', 'clip'], ['#newsec-daily-reports', 'Daily reports', 'users']],
-    dashboard: [['#today', 'Your tools', 'tool'], ['.sl-pair', 'Target and overdue follow-ups', 'trend']]
+    dashboard: [['#today', 'Your tools', 'tool'], ['.sl-pair', 'Monthly target', 'trend']]   // A407 — the old overdue follow-ups card is gone
   };
   var CHEV = '<svg class="ap-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var BACK = '<svg viewBox="0 0 12 20" aria-hidden="true"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';

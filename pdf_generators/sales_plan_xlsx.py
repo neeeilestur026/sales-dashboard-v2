@@ -127,6 +127,7 @@ def build_sales_plan_xlsx(plan, activity=None, prepared_by="", today=None):
     may = plan.get("may") or {}
     cost = bool(may.get("cost"))
     accounts = plan.get("accounts") or []
+    book = _s((plan.get("lists") or {}).get("tierFrom")) == "book"   # A407 — the tiers are the Client Book's labels
     sales = plan.get("sales") or []
     pipe = [o for o in (plan.get("pipeline") or []) if not o.get("archived")]
     quotes = plan.get("quotes") or []
@@ -153,8 +154,10 @@ def build_sales_plan_xlsx(plan, activity=None, prepared_by="", today=None):
     ws["A4"] = "HOW THIS FILE WAS FILLED"
     ws["A4"].font = Font(name="Aptos", size=12, bold=True, color=RED)
     steps = [
-        ("1. The accounts", "The live clients in the rep's Client Book, in follow-up rank order. Tier from the rank (1–10 A, 11–25 B, 26–50 C) unless changed by hand; "
-                            "the target from the tier; the main contact from the Client Book; visits from the visit plans and the daily reports."),
+        ("1. The accounts", ("The live clients in the rep's Client Book, Major first, then Minor and Developing. The tier is the client's Client Book label "
+                             "(A Major, B Minor, C Developing); " if book else
+                             "The live clients in the rep's Client Book, in follow-up rank order. Tier from the rank (1–10 A, 11–25 B, 26–50 C) unless changed by hand; ")
+                            + "the target from the tier; the main contact from the Client Book; visits from the visit plans and the daily reports."),
         ("2. The annual target", f"₱{annual:,.0f}, split over the months on the Monthly Targets sheet"
                                  + (" as set on the Sales plan." if p.get("set") else " (the default: not yet set by the director).")),
         ("3. The sales", "Every sales order of the year on its date, at its total as recorded — before VAT (VAT is added on the invoice). An order counts for the rep "
@@ -219,7 +222,7 @@ def build_sales_plan_xlsx(plan, activity=None, prepared_by="", today=None):
         b.font = Font(name="Aptos", size=11, bold=True, color=INK)
         b.fill = PatternFill("solid", fgColor=fill)
         b.number_format = fmt
-    kd["A22"] = "Sales target by account tier"
+    kd["A22"] = "Sales target by account tier" + (" (A Major, B Minor, C Developing)" if book else "")
     kd["A22"].font = Font(name="Aptos", size=12, bold=True, color=RED)
     _header(kd, 23, ["Tier", "Accounts", "Target", "Actual", "Achievement"])
     for i, t in enumerate(["A", "B", "C"]):
@@ -242,7 +245,8 @@ def build_sales_plan_xlsx(plan, activity=None, prepared_by="", today=None):
     # ── 50 Customer Accounts ─────────────────────────────────────────────────────────────────────
     ac = wb.create_sheet("50 Customer Accounts")
     _title(ac, f"{len(accounts)} Customer Account Plan — {who}",
-           "From the Client Book, in follow-up rank order. Tier and target as on the Sales plan; change the yellow cells if a customer's potential differs.", 13)
+           ("From the Client Book, Major first (tier A), then Minor (B) and Developing (C). Target as on the Sales plan; change the yellow cells if a customer's potential differs."
+            if book else "From the Client Book, in follow-up rank order. Tier and target as on the Sales plan; change the yellow cells if a customer's potential differs."), 13)
     _widths(ac, [15, 30, 22, 10, 18, 18, 18, 13, 28, 14, 14, 36, 14])
     _header(ac, 4, ["Account ID", "Customer Name", "Industry / Sector", "Account Tier", "Annual Sales Target", "Actual Sales YTD", "Remaining Target",
                     "Achievement %", "Primary Contact", "Last Visit", "Next Visit", "Products / Opportunity Focus", "Account Status"])

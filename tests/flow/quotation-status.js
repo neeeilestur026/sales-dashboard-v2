@@ -168,7 +168,7 @@ async function boot(o) {
   eq('a rep reads their own quotations (owner or typist, as the server scopes it)', p.paramsFor('getQuotations'), { createdBy: 'Kimberlyn Blones' });
   eq('  and keeps only the ones they own (not one they typed for Gerald)', p.run('QS.all.length'), Q.length);
   eq('  the five reads, and no write', p.calls.filter(c => !/^POST:/.test(c)).sort(), ['getClients', 'getFlowSettings', 'getQuotationEmails', 'getQuotations', 'getSalesOrders']);
-  ok('  no write on load', !p.calls.some(c => /^POST:/.test(c)));
+  ok('  no write on load (A407: its one POST is the follow-up guide, a read)', !p.calls.some(c => /^POST:/.test(c) && !/^POST:getFollowUpGuide/.test(c)), p.calls.filter(c => /^POST:/.test(c)));
   ok('  the list is drawn, To update first, oldest first', /Over 90 days/.test(p.els.qsList.innerHTML) && p.els.qsList.innerHTML.indexOf('2026-409-KPB-I') < p.els.qsList.innerHTML.indexOf('2026-401-KPB-A'));
   ok('  each open row has Won, Pending and Lost, and Update for a phone', /data-act="won" data-no="2026-401-KPB-A"/.test(p.els.qsList.innerHTML) && /data-act="pending" data-no="2026-401-KPB-A"/.test(p.els.qsList.innerHTML) &&
      /data-act="lost" data-no="2026-401-KPB-A"/.test(p.els.qsList.innerHTML) && /class="qs-update" data-act="update" data-no="2026-401-KPB-A"/.test(p.els.qsList.innerHTML));
@@ -182,7 +182,7 @@ async function boot(o) {
   const o = await boot({ v190: true });
   ok('before 191: a notice, and no buttons', /version 191/.test(o.els.qsNotice.innerHTML) && !/data-act="won"/.test(o.els.qsList.innerHTML));
   const src = read('js/quotation-status.js');
-  eq('the only write the page makes is setQuotationResult', (src.match(/postFlow\('([A-Za-z]+)'/g) || []).map(s => s.slice(10, -1)).filter((x, i, a) => a.indexOf(x) === i), ['setQuotationResult']);
+  eq('the only write the page makes is setQuotationResult (A407: and it reads the follow-up guide)', (src.match(/postFlow\('([A-Za-z]+)'/g) || []).map(s => s.slice(10, -1)).filter((x, i, a) => a.indexOf(x) === i).sort(), ['getFollowUpGuide', 'setQuotationResult']);
   ok('the mailbox picker is offered only to the quotation\'s own rep', /const q = r\.q, mine = _qsMine\(q\)/.test(src) && /Emails can be picked only from/.test(src));
   ok('the page does not gate on getVersion (the rows tell)', !/flowVersionAtLeast/.test(src) && /hasOwnProperty\.call\(x, 'result'\)/.test(src));
 
