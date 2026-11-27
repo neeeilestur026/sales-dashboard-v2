@@ -8,8 +8,8 @@
  * The rules pinned here:
  *   1. The BIR semi-monthly table (from 1 Jan 2023): nothing up to ₱10,417, then 15 / 20 / 25 / 30 /
  *      35% of the amount over each bracket, continuous at every edge.
- *   2. Taxable pay = gross less the cutoff's Pag-IBIG, SSS and PhilHealth (not advances, not loans);
- *      a fixed salary has no contributions, so its whole gross is taxable.
+ *   2. Taxable pay = gross less the cutoff's Pag-IBIG, SSS and PhilHealth (not advances, not loans).
+ *      A410: a fixed salary (Steve, Neil, Daisy) takes no withholding tax at all.
  *   3. Only an OPEN cutoff is worked out. Approved = the saved (paid) figure. Unknown / not loaded =
  *      the saved figure, with a banner when the check failed.
  *   4. A saved row holding a different figure is starred; Save sends the worked-out figure.
@@ -78,6 +78,7 @@ const FIXED  = { firstName: 'Ana', lastName: 'Reyes', payType: 'Fixed', fixedAmo
 const LOW    = { firstName: 'Lea', lastName: 'Santos', dailyRate: 600, otherIncome: 0 };
 const days = (who, list, hrs) => Object.assign({}, ...list.map(d => ({ [who + '|2026-11-' + d]: { employee: who, date: '2026-11-' + d, dayType: 'Regular', hours: hrs } })));
 const WORK = ['11', '12', '13', '14', '17', '18', '19', '20', '21', '24', '25', '15', '16'];   // 13 days
+let d0;
 const HOURS = Object.assign({}, days('Cruz, Juan', WORK, 8), days('Santos, Lea', WORK, 8));
 
 console.log('\n2 · taxable pay = gross less Pag-IBIG, SSS and PhilHealth (open cutoff)');
@@ -94,8 +95,16 @@ const dA = T.d(HOURLY, 'A');
 ok('  cutoff A takes only Pag-IBIG off before the table', Math.abs(dA.wtaxTaxable - (T.slip(HOURLY, 'A').grossPay - 200)) < 0.005);
 eq('  low earner (₱600 a day) pays nothing', T.d(LOW, 'B').wtax, 0);
 const dF = T.d(FIXED, 'B');
-eq('  fixed salary: the whole ₱15,000 is taxable', dF.wtaxTaxable, 15000);
-eq('  fixed salary WTax = 15% of ₱4,583', dF.wtax, 687.45);
+eq('  A410 — a fixed salary (₱15,000) takes no withholding tax', dF.wtax, 0);
+ok('  marked exempt, still worked out (not a saved figure)', dF.wtaxExempt === true && dF.wtaxAuto === true);
+eq('  its Total Ded. has no tax in it', dF.totalDed, 0);
+T.set([FIXED], HOURS, {}, { 'Reyes, Ana': { period: '2026-11-B', employee: 'Reyes, Ana', wtax: 687.45, salaryDeductionStored: 0 } }, 2026, '11');
+d0 = T.d(FIXED, 'B');
+ok('  a fixed salary saved with tax is 0 and starred on an open cutoff', d0.wtax === 0 && d0.wtaxProvisional === true && d0.wtaxSaved === 687.45, d0);
+T.state('open', 'approved');
+eq('  but an APPROVED cutoff keeps the tax that was paid', T.d(FIXED, 'B').wtax, 687.45);
+T.state('open', 'open');
+T.set([HOURLY, FIXED, LOW], HOURS, {}, {}, 2026, '11');
 T.set([HOURLY], HOURS, {}, { 'Cruz, Juan': { advances: 3000 } }, 2026, '11');
 eq('  an advance does not lower the tax', T.d(HOURLY, 'B').wtax, 267.45);
 
@@ -148,8 +157,11 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
   ok('  it shows ₱267.45 with the not-saved star', /267\.45<span title="Not saved to this cutoff yet" class="dh-warn-text"> \*<\/span>/.test(html));
   ok('  the tooltip says what is saved and how to apply it', /Saved now as ₱0\.00; Save Pay Register to apply it\./.test(html));
   ok('  a zero tax is a dim dash', /id="wtax_B_[^"]*Santos[^"]*"[^>]*><span class="dh-dim">—<\/span>/.test(html) || /<span class="dh-dim">—<\/span><\/td>\s*<td class="num computed" id="totalDed_B_[^"]*Santos/.test(html));
-  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth">WTax</.test(html));
+  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth\. None on a fixed salary\.">WTax</.test(html));
   ok('  no banner on an open cutoff', !/Withholding tax shows the saved figures/.test(html));
+  T.set([FIXED], HOURS, {}, {}, 2026, '11'); T.grid('B');
+  ok('  A410 — a fixed salary\'s cell says why it is empty', /title="Fixed salary: no withholding tax\."><span class="dh-dim">—<\/span>/.test(byId('payBGrid').innerHTML));
+  T.set([HOURLY, LOW], HOURS, {}, { 'Cruz, Juan': savedRow({ wtax: 0 }) }, 2026, '11'); T.grid('B');
 
   // type a new SSS for Juan → taxable 12,800 − 200 → WTax moves
   const k = Object.keys(ELS).find(id => /^wtax_B_/.test(id) && /Cruz/.test(id)) ||
