@@ -9,7 +9,7 @@
  *   1. The BIR semi-monthly table (from 1 Jan 2023): nothing up to ₱10,417, then 15 / 20 / 25 / 30 /
  *      35% of the amount over each bracket, continuous at every edge.
  *   2. Taxable pay = gross less the cutoff's MANDATORY Pag-IBIG (≤ ₱200), SSS and PhilHealth (not
- *      advances, not loans). A411: a fixed salary follows the same table (no blanket exemption).
+ *      advances, not loans). A413: a fixed salary (Neil, Daisy, John Steve) takes no withholding tax.
  *   3. Only an OPEN cutoff is worked out. Approved = the saved (paid) figure. Unknown / not loaded =
  *      the saved figure, with a banner when the check failed.
  *   4. A saved row holding a different figure is starred; Save sends the worked-out figure.
@@ -103,21 +103,23 @@ const dA = T.d(HOURLY, 'A');
 ok('  cutoff A takes only Pag-IBIG off before the table', Math.abs(dA.wtaxTaxable - (T.slip(HOURLY, 'A').grossPay - 200)) < 0.005);
 eq('  low earner (₱600 a day) pays nothing', T.d(LOW, 'B').wtax, 0);
 const dF = T.d(FIXED, 'B');
-eq('  A411 — a fixed salary follows the table: ₱15,000 is all taxable', dF.wtaxTaxable, 15000);
-eq('  fixed salary WTax = 15% of ₱4,583', dF.wtax, 687.45);
+eq('  a fixed salary\'s taxable pay is still reported (₱15,000)', dF.wtaxTaxable, 15000);
+eq('  A413 — but a fixed salary takes no withholding tax', dF.wtax, 0);
+ok('  marked exempt, worked out (not a saved figure)', dF.wtaxExempt === true && dF.wtaxAuto === true);
+eq('  and its Total Ded. has no tax in it', dF.totalDed, 0);
 const F9 = Object.assign({}, FIXED, { firstName: 'Nina', fixedAmount: 9000 });
 const F10 = Object.assign({}, FIXED, { firstName: 'Dina', fixedAmount: 10000 });
 const F12 = Object.assign({}, FIXED, { firstName: 'Sam', fixedAmount: 12000 });
 T.set([F9, F10, F12], HOURS, {}, {}, 2026, '11');
 eq('  ₱9,000 a cutoff pays nothing (under ₱10,417)', T.d(F9, 'B').wtax, 0);
 eq('  ₱10,000 a cutoff pays nothing', T.d(F10, 'B').wtax, 0);
-eq('  ₱12,000 a cutoff pays 15% of ₱1,583', T.d(F12, 'B').wtax, 237.45);
-ok('  no blanket fixed-salary exemption left in the code', !/wtaxExempt|Fixed salary: no withholding tax/.test(SRC));
-T.set([F12], HOURS, {}, { 'Reyes, Sam': { period: '2026-11-B', employee: 'Reyes, Sam', wtax: 0, salaryDeductionStored: 0 } }, 2026, '11');
+eq('  ₱12,000 a cutoff (John Steve\'s) pays nothing either (A413)', T.d(F12, 'B').wtax, 0);
+eq('  while an hourly person over the line is still taxed', T.d(HOURLY, 'B').wtax, 267.45);
+T.set([F12], HOURS, {}, { 'Reyes, Sam': { period: '2026-11-B', employee: 'Reyes, Sam', wtax: 237.45, salaryDeductionStored: 0 } }, 2026, '11');
 d0 = T.d(F12, 'B');
-ok('  saved 0 under the old exemption → 237.45 and starred on an open cutoff', d0.wtax === 237.45 && d0.wtaxProvisional === true, d0);
+ok('  a fixed salary saved with tax (A411) → 0 and starred on an open cutoff', d0.wtax === 0 && d0.wtaxProvisional === true && d0.wtaxSaved === 237.45, d0);
 T.state('open', 'approved');
-eq('  but an APPROVED cutoff keeps the tax that was paid', T.d(F12, 'B').wtax, 0);
+eq('  but an APPROVED cutoff keeps the tax that was paid', T.d(F12, 'B').wtax, 237.45);
 T.state('open', 'open');
 T.set([HOURLY, FIXED, LOW], HOURS, {}, {}, 2026, '11');
 T.set([HOURLY], HOURS, {}, { 'Cruz, Juan': { advances: 3000 } }, 2026, '11');
@@ -172,10 +174,10 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
   ok('  it shows ₱267.45 with the not-saved star', /267\.45<span title="Not saved to this cutoff yet" class="dh-warn-text"> \*<\/span>/.test(html));
   ok('  the tooltip says what is saved and how to apply it', /Saved now as ₱0\.00; Save Pay Register to apply it\./.test(html));
   ok('  a zero tax is a dim dash', /id="wtax_B_[^"]*Santos[^"]*"[^>]*><span class="dh-dim">—<\/span>/.test(html) || /<span class="dh-dim">—<\/span><\/td>\s*<td class="num computed" id="totalDed_B_[^"]*Santos/.test(html));
-  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table on taxable pay: gross less mandatory Pag-IBIG \(up to ₱200\), SSS, PhilHealth and bonuses still under ₱90,000 for the year">WTax</.test(html));
+  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table on taxable pay: gross less mandatory Pag-IBIG \(up to ₱200\), SSS, PhilHealth and bonuses still under ₱90,000 for the year\. None on a fixed salary\.">WTax</.test(html));
   ok('  no banner on an open cutoff', !/Withholding tax shows the saved figures/.test(html));
   T.set([F9], HOURS, {}, {}, 2026, '11'); T.grid('B');
-  ok('  a ₱9,000 fixed salary: the whole gross, under the threshold', /title="Taxable pay ₱9,000\.00 = the whole gross\. No tax up to ₱10,417\.00 a cutoff\."><span class="dh-dim">—<\/span>/.test(byId('payBGrid').innerHTML));
+  ok('  a fixed salary\'s cell says why it is empty', /title="Fixed salary: no withholding tax\."><span class="dh-dim">—<\/span>/.test(byId('payBGrid').innerHTML));
   T.set([HOURLY, LOW], HOURS, {}, { 'Cruz, Juan': savedRow({ wtax: 0 }) }, 2026, '11'); T.grid('B');
 
   // type a new SSS for Juan → taxable 12,800 − 200 → WTax moves
@@ -339,7 +341,7 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
      /Cruz, Juan<\/td>\s*<td class="num">₱20,000\.00<\/td>\s*<td class="num">−₱800\.00<\/td>\s*<td class="num">−₱2,000\.00<\/td>\s*<td class="num">₱17,200\.00<\/td>\s*<td>₱937\.50 \+ 20% over ₱16,667\.00<\/td>\s*<td class="num bold">₱1,044\.10<\/td>/.test(h));
   ok('  only people with tax are listed', !/<td class="name">Santos, Lea<\/td>\s*<td class="num">₱7,800/.test(h.slice(h.indexOf('<h3>Withholding tax</h3>'))));
   ok('  with the total to remit to the BIR', /TOTAL WITHHOLDING TAX \(remit to BIR\)<\/td><td class="num">₱1,044\.10/.test(h));
-  ok('  and a plain-language note on what taxable pay is', /Anyone not listed has taxable pay of ₱10,417 or less this cutoff, so no tax\./.test(h));
+  ok('  and a plain-language note on what taxable pay is', /Fixed salaries take no withholding tax\. Anyone else not listed has taxable pay of ₱10,417 or less this cutoff\./.test(h));
   ok('  the cost summary names it', /of which Withholding Tax \(remit to BIR\)<\/td><td class="num">₱1,044\.10/.test(h));
   eq('  the approval record stores the total', built9.totals.totalWithholdingTax, 1044.10);
   eq('  and how many people pay it', built9.totals.withholdingTaxEmployees, 1);
