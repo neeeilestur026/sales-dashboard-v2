@@ -100,7 +100,7 @@ eq('  Pag-IBIG ignored', dOv.pagibig, 0);
 eq('  SSS ignored', dOv.sss, 0);
 eq('  PhilHealth ignored', dOv.philhealth, 0);
 eq('  advances STILL deducted', dOv.advances, 500);
-eq('  withholding tax STILL deducted', dOv.wtax, 200);
+eq('  a saved withholding tax is kept until the cutoff is known open (A410: then 0 for a fixed salary)', dOv.wtax, 200);
 eq('  total deductions', dOv.totalDed, 700);
 eq('  net = 9000 - 700', T.earnings(NEIL, 'B').grossPay - dOv.totalDed, 8300);
 

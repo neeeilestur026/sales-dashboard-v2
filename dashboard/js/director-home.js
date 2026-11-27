@@ -1147,7 +1147,7 @@ function renderPayGrid(cutoff) {
       <th class="num">PhilHealth</th>
       <th class="num">Advances</th>
       <th class="num" title="Set by the salary-deduction agreement — recalculated on save">Salary Ded.</th>
-      <th class="num" title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth">WTax</th>
+      <th class="num" title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth. None on a fixed salary.">WTax</th>
       <th class="num">Total Ded.</th>
       <th class="num highlight">Net Pay</th>
       <th>Slip</th>
@@ -1306,9 +1306,10 @@ function _wtaxTip(cutoff, d) {
   const state = cutoff === 'A' ? _cutoffStateA : _cutoffStateB;
   if (state === 'approved') return 'This cutoff is approved: the withholding tax as saved and paid.';
   if (!d.wtaxAuto) return 'The saved figure. Click Load to work the tax out.';
+  const saveNote = d.wtaxProvisional ? ' Saved now as ' + peso(d.wtaxSaved) + '; Save Pay Register to apply it.' : '';
+  if (d.wtaxExempt) return 'Fixed salary: no withholding tax.' + saveNote;   // A410
   return 'Taxable pay ' + peso(d.wtaxTaxable) + ' (gross less Pag-IBIG, SSS and PhilHealth). ' +
-    _wtaxRuleText(d.wtaxTaxable) +
-    (d.wtaxProvisional ? ' Saved now as ' + peso(d.wtaxSaved) + '; Save Pay Register to apply it.' : '');
+    _wtaxRuleText(d.wtaxTaxable) + saveNote;
 }
 /* A409 — said once above the grid when the approvals could not be read: the tax then stays at the
    saved figures, and nobody should mistake that for "no tax due". */
@@ -1957,8 +1958,10 @@ function _payEarnings(emp, cutoff) {
  * A FIXED-SALARY employee takes no statutory contribution: Pag-IBIG, SSS and PhilHealth are zero.
  * A stored register override for those three is deliberately IGNORED rather than trusted — a figure
  * saved while the employee was still hourly would otherwise keep being deducted after the switch.
- * Withholding tax and cash advances are read exactly as before: an advance is a loan being repaid
- * and tax is a legal obligation, neither of which a pay type changes.
+ * Cash advances are read exactly as before: an advance is a loan being repaid, which a pay type does
+ * not change. A410 — withholding tax is NOT taken from a fixed salary either (Neil, 27 Nov 2026: "tax
+ * are exempted by the fixed one salary for Steve, Neil and Daisy"): on an open cutoff it is 0; an
+ * approved cutoff keeps whatever was saved and paid.
  *
  * A309 — THE STATUTORY SCHEDULE IS A RULE, NOT A TABLE. The company deducts Pag-IBIG on the 1st
  * cutoff only and SSS + PhilHealth on the 2nd only, at per-employee amounts kept on the employee
@@ -1998,12 +2001,13 @@ function _payDeductions(emp, cutoff) {
     /* A260 — no statutory contribution, but a fixed-salary manager still repays what they bought:
        a deduction is a loan being repaid, which a pay type does not change. */
     const eF = _payEarnings(emp, cutoff);
-    const tF = _wtaxFor(cutoff, saved, eF.grossPay, 0);                  // A409 — the whole salary is taxable pay
+    const tF = _wtaxFor(cutoff, saved, eF.grossPay, 0, true);            // A410 — a fixed salary is exempt
     const wtax = tF.wtax;
     const sdF = isStored ? stored
       : _sdPreview((due && due.amount) || 0, eF.grossPay || 0, advances + wtax);
     return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax,
              wtaxTaxable: tF.taxable, wtaxAuto: tF.auto, wtaxProvisional: tF.provisional, wtaxSaved: tF.saved,
+             wtaxExempt: tF.exempt,
              salaryDeduction: sdF, salaryDeductionLines: _sdLinesFor(saved, due, isStored),
              salaryDeductionProvisional: !isStored && sdF > 0,
              totalDed: advances + wtax + sdF };
@@ -2030,15 +2034,17 @@ function _payDeductions(emp, cutoff) {
      open cutoff     → the BIR table on (gross − Pag-IBIG − SSS − PhilHealth), whatever was saved;
                        `provisional` when a saved row holds a different figure (Save applies it);
      anything else   → the saved figure, untouched (approved = paid; unknown / not loaded = can't tell).
-   `taxable` is reported either way, for the tooltip. */
-function _wtaxFor(cutoff, saved, grossPay, contributions) {
+   `taxable` is reported either way, for the tooltip.
+   A410 — `exempt` (a fixed salary) makes an open cutoff's tax 0; approved cutoffs still keep what was
+   saved and paid. */
+function _wtaxFor(cutoff, saved, grossPay, contributions, exempt) {
   const state = cutoff === 'A' ? _cutoffStateA : _cutoffStateB;
   const savedTax = +(saved && saved.wtax !== undefined ? saved.wtax : 0) || 0;
   const taxable = Math.max(0, Math.round(((Number(grossPay) || 0) - (Number(contributions) || 0)) * 100) / 100);
-  if (state !== 'open') return { wtax: savedTax, taxable, auto: false, provisional: false, saved: savedTax };
-  const wtax = _wtaxSemiMonthly(taxable);
+  if (state !== 'open') return { wtax: savedTax, taxable, auto: false, provisional: false, saved: savedTax, exempt: !!exempt };
+  const wtax = exempt ? 0 : _wtaxSemiMonthly(taxable);
   const isSavedRow = !!(saved && saved.period);                      // a row the server returned
-  return { wtax, taxable, auto: true, provisional: isSavedRow && Math.abs(savedTax - wtax) >= 0.005, saved: savedTax };
+  return { wtax, taxable, auto: true, provisional: isSavedRow && Math.abs(savedTax - wtax) >= 0.005, saved: savedTax, exempt: !!exempt };
 }
 
 /* What to SHOW for a cutoff that has not been saved yet.
