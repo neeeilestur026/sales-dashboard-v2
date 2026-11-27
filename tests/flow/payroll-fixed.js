@@ -130,12 +130,13 @@ ok('  empty string is not fixed', !T.isFixed(Object.assign({}, LEGACY, { payType
 ok('  "hourly" lowercase is not fixed', !T.isFixed(Object.assign({}, LEGACY, { payType: 'hourly' })));
 ok('  only exact "Fixed" is fixed', T.isFixed(Object.assign({}, LEGACY, { payType: 'Fixed' })));
 
-console.log('\n8 · the four surfaces read ONE definition');
+console.log('\n8 · the five surfaces read ONE definition');
 ok('_payDeductions exists', /function _payDeductions\(emp, cutoff\)/.test(SRC));
 /* Count CALLS, not the declaration — `function _payDeductions(emp, cutoff)` matches the same text.
-   The four are the payslip, the pay grid, the register save and the approval snapshot. */
+   The five are the payslip, the pay grid, the register save, the approval snapshot and (A409) the
+   cell edit, which now recomputes the row's withholding tax with the rest. */
 const calls = (SRC.match(/[^n] _payDeductions\(emp, cutoff\)|= _payDeductions\(emp, cutoff\)/g) || []).length;
-eq('  and is called at four sites', calls, 4);
+eq('  and is called at five sites', calls, 5);
 ok('  the old duplicated default survives ONLY inside it',
    (SRC.match(/emp\.hdmfAmount \|\| 200/g) || []).length === 1);
 const slipD = T.deductions.bind(null);

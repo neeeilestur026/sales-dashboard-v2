@@ -35,6 +35,43 @@ const _HOL_SPE          = 'Special Non-Working';
 let _currentYear  = null;
 let _currentMonth = null;
 
+/* A409 — WITHHOLDING TAX IS WORKED OUT, NOT TYPED. Neil, 27 Nov 2026: "it should be automatic … after
+   deductions of benefits after gross pay". The WTax cell used to be a box that started at 0, so no
+   tax was taken unless someone remembered to type it.
+
+   The figure is the BIR semi-monthly table applied to the cutoff's taxable pay: gross pay less the
+   employee's Pag-IBIG, SSS and PhilHealth for that cutoff. Advances and salary deductions are loans
+   being repaid and do not lower the tax.
+
+   It is applied only to a cutoff known to be OPEN. An approved cutoff has been paid, so it keeps the
+   tax that was saved and paid; and when the approvals could not be read the page cannot tell, so it
+   keeps the saved figures too and says so. `null` = not checked yet (nothing loaded). */
+let _cutoffStateA = null;   // null | 'open' | 'approved' | 'unknown'
+let _cutoffStateB = null;
+
+/* BIR withholding tax table on compensation, SEMI-MONTHLY, in force from 1 January 2023 (TRAIN law,
+   RR 11-2018). Taxable pay over `over` pays `base` plus `rate` of the amount over it; ₱10,417 a
+   cutoff and below pays nothing. Highest bracket first, so the first match is the one. */
+const _WTAX_SEMI_MONTHLY = [
+  { over: 333333, base: 91770.70, rate: 0.35 },
+  { over:  83333, base: 16770.70, rate: 0.30 },
+  { over:  33333, base:  4270.70, rate: 0.25 },
+  { over:  16667, base:   937.50, rate: 0.20 },
+  { over:  10417, base:     0,    rate: 0.15 },
+];
+function _wtaxBracket(taxable) { return _WTAX_SEMI_MONTHLY.find(b => (Number(taxable) || 0) > b.over) || null; }
+function _wtaxSemiMonthly(taxable) {
+  const b = _wtaxBracket(taxable);
+  return b ? Math.round((b.base + b.rate * ((Number(taxable) || 0) - b.over)) * 100) / 100 : 0;
+}
+/** The rule that produced a figure, in words, for the cell's tooltip. */
+function _wtaxRuleText(taxable) {
+  const b = _wtaxBracket(taxable);
+  if (!b) return 'No tax up to ₱10,417.00 a cutoff.';
+  const pct = Math.round(b.rate * 100) + '% of the amount over ' + peso(b.over);
+  return (b.base ? peso(b.base) + ' + ' : '') + pct + '.';
+}
+
 /* A260 — a fixed-salary employee is paid a set amount per cutoff whatever their hours, and takes no
    statutory contribution. Anything that is not exactly 'Fixed' is hourly, so a blank pay type on
    every row written before this feature keeps its original behaviour with no migration. */
@@ -138,6 +175,11 @@ async function loadPeriod() {
   // Load hours and register for both cutoffs. A transient backend failure must render an
   // inline error, not abort as an unhandled rejection leaving the grids stuck on the intro text.
   let hA, hB, rA, rB, iA, iB, xA, xB;
+  /* A409 — whether each cutoff is approved decides whether its withholding tax is worked out. Started
+     here so it runs alongside the reads below, but kept OUT of their Promise.all: the older suites pin
+     that literal, and this read never fails the load (it answers 'unknown' instead). */
+  _cutoffStateA = null; _cutoffStateB = null;   // the last period's answer is not this one's
+  const statesP = _readCutoffStates(periodA, periodB);
   try {
     /* A229 — the two incentive reads join THIS Promise.all rather than awaiting after it. Six
        round trips to Apps Script in parallel is already slow; two more in sequence would be felt. */
@@ -181,11 +223,30 @@ async function loadPeriod() {
   _applyIncentives('A', (iA && iA.data) || []);
   _applyIncentives('B', (iB && iB.data) || []);
 
+  const states = await statesP;                // A409 — before the pay grids draw their WTax
+  _cutoffStateA = states.A;
+  _cutoffStateB = states.B;
+
   renderHoursGrid('A');
   renderHoursGrid('B');
   renderPayGrid('A');
   renderPayGrid('B');
-  _prefillEmployerShare(periodA, periodB);   // A288 — fire-and-forget; never delays the grids
+  _prefillEmployerShare(periodA, periodB, states.rows);   // A288 — fire-and-forget; never delays the grids
+}
+
+/* A409 — each cutoff's state from the payroll-approvals ledger, by the server's own rule
+   (_sdPeriodApproved): approved when any submission of that period says 'Approved'. A missing action
+   or a failed read is 'unknown', never 'open': guessing open would put a worked-out tax on a cutoff
+   that may already have been paid. Never rejects. */
+async function _readCutoffStates(pA, pB) {
+  const unknown = { A: 'unknown', B: 'unknown', rows: null };
+  if (typeof apiGetPayrollApprovals !== 'function') return unknown;
+  try {
+    const res = await apiGetPayrollApprovals();
+    if (!res || res.success === false || !Array.isArray(res.data)) return unknown;
+    const approved = (p) => res.data.some(r => String((r || {}).period || '') === p && String((r || {}).status || '') === 'Approved');
+    return { A: approved(pA) ? 'approved' : 'open', B: approved(pB) ? 'approved' : 'open', rows: res.data };
+  } catch (e) { return unknown; }
 }
 
 /* A288 — the employer share was only ever read from the two inputs and never persisted, so the
@@ -194,10 +255,12 @@ async function loadPeriod() {
    period (else the newest submission overall). The director's own figure always wins — a filled
    input is never overwritten. Outside loadPeriod's Promise.all on purpose: the older suites stub
    the payroll reads by name and pin that literal, and this must be free to fail quietly. */
-async function _prefillEmployerShare(pA, pB) {
-  if (typeof apiGetPayrollApprovals !== 'function') return;
-  let rows = [];
-  try { rows = ((await apiGetPayrollApprovals()) || {}).data || []; } catch (e) { return; }
+async function _prefillEmployerShare(pA, pB, given) {
+  let rows = Array.isArray(given) ? given : [];   // A409 — loadPeriod already read the ledger once
+  if (!Array.isArray(given)) {
+    if (typeof apiGetPayrollApprovals !== 'function') return;
+    try { rows = ((await apiGetPayrollApprovals()) || {}).data || []; } catch (e) { return; }
+  }
   if (!Array.isArray(rows) || !rows.length) return;
   const newestFirst = (list) => list.slice().sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
   const newest = newestFirst(rows)[0];
@@ -1070,7 +1133,7 @@ function renderPayGrid(cutoff) {
     return;
   }
 
-  let html = _sdDraftNotice(cutoff) + `<table class="pay-table">
+  let html = _sdDraftNotice(cutoff) + _wtaxNotice(cutoff) + `<table class="pay-table">
     <thead><tr>
       <th class="sticky">Employee</th>
       <th class="num">Basic Pay</th>
@@ -1084,7 +1147,7 @@ function renderPayGrid(cutoff) {
       <th class="num">PhilHealth</th>
       <th class="num">Advances</th>
       <th class="num" title="Set by the salary-deduction agreement — recalculated on save">Salary Ded.</th>
-      <th class="num">WTax</th>
+      <th class="num" title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth">WTax</th>
       <th class="num">Total Ded.</th>
       <th class="num highlight">Net Pay</th>
       <th>Slip</th>
@@ -1102,8 +1165,9 @@ function renderPayGrid(cutoff) {
     const otherIncome = e.otherIncome, incentive = e.incentive, grossPay = e.grossPay;
 
     // A260 — one definition of the deduction half, waiver included.
+    const d = _payDeductions(emp, cutoff);
     const { pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
-            salaryDeductionProvisional, totalDed } = _payDeductions(emp, cutoff);
+            salaryDeductionProvisional, totalDed } = d;
     const netPay   = grossPay - totalDed;
 
     totBasic += basicPay; totHol += holidayPay; totOT += otPay; totOther += otherIncome;
@@ -1166,7 +1230,9 @@ function renderPayGrid(cutoff) {
            <td class="num"><input type="number" min="0" step="0.01" value="${philhealth.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="philhealth" onchange="_updateRegCell(this)" class="dh-num-in"></td>`}
       <td class="num"><input type="number" min="0" step="0.01" value="${advances.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="advances" onchange="_updateRegCell(this)" class="dh-num-in"${advTitle}></td>
       ${sdCell}
-      <td class="num"><input type="number" min="0" step="0.01" value="${wtax.toFixed(2)}" data-emp="${esc(empName)}" data-cutoff="${cutoff}" data-field="wtax" onchange="_updateRegCell(this)" class="dh-num-in"></td>
+      ${/* A409 — computed, like Salary Ded. beside it: a box here would say "type it", and the
+             figure is the BIR table's. */''}
+      <td class="num computed" id="wtax_${cutoff}_${k}" title="${esc(_wtaxTip(cutoff, d))}">${_wtaxInner(d)}</td>
       <td class="num computed" id="totalDed_${cutoff}_${k}">${peso(totalDed)}</td>
       <td class="num highlight" id="netPay_${cutoff}_${k}">${peso(netPay)}</td>
       <td class="ps-actions"><button class="btn-sm xs" title="Download payslip PDF" onclick="downloadPayslip(${_jsArg(empName)},'${cutoff}')">${_ICO_DL}</button>${_isFixedPay(emp) ? '' : _releaseBtn(empName, cutoff)}</td>
@@ -1214,25 +1280,45 @@ function _updateRegCell(input) {
 
   const grossPay = _payEarnings(emp, cutoff).grossPay;   // A229 — one definition
 
-  /* NOTE this block deliberately keeps its own deduction idiom: `parseFloat(x) || 0` with NO
-     `!== undefined` fallback, unlike the other four sites. That is correct here — by the time this
-     runs the row has been rendered, so regMap already holds every field. Folding it into a shared
-     helper would have changed it. */
-  const saved = regMap[empName];
-  const pag  = parseFloat(saved.pagibig)    || 0;
-  const sss  = parseFloat(saved.sss)        || 0;
-  const phic = parseFloat(saved.philhealth) || 0;
-  const adv  = parseFloat(saved.advances)   || 0;
-  const wt   = parseFloat(saved.wtax)       || 0;
-  const sdn  = parseFloat(saved.salaryDeduction) || 0;   // A275 — server-set; unchanged by typing here
-  const totDed = pag + sss + phic + adv + wt + sdn;
-  const netPay = grossPay - totDed;
+  /* A409 — the row is recomputed through the one _payDeductions, the fifth site that reads it. The
+     withholding tax follows the contributions: typing a new SSS figure changes the taxable pay, so
+     WTax, Total Ded. and Net Pay all move together. The old private idiom here read an untyped field
+     as 0, which on a row never saved dropped the Pag-IBIG, SSS and PhilHealth the grid was showing. */
+  const d = _payDeductions(emp, cutoff);
+  const netPay = grossPay - d.totalDed;
 
   const k = _empKey(empName);
   const tdEl  = document.getElementById(`totalDed_${cutoff}_${k}`);
   const npEl  = document.getElementById(`netPay_${cutoff}_${k}`);
-  if (tdEl) tdEl.textContent = peso(totDed);
+  const wtEl  = document.getElementById(`wtax_${cutoff}_${k}`);
+  if (tdEl) tdEl.textContent = peso(d.totalDed);
   if (npEl) npEl.textContent = peso(netPay);
+  if (wtEl) { wtEl.innerHTML = _wtaxInner(d); wtEl.title = _wtaxTip(cutoff, d); }
+}
+
+/* A409 — the WTax cell: the figure, with the star the salary deduction uses when the worked-out tax
+   is not what this cutoff has saved yet. */
+function _wtaxInner(d) {
+  return (d.wtax > 0 ? peso(d.wtax) : '<span class="dh-dim">—</span>') +
+    (d.wtaxProvisional ? '<span title="Not saved to this cutoff yet" class="dh-warn-text"> *</span>' : '');
+}
+function _wtaxTip(cutoff, d) {
+  const state = cutoff === 'A' ? _cutoffStateA : _cutoffStateB;
+  if (state === 'approved') return 'This cutoff is approved: the withholding tax as saved and paid.';
+  if (!d.wtaxAuto) return 'The saved figure. Click Load to work the tax out.';
+  return 'Taxable pay ' + peso(d.wtaxTaxable) + ' (gross less Pag-IBIG, SSS and PhilHealth). ' +
+    _wtaxRuleText(d.wtaxTaxable) +
+    (d.wtaxProvisional ? ' Saved now as ' + peso(d.wtaxSaved) + '; Save Pay Register to apply it.' : '');
+}
+/* A409 — said once above the grid when the approvals could not be read: the tax then stays at the
+   saved figures, and nobody should mistake that for "no tax due". */
+function _wtaxNotice(cutoff) {
+  if ((cutoff === 'A' ? _cutoffStateA : _cutoffStateB) !== 'unknown') return '';
+  return `<div class="dh-banner warn">
+      <strong>Withholding tax shows the saved figures.</strong>
+      The page could not check whether this cutoff is approved, so it did not work the tax out.
+      Click Load again.
+    </div>`;
 }
 
 // ── Save Register ─────────────────────────────────────────────
@@ -1264,7 +1350,7 @@ async function saveRegister(cutoff) {
       sss:         d.sss,
       philhealth:  d.philhealth,
       advances:    saved.advances   || 0,
-      wtax:        saved.wtax       || 0
+      wtax:        d.wtax           || 0      // A409 — the worked-out tax the grid shows, not a typed one
     };
   });
 
@@ -1458,7 +1544,7 @@ function _buildCutoffHtml(cutoff) {
     const dd = _payDeductions(emp, cutoff);
     const pagibig = dd.pagibig, sss = dd.sss, philhealth = dd.philhealth;
     const advances    = saved.advances   || 0;
-    const wtax        = saved.wtax       || 0;
+    const wtax        = dd.wtax          || 0;      // A409 — the same worked-out tax as the grid
     const salaryDed   = dd.salaryDeduction || 0;      // A275 — server-set during the register save
     const totalDed    = pagibig + sss + philhealth + advances + wtax + salaryDed;
     const netPay      = grossPay - totalDed;
@@ -1891,7 +1977,6 @@ function _payDeductions(emp, cutoff) {
   const registerMap = cutoff === 'A' ? _registerA : _registerB;
   const saved = registerMap[empName] || {};
   const advances = +(saved.advances !== undefined ? saved.advances : 0);
-  const wtax     = +(saved.wtax     !== undefined ? saved.wtax     : 0);
   /* A275 — the SCHEDULE is never computed here. It depends on every posting ever made against the
      agreement and on whether the cutoff was approved, so the browser cannot know it and a guess
      would end up in the PDF Management signs. The server owns it, and this reads it back:
@@ -1913,9 +1998,12 @@ function _payDeductions(emp, cutoff) {
     /* A260 — no statutory contribution, but a fixed-salary manager still repays what they bought:
        a deduction is a loan being repaid, which a pay type does not change. */
     const eF = _payEarnings(emp, cutoff);
+    const tF = _wtaxFor(cutoff, saved, eF.grossPay, 0);                  // A409 — the whole salary is taxable pay
+    const wtax = tF.wtax;
     const sdF = isStored ? stored
       : _sdPreview((due && due.amount) || 0, eF.grossPay || 0, advances + wtax);
     return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax,
+             wtaxTaxable: tF.taxable, wtaxAuto: tF.auto, wtaxProvisional: tF.provisional, wtaxSaved: tF.saved,
              salaryDeduction: sdF, salaryDeductionLines: _sdLinesFor(saved, due, isStored),
              salaryDeductionProvisional: !isStored && sdF > 0,
              totalDed: advances + wtax + sdF };
@@ -1925,13 +2013,32 @@ function _payDeductions(emp, cutoff) {
   const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : ((cutoff === 'A' && elig) ? (emp.hdmfAmount || 200) : 0));
   const sss        = +(saved.sss        !== undefined ? saved.sss        : ((cutoff === 'B' && elig) ? (emp.sssAmount || 600) : 0));
   const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : ((cutoff === 'B' && elig) ? (emp.philhealthAmount || 200) : 0));
+  const t = _wtaxFor(cutoff, saved, e.grossPay, pagibig + sss + philhealth);   // A409 — after the three benefits
+  const wtax = t.wtax;
   const salaryDeduction = isStored ? stored
     : _sdPreview((due && due.amount) || 0, e.grossPay || 0,
                  pagibig + sss + philhealth + advances + wtax);
-  return { pagibig, sss, philhealth, advances, wtax, salaryDeduction,
+  return { pagibig, sss, philhealth, advances, wtax,
+           wtaxTaxable: t.taxable, wtaxAuto: t.auto, wtaxProvisional: t.provisional, wtaxSaved: t.saved,
+           salaryDeduction,
            salaryDeductionLines: _sdLinesFor(saved, due, isStored),
            salaryDeductionProvisional: !isStored && salaryDeduction > 0,
            totalDed: pagibig + sss + philhealth + advances + wtax + salaryDeduction };
+}
+
+/* A409 — one employee's withholding tax for one cutoff.
+     open cutoff     → the BIR table on (gross − Pag-IBIG − SSS − PhilHealth), whatever was saved;
+                       `provisional` when a saved row holds a different figure (Save applies it);
+     anything else   → the saved figure, untouched (approved = paid; unknown / not loaded = can't tell).
+   `taxable` is reported either way, for the tooltip. */
+function _wtaxFor(cutoff, saved, grossPay, contributions) {
+  const state = cutoff === 'A' ? _cutoffStateA : _cutoffStateB;
+  const savedTax = +(saved && saved.wtax !== undefined ? saved.wtax : 0) || 0;
+  const taxable = Math.max(0, Math.round(((Number(grossPay) || 0) - (Number(contributions) || 0)) * 100) / 100);
+  if (state !== 'open') return { wtax: savedTax, taxable, auto: false, provisional: false, saved: savedTax };
+  const wtax = _wtaxSemiMonthly(taxable);
+  const isSavedRow = !!(saved && saved.period);                      // a row the server returned
+  return { wtax, taxable, auto: true, provisional: isSavedRow && Math.abs(savedTax - wtax) >= 0.005, saved: savedTax };
 }
 
 /* What to SHOW for a cutoff that has not been saved yet.
