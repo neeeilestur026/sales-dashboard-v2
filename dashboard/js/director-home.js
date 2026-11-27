@@ -910,7 +910,23 @@ function _computePaySlip(emp, cutoff) {
     incentiveLines: _incentiveLinesFor(empName, cutoff),   // A398 — printed by type; released with the slip
     pagibig, sss, philhealth, advances, wtax, salaryDeduction, salaryDeductionLines,
     totalDed, netPay: grossPay - totalDed,
+    // A412 — how the tax was reached, printed under it and released with the slip
+    wtaxTaxable: d.wtaxTaxable, wtaxNote: _wtaxSlipNote(d),
   };
+}
+
+/* A412 — the payslip's one-line account of the withholding tax. Only for a figure the page worked
+   out itself (an approved cutoff's saved tax carries no note: the page did not produce it). */
+function _wtaxSlipNote(d) {
+  if (!d || !(d.wtax > 0) || !d.wtaxAuto) return '';
+  const b = _wtaxBracket(d.wtaxTaxable);
+  if (!b) return '';
+  const free = (d.wtaxBenefits && d.wtaxBenefits.free) || 0;
+  /* One short line per fact ("\n" = a new sub-line on the receipt): on the 400px Courier receipt a
+     single long sentence broke mid-figure. */
+  return 'Taxable pay ' + peso(d.wtaxTaxable) + ' · ' + (b.base ? peso(b.base) + ' + ' : '') +
+    Math.round(b.rate * 100) + '% over ' + peso(b.over) +
+    (free ? '\n' + peso(free) + ' bonus not taxed (up to ₱90,000 a year)' : '');
 }
 
 // One employee's payslip block — drawn by js/payslip.js from the computed figures (A312).
@@ -1593,6 +1609,9 @@ function _buildCutoffHtml(cutoff) {
      peso of the Incentive column is. */
   const ex = v => hxEscBlank(v);
   let incBody = '';
+  /* A412 — the withholding tax, worked through for each person who pays it, so an approver can follow
+     the figure from gross pay to the BIR bracket instead of trusting a bare WTax column. */
+  let taxBody = '', taxCount = 0;
 
   _employees.forEach(emp => {
     const e = _payEarnings(emp, cutoff);            // A229 — one definition of the earnings half
@@ -1621,6 +1640,21 @@ function _buildCutoffHtml(cutoff) {
       incBody += `<tr><td class="name">${ex(empName)}</td><td>${ex(it.category)}</td>
         <td class="why">${it.reason ? ex(it.reason) : '—'}</td><td class="num">${p(it.amount)}</td></tr>`;
     });
+    if (wtax > 0) {                                                       // A412
+      taxCount++;
+      const contrib = (pagibig - (dd.wtaxPagibigExcess || 0)) + sss + philhealth;
+      const freeBonus = (dd.wtaxBenefits && dd.wtaxBenefits.free) || 0;
+      const br = _wtaxBracket(dd.wtaxTaxable);
+      const how = !dd.wtaxAuto ? 'As saved'
+        : br ? (br.base ? p(br.base) + ' + ' : '') + Math.round(br.rate * 100) + '% over ' + p(br.over) : '—';
+      taxBody += `<tr><td class="name">${ex(empName)}</td>
+        <td class="num">${p(grossPay)}</td>
+        <td class="num">${contrib > 0 ? '−' + p(contrib) : '—'}</td>
+        <td class="num">${freeBonus > 0 ? '−' + p(freeBonus) : '—'}</td>
+        <td class="num">${p(dd.wtaxTaxable)}</td>
+        <td>${how}</td>
+        <td class="num bold">${p(wtax)}</td></tr>`;
+    }
 
     prBody += `<tr>
       <td class="name">${empName}</td>
@@ -1691,6 +1725,8 @@ function _buildCutoffHtml(cutoff) {
   h3 { font-size: 9pt; margin: 10px 0 4px; }
   table.incentives { width: auto; min-width: 520px; }
   table.incentives td.why { white-space: normal; max-width: 320px; }
+  table.wtax { width: auto; min-width: 640px; }
+  .note { font-size: 7.5pt; color: #555; margin-top: 4px; max-width: 640px; line-height: 1.4; }
   table.summary { width: 360px; margin-top: 4px; }
   table.summary td { border-bottom: 1px solid #e5e7eb; }
   table.summary tr.total td { font-weight: bold; border-top: 2px solid #333; background: #eef2ff !important; }
@@ -1733,12 +1769,23 @@ ${incBody ? `
   <tbody>${incBody}<tr class="total"><td colspan="3">TOTAL</td><td class="num">${p(gInc)}</td></tr></tbody>
 </table>` : ''}
 
+<h3>Withholding tax</h3>
+${taxBody ? `<table class="wtax">
+  <thead><tr><th>Employee</th><th class="num">Gross Pay</th><th class="num">Less Pag-IBIG, SSS, PhilHealth</th>
+    <th class="num">Less tax-free bonus</th><th class="num">Taxable Pay</th><th>BIR semi-monthly table</th><th class="num">WTax</th></tr></thead>
+  <tbody>${taxBody}<tr class="total"><td colspan="6">TOTAL WITHHOLDING TAX (remit to BIR)</td><td class="num">${p(gWTax)}</td></tr></tbody>
+</table>
+<div class="note">Taxable pay is gross pay less the mandatory Pag-IBIG (up to ₱200), SSS and PhilHealth, and less bonuses
+  still under ₱90,000 for the year. Anyone not listed has taxable pay of ₱10,417 or less this cutoff, so no tax.</div>`
+: `<div class="note">No withholding tax this cutoff: no one's taxable pay is over ₱10,417.</div>`}
+
 <h2>Section 3 — Cutoff Cost Summary</h2>
 <table class="summary">
   <tbody>
     <tr><td>Employees</td><td class="num">${employeeCount}</td></tr>
     <tr><td>Gross Pay (salaries expense)</td><td class="num">${p(gGross)}</td></tr>
     <tr><td>Total Deductions</td><td class="num">${p(gDed)}</td></tr>
+    <tr><td>&nbsp;&nbsp;of which Withholding Tax (remit to BIR)</td><td class="num">${p(gWTax)}</td></tr>
     <tr><td>Net Pay (cash to employees)</td><td class="num green">${p(gNet)}</td></tr>
     <tr><td>Employer Share (SSS / PhilHealth / Pag-IBIG)</td><td class="num">${p(employerShare)}</td></tr>
     <tr class="total"><td>TOTAL PAYROLL COST (Gross + Employer Share)</td><td class="num bold">${p(gGross + employerShare)}</td></tr>
@@ -1774,6 +1821,8 @@ ${incBody ? `
       /* A275 — named in the totals for the same reason A259 added the holiday figure: an aggregate
          that cannot explain its own components is not an approval record. */
       totalSalaryDeductions: gSalDed,
+      totalWithholdingTax: Math.round(gWTax * 100) / 100,   // A412 — what is to be remitted to the BIR for this cutoff
+      withholdingTaxEmployees: taxCount,
       netPay: gNet,
       employerShare: employerShare,
       totalPayrollCost: gGross + employerShare

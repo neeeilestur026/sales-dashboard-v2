@@ -241,8 +241,8 @@ section('3 · the payslip names what the money went to');
   has('  out of the agreed total', html, 'left of ₱34,995.00');
   ok('it sits inside the Deductions block, not Earnings',
      html.indexOf('Salary Deduction') > html.indexOf('>Deductions<'));
-  ok('  and above Withholding Tax, beside Advances',
-     html.indexOf('Salary Deduction') < html.indexOf('Withholding Tax'));
+  ok('  after the government deductions (A412: Withholding Tax sits with Pag-IBIG, SSS, PhilHealth), beside Advances',
+     html.indexOf('Salary Deduction') > html.indexOf('Withholding Tax') && html.indexOf('Salary Deduction') > html.indexOf('Advances'));
 
   t.setRegister('A', { 'Lucena, Gerald': { pagibig: 0, sss: 0, philhealth: 0, advances: 0, wtax: 0,
     salaryDeductionStored: 3416.25, salaryDeductionLines: [

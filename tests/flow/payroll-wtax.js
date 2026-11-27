@@ -18,6 +18,8 @@
  *   7. The state comes from the approvals ledger by the server's rule, outside the pinned Promise.all.
  *   8. A411 — Performance Bonus / Perfect Attendance are tax-free up to ₱90,000 for the year (from the
  *      ledger); Commission and the rest are taxed; an unreadable ledger taxes the bonus.
+ *   9. A412 — the approval PDF works the tax through per person; the payslip puts Withholding Tax with
+ *      the government deductions and says how it was reached.
  */
 const fs = require('fs');
 const path = require('path');
@@ -45,6 +47,7 @@ const ctx = { console, setTimeout: () => 0, alert: () => {},
   location: { origin: 'http://localhost' }, window: {} };
 vm.createContext(ctx);
 require('./hxutil').load(ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../../dashboard/js/payslip.js'), 'utf8'), ctx);   // A412 — hxPayslipHtml
 vm.runInContext(SRC + `
 this.__t = {
   set(emps, hours, regA, regB, y, m) { _employees = emps; _hoursA = hours; _hoursB = hours;
@@ -290,6 +293,63 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
   ok('  loadPeriod reads it beside the approvals, outside the pinned Promise.all, before the grids',
      /const ytdP = _readBenefitsYtd\(year\);/.test(SRC) && !/Promise\.all\(\[[^\]]*_readBenefitsYtd/.test(SRC) &&
      /_benefitsYtd = await ytdP;[\s\S]{0,300}renderPayGrid\('A'\)/.test(SRC));
+
+  console.log('\n9 · A412 — the approval PDF and the payslip');
+  T.state('open', 'open'); T.setYtd({});
+  T.set([HOURLY, LOW], HOURS, {}, {}, 2026, '11');
+  T.inc('B', [incRow('Commission', 5000)]);
+  let slip = T.slip(HOURLY, 'B');
+  eq('  the slip carries the taxable pay', slip.wtaxTaxable, 17200);
+  eq('  and a one-line account of the tax', slip.wtaxNote, 'Taxable pay ₱17,200.00 · ₱937.50 + 20% over ₱16,667.00');
+  let ps = vm.runInContext('hxPayslipHtml', ctx)(slip, { label: '2nd Cutoff — November 2026', range: 'x' });
+  const at = (s) => ps.indexOf(s);
+  ok('  payslip order: Pag-IBIG, SSS, PhilHealth, Withholding Tax, Advances, Salary Deduction, TOTAL',
+     at('>Pag-IBIG<') < at('>SSS<') && at('>SSS<') < at('>PhilHealth<') && at('>PhilHealth<') < at('>Withholding Tax<') &&
+     at('>Withholding Tax<') < at('>Advances<') && at('>Advances<') < at('>Salary Deduction<') && at('>Salary Deduction<') < at('TOTAL DEDUCTIONS'));
+  ok('  the tax figure is right-aligned in the amount column', /<td class="l">Withholding Tax<\/td><td class="r">₱1,044\.10<\/td>/.test(ps));
+  ok('  the note sits on its own wrapping line right under it',
+     /<td class="r">₱1,044\.10<\/td><\/tr><tr><td class="ps-note" colspan="2">Taxable pay ₱17,200\.00 · ₱937\.50 \+ 20% over ₱16,667\.00<\/td><\/tr>/.test(ps));
+  T.inc('B', [incRow('Performance Bonus', 5000)]);
+  T.set([HOURLY, LOW], HOURS, {}, { 'Cruz, Juan': { advances: 0 } }, 2026, '11');
+  T.inc('B', [incRow('Performance Bonus', 5000), incRow('Commission', 5000)]);
+  ok('  a tax-free bonus gets its own short second line', T.slip(HOURLY, 'B').wtaxNote.split('\n')[1] === '₱5,000.00 bonus not taxed (up to ₱90,000 a year)', T.slip(HOURLY, 'B').wtaxNote);
+  ps = vm.runInContext('hxPayslipHtml', ctx)(T.slip(HOURLY, 'B'), { label: 'x', range: 'x' });
+  ok('  printed as two sub-lines under Withholding Tax', (ps.match(/<td class="ps-note" colspan="2">/g) || []).length === 2 &&
+     /Taxable pay ₱17,200\.00 · ₱937\.50 \+ 20% over ₱16,667\.00<\/td><\/tr><tr><td class="ps-note" colspan="2">₱5,000\.00 bonus not taxed/.test(ps));
+  T.inc('B', []);
+  slip = T.slip(LOW, 'B');
+  ps = vm.runInContext('hxPayslipHtml', ctx)(slip, { label: 'x', range: 'x' });
+  ok('  no tax → no note, just the ₱0.00 line', slip.wtaxNote === '' && !/ps-note[^>]*>Taxable pay/.test(ps) && /Withholding Tax<\/td><td class="r">₱0\.00/.test(ps));
+  ok('  a slip released before A412 (no wtaxNote) prints the single line', !/ps-note/.test(
+     vm.runInContext('hxPayslipHtml', ctx)(Object.assign({}, slip, { wtax: 50, wtaxNote: undefined }), { label: 'x', range: 'x' })));
+  T.state('open', 'approved');
+  T.set([HOURLY], HOURS, {}, { 'Cruz, Juan': savedRow({ wtax: 120 }) }, 2026, '11');
+  eq('  an approved cutoff\'s saved tax carries no note (the page did not work it out)', T.slip(HOURLY, 'B').wtaxNote, '');
+
+  T.state('open', 'open');
+  T.set([HOURLY, LOW], HOURS, {}, {}, 2026, '11');
+  T.inc('B', [incRow('Commission', 5000), incRow('Performance Bonus', 2000)]);
+  let built9 = T.build('B');
+  const h = built9.html;
+  ok('  the PDF has a Withholding tax section under the register', /<h3>Withholding tax<\/h3>\s*<table class="wtax">/.test(h) &&
+     h.indexOf('Section 2') < h.indexOf('<h3>Withholding tax</h3>') && h.indexOf('<h3>Withholding tax</h3>') < h.indexOf('Section 3'));
+  ok('  headed Gross / Less contributions / Less bonus / Taxable / BIR table / WTax',
+     /<th>Employee<\/th><th class="num">Gross Pay<\/th><th class="num">Less Pag-IBIG, SSS, PhilHealth<\/th>\s*<th class="num">Less tax-free bonus<\/th><th class="num">Taxable Pay<\/th><th>BIR semi-monthly table<\/th><th class="num">WTax<\/th>/.test(h));
+  ok('  Juan worked through: 20,000 − 800 − 2,000 = 17,200 → ₱1,044.10',
+     /Cruz, Juan<\/td>\s*<td class="num">₱20,000\.00<\/td>\s*<td class="num">−₱800\.00<\/td>\s*<td class="num">−₱2,000\.00<\/td>\s*<td class="num">₱17,200\.00<\/td>\s*<td>₱937\.50 \+ 20% over ₱16,667\.00<\/td>\s*<td class="num bold">₱1,044\.10<\/td>/.test(h));
+  ok('  only people with tax are listed', !/<td class="name">Santos, Lea<\/td>\s*<td class="num">₱7,800/.test(h.slice(h.indexOf('<h3>Withholding tax</h3>'))));
+  ok('  with the total to remit to the BIR', /TOTAL WITHHOLDING TAX \(remit to BIR\)<\/td><td class="num">₱1,044\.10/.test(h));
+  ok('  and a plain-language note on what taxable pay is', /Anyone not listed has taxable pay of ₱10,417 or less this cutoff, so no tax\./.test(h));
+  ok('  the cost summary names it', /of which Withholding Tax \(remit to BIR\)<\/td><td class="num">₱1,044\.10/.test(h));
+  eq('  the approval record stores the total', built9.totals.totalWithholdingTax, 1044.10);
+  eq('  and how many people pay it', built9.totals.withholdingTaxEmployees, 1);
+  T.inc('B', []); T.set([LOW], HOURS, {}, {}, 2026, '11');
+  built9 = T.build('B');
+  ok('  no tax at all → one line saying so, no empty table', /No withholding tax this cutoff: no one's taxable pay is over ₱10,417\./.test(built9.html) && !/<table class="wtax">/.test(built9.html));
+  T.state('open', 'approved');
+  T.set([HOURLY], HOURS, {}, { 'Cruz, Juan': savedRow({ wtax: 120 }) }, 2026, '11');
+  ok('  an approved cutoff\'s tax is shown "As saved"', /<td>As saved<\/td>\s*<td class="num bold">₱120\.00/.test(T.build('B').html));
+  T.state('open', 'open');
 
   console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ' + N + ' passed'));
   process.exit(FAIL ? 1 : 0);

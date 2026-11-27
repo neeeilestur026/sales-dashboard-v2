@@ -93,6 +93,15 @@ function hxPayslipHtml(s, pr, opts) {
   const incentiveRows = (incLines.length && Math.abs(incSum - (Number(s.incentive) || 0)) < 0.005)
     ? incLines.map(l => money('Incentive: ' + (l.category || 'Other'), l.amount)).join('')
     : money('Incentive', s.incentive);
+  /* A412 — WITHHOLDING TAX sits with the other government deductions (Pag-IBIG, SSS, PhilHealth),
+     before the loans being repaid, and when there is tax it says how it was reached on a sub-line
+     the employee can check: "Taxable pay ₱14,394.28 · 15% over ₱10,417.00". The sub-line is the same
+     wrapping ps-note the salary deduction uses, so it can never be cut off at the column edge. A slip
+     released before A412 has no `wtaxNote` and prints the single line exactly as before. */
+  const wtaxRows = money('Withholding Tax', s.wtax) +
+    ((Number(s.wtax) || 0) > 0 && s.wtaxNote
+      ? String(s.wtaxNote).split('\n').filter(Boolean)
+          .map(l => `<tr><td class="ps-note" colspan="2">${hxEscBlank(l)}</td></tr>`).join('') : '');
   return `<div class="payslip">
     <div class="ps-head"><div class="ps-co">H.O ESTUR CORPORATION</div>
       <img class="ps-logo" src="${location.origin}/images/logo-login-2x.png" alt="" onerror="this.style.display='none'">
@@ -131,9 +140,9 @@ function hxPayslipHtml(s, pr, opts) {
       ${money('Pag-IBIG', s.pagibig)}
       ${money('SSS', s.sss)}
       ${money('PhilHealth', s.philhealth)}
+      ${wtaxRows}
       ${money('Advances', s.advances)}
       ${sdRows}
-      ${money('Withholding Tax', s.wtax)}
       ${money('TOTAL DEDUCTIONS', s.totalDed, 'sub')}
     </tbody></table>
     <div class="ps-sep"></div>
