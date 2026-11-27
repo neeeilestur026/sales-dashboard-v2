@@ -8,14 +8,16 @@
  * The rules pinned here:
  *   1. The BIR semi-monthly table (from 1 Jan 2023): nothing up to ₱10,417, then 15 / 20 / 25 / 30 /
  *      35% of the amount over each bracket, continuous at every edge.
- *   2. Taxable pay = gross less the cutoff's Pag-IBIG, SSS and PhilHealth (not advances, not loans).
- *      A410: a fixed salary (Steve, Neil, Daisy) takes no withholding tax at all.
+ *   2. Taxable pay = gross less the cutoff's MANDATORY Pag-IBIG (≤ ₱200), SSS and PhilHealth (not
+ *      advances, not loans). A411: a fixed salary follows the same table (no blanket exemption).
  *   3. Only an OPEN cutoff is worked out. Approved = the saved (paid) figure. Unknown / not loaded =
  *      the saved figure, with a banner when the check failed.
  *   4. A saved row holding a different figure is starred; Save sends the worked-out figure.
  *   5. The cell is computed (no input), and editing SSS moves WTax, Total Ded. and Net Pay together.
  *   6. The approval document reads the same figure; the salary-deduction cap counts it.
  *   7. The state comes from the approvals ledger by the server's rule, outside the pinned Promise.all.
+ *   8. A411 — Performance Bonus / Perfect Attendance are tax-free up to ₱90,000 for the year (from the
+ *      ledger); Commission and the rest are taxed; an unreadable ledger taxes the bonus.
  */
 const fs = require('fs');
 const path = require('path');
@@ -52,6 +54,9 @@ this.__t = {
   get states() { return [_cutoffStateA, _cutoffStateB]; },
   table: _wtaxSemiMonthly, rule: _wtaxRuleText, d: _payDeductions, slip: _computePaySlip,
   grid: renderPayGrid, cell: _updateRegCell, save: saveRegister, read: _readCutoffStates, build: _buildCutoffHtml,
+  ytd: _readBenefitsYtd, free: _taxFreeBenefits,
+  inc(cutoff, rows) { _applyIncentives(cutoff, rows); },
+  setYtd(v) { _benefitsYtd = v; },
   stubApi(o) { Object.assign(globalThis, o); }
 };`, ctx);
 const T = ctx.__t;
@@ -95,14 +100,21 @@ const dA = T.d(HOURLY, 'A');
 ok('  cutoff A takes only Pag-IBIG off before the table', Math.abs(dA.wtaxTaxable - (T.slip(HOURLY, 'A').grossPay - 200)) < 0.005);
 eq('  low earner (₱600 a day) pays nothing', T.d(LOW, 'B').wtax, 0);
 const dF = T.d(FIXED, 'B');
-eq('  A410 — a fixed salary (₱15,000) takes no withholding tax', dF.wtax, 0);
-ok('  marked exempt, still worked out (not a saved figure)', dF.wtaxExempt === true && dF.wtaxAuto === true);
-eq('  its Total Ded. has no tax in it', dF.totalDed, 0);
-T.set([FIXED], HOURS, {}, { 'Reyes, Ana': { period: '2026-11-B', employee: 'Reyes, Ana', wtax: 687.45, salaryDeductionStored: 0 } }, 2026, '11');
-d0 = T.d(FIXED, 'B');
-ok('  a fixed salary saved with tax is 0 and starred on an open cutoff', d0.wtax === 0 && d0.wtaxProvisional === true && d0.wtaxSaved === 687.45, d0);
+eq('  A411 — a fixed salary follows the table: ₱15,000 is all taxable', dF.wtaxTaxable, 15000);
+eq('  fixed salary WTax = 15% of ₱4,583', dF.wtax, 687.45);
+const F9 = Object.assign({}, FIXED, { firstName: 'Nina', fixedAmount: 9000 });
+const F10 = Object.assign({}, FIXED, { firstName: 'Dina', fixedAmount: 10000 });
+const F12 = Object.assign({}, FIXED, { firstName: 'Sam', fixedAmount: 12000 });
+T.set([F9, F10, F12], HOURS, {}, {}, 2026, '11');
+eq('  ₱9,000 a cutoff pays nothing (under ₱10,417)', T.d(F9, 'B').wtax, 0);
+eq('  ₱10,000 a cutoff pays nothing', T.d(F10, 'B').wtax, 0);
+eq('  ₱12,000 a cutoff pays 15% of ₱1,583', T.d(F12, 'B').wtax, 237.45);
+ok('  no blanket fixed-salary exemption left in the code', !/wtaxExempt|Fixed salary: no withholding tax/.test(SRC));
+T.set([F12], HOURS, {}, { 'Reyes, Sam': { period: '2026-11-B', employee: 'Reyes, Sam', wtax: 0, salaryDeductionStored: 0 } }, 2026, '11');
+d0 = T.d(F12, 'B');
+ok('  saved 0 under the old exemption → 237.45 and starred on an open cutoff', d0.wtax === 237.45 && d0.wtaxProvisional === true, d0);
 T.state('open', 'approved');
-eq('  but an APPROVED cutoff keeps the tax that was paid', T.d(FIXED, 'B').wtax, 687.45);
+eq('  but an APPROVED cutoff keeps the tax that was paid', T.d(F12, 'B').wtax, 0);
 T.state('open', 'open');
 T.set([HOURLY, FIXED, LOW], HOURS, {}, {}, 2026, '11');
 T.set([HOURLY], HOURS, {}, { 'Cruz, Juan': { advances: 3000 } }, 2026, '11');
@@ -157,10 +169,10 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
   ok('  it shows ₱267.45 with the not-saved star', /267\.45<span title="Not saved to this cutoff yet" class="dh-warn-text"> \*<\/span>/.test(html));
   ok('  the tooltip says what is saved and how to apply it', /Saved now as ₱0\.00; Save Pay Register to apply it\./.test(html));
   ok('  a zero tax is a dim dash', /id="wtax_B_[^"]*Santos[^"]*"[^>]*><span class="dh-dim">—<\/span>/.test(html) || /<span class="dh-dim">—<\/span><\/td>\s*<td class="num computed" id="totalDed_B_[^"]*Santos/.test(html));
-  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth\. None on a fixed salary\.">WTax</.test(html));
+  ok('  the header explains the column', /title="Worked out from the BIR semi-monthly table on taxable pay: gross less mandatory Pag-IBIG \(up to ₱200\), SSS, PhilHealth and bonuses still under ₱90,000 for the year">WTax</.test(html));
   ok('  no banner on an open cutoff', !/Withholding tax shows the saved figures/.test(html));
-  T.set([FIXED], HOURS, {}, {}, 2026, '11'); T.grid('B');
-  ok('  A410 — a fixed salary\'s cell says why it is empty', /title="Fixed salary: no withholding tax\."><span class="dh-dim">—<\/span>/.test(byId('payBGrid').innerHTML));
+  T.set([F9], HOURS, {}, {}, 2026, '11'); T.grid('B');
+  ok('  a ₱9,000 fixed salary: the whole gross, under the threshold', /title="Taxable pay ₱9,000\.00 = the whole gross\. No tax up to ₱10,417\.00 a cutoff\."><span class="dh-dim">—<\/span>/.test(byId('payBGrid').innerHTML));
   T.set([HOURLY, LOW], HOURS, {}, { 'Cruz, Juan': savedRow({ wtax: 0 }) }, 2026, '11'); T.grid('B');
 
   // type a new SSS for Juan → taxable 12,800 − 200 → WTax moves
@@ -215,11 +227,69 @@ eq('  an old typed 500 is replaced on an open cutoff', T.d(HOURLY, 'B').wtax, 26
   delete ctx.apiGetPayrollApprovals; delete globalThis.apiGetPayrollApprovals;
   s = await T.read('2026-11-A', '2026-11-B');
   ok('  no such action is unknown', s.A === 'unknown' && s.B === 'unknown');
-  ok('  loadPeriod reads it OUTSIDE the pinned Promise.all', /const statesP = _readCutoffStates\(periodA, periodB\);\s*\n\s*try \{/.test(SRC) &&
+  ok('  loadPeriod reads it OUTSIDE the pinned Promise.all', /const statesP = _readCutoffStates\(periodA, periodB\);[\s\S]{0,160}\n\s*try \{/.test(SRC) &&
      !/Promise\.all\(\[[^\]]*_readCutoffStates/.test(SRC));
   ok('  and waits for it before the pay grids draw', /await statesP;[\s\S]{0,200}renderPayGrid\('A'\)/.test(SRC));
   ok('  and resets the last period\'s answer first', /_cutoffStateA = null; _cutoffStateB = null;[^\n]*\n\s*const statesP/.test(SRC));
   ok('  the employer share reuses the rows', /_prefillEmployerShare\(periodA, periodB, states\.rows\)/.test(SRC));
+
+  console.log('\n8 · A411 — bonuses, the ₱90,000 cap and Pag-IBIG');
+  T.state('open', 'open');
+  T.set([HOURLY], HOURS, {}, {}, 2026, '11');
+  const incRow = (cat, amt, st) => ({ employee: 'Cruz, Juan', period: '2026-11-B', category: cat, amount: amt, status: st || 'Active' });
+  T.inc('B', [incRow('Performance Bonus', 5000)]);
+  T.setYtd({});
+  let dd = T.d(HOURLY, 'B');
+  eq('  gross now carries the bonus', T.slip(HOURLY, 'B').grossPay, 18000);
+  eq('  a Performance Bonus is left out of taxable pay', dd.wtaxTaxable, 12200);
+  eq('  so WTax is unchanged by it', dd.wtax, 267.45);
+  ok('  the tooltip names the tax-free bonus', /= gross less Pag-IBIG, SSS and PhilHealth, less ₱5,000\.00 of bonus\.[\s\S]*Bonuses are tax-free up to ₱90,000 a year with the 13th month\./.test(vm.runInContext('_wtaxTip', ctx)('B', dd)));
+  T.inc('B', [incRow('Perfect Attendance', 1000)]);
+  eq('  Perfect Attendance too', T.d(HOURLY, 'B').wtaxTaxable, 12200);
+  T.inc('B', [incRow('Commission', 5000)]);
+  dd = T.d(HOURLY, 'B');
+  eq('  a Commission is taxed: taxable 17,200', dd.wtaxTaxable, 17200);
+  eq('  WTax = 937.50 + 20% of 533', dd.wtax, 1044.10);
+  T.inc('B', [incRow('Sales Incentive', 2000)]);
+  eq('  a Sales Incentive is taxed', T.d(HOURLY, 'B').wtaxTaxable, 14200);
+  T.inc('B', [incRow('Performance Bonus', 5000, 'Voided')]);
+  eq('  a voided bonus is not pay at all', T.d(HOURLY, 'B').wtaxTaxable, 12200);
+  T.inc('B', [incRow('Performance Bonus', 10000)]);
+  T.setYtd({ 'Cruz, Juan': [{ period: '2026-03-A', amount: 50000 }, { period: '2026-11-A', amount: 35000 }, { period: '2026-11-B', amount: 10000 }] });
+  dd = T.d(HOURLY, 'B');
+  ok('  earlier bonuses 85,000 → only 5,000 of this 10,000 is tax-free (this cutoff\'s own row not counted twice)',
+     dd.wtaxBenefits.free === 5000 && dd.wtaxBenefits.taxed === 5000, dd.wtaxBenefits);
+  eq('  so taxable = 12,200 + 5,000', dd.wtaxTaxable, 17200);
+  ok('  the tooltip says the excess is taxed', /₱5,000\.00 of bonus is over this year's ₱90,000 and is taxed\./.test(vm.runInContext('_wtaxTip', ctx)('B', dd)));
+  T.setYtd({ 'Cruz, Juan': [{ period: '2026-01-A', amount: 95000 }] });
+  eq('  past the cap: the whole bonus is taxed', T.d(HOURLY, 'B').wtaxTaxable, 22200);
+  T.setYtd(null);
+  dd = T.d(HOURLY, 'B');
+  ok('  ledger unreadable → the bonus is taxed, and the tooltip says so', dd.wtaxTaxable === 22200 &&
+     /could not be read/.test(vm.runInContext('_wtaxTip', ctx)('B', dd)), dd.wtaxBenefits);
+  T.inc('B', []); T.setYtd({});
+  // Pag-IBIG: a voluntary 500 on cutoff A — only 200 comes off taxable pay
+  const VOL = Object.assign({}, HOURLY, { hdmfAmount: 500 });
+  T.set([VOL], HOURS, {}, {}, 2026, '11');
+  const dv = T.d(VOL, 'A');
+  eq('  Pag-IBIG 500 is still DEDUCTED in full', dv.pagibig, 500);
+  eq('  but only the mandatory 200 lowers taxable pay', dv.wtaxTaxable, T.slip(VOL, 'A').grossPay - 200);
+  ok('  and the tooltip says why', /Pag-IBIG above ₱200 is voluntary and stays taxable\./.test(vm.runInContext('_wtaxTip', ctx)('A', dv)));
+  // the ledger read
+  ctx.apiGetPayrollIncentives = async () => ({ success: true, data: [
+    { employee: 'A', period: '2026-03-A', category: 'Performance Bonus', amount: 1000 },
+    { employee: 'A', period: '2026-04-B', category: 'Commission', amount: 9000 },
+    { employee: 'A', period: '2025-12-B', category: 'Performance Bonus', amount: 7000 },
+    { employee: 'A', period: '2026-05-A', category: 'Perfect Attendance', amount: 500, status: 'Voided' },
+    { employee: 'B', period: '2026-06-B', category: 'Perfect Attendance', amount: 300 } ] });
+  const y = await T.ytd(2026);
+  ok('  the year read keeps only this year\'s live bonus-type rows', JSON.stringify(y) ===
+     JSON.stringify({ A: [{ period: '2026-03-A', amount: 1000 }], B: [{ period: '2026-06-B', amount: 300 }] }), y);
+  ctx.apiGetPayrollIncentives = async () => { throw new Error('x'); };
+  ok('  a failed read is null (unknown)', (await T.ytd(2026)) === null);
+  ok('  loadPeriod reads it beside the approvals, outside the pinned Promise.all, before the grids',
+     /const ytdP = _readBenefitsYtd\(year\);/.test(SRC) && !/Promise\.all\(\[[^\]]*_readBenefitsYtd/.test(SRC) &&
+     /_benefitsYtd = await ytdP;[\s\S]{0,300}renderPayGrid\('A'\)/.test(SRC));
 
   console.log('\n' + (FAIL ? FAIL + ' FAILED' : 'all ' + N + ' passed'));
   process.exit(FAIL ? 1 : 0);

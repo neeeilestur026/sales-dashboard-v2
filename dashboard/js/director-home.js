@@ -72,6 +72,55 @@ function _wtaxRuleText(taxable) {
   return (b.base ? peso(b.base) + ' + ' : '') + pct + '.';
 }
 
+/* A411 — WHAT THE BIR DOES NOT TAX. Neil, 27 Nov 2026: "make sure we followed the right way especially
+   in the Philippines with the wtax". Taxable pay is gross pay less only what the law excludes:
+     • the employee's MANDATORY Pag-IBIG, SSS and PhilHealth. Pag-IBIG's mandatory share is ₱200 a
+       month (HDMF Circular 460, Feb 2024); anything above it is voluntary and stays taxable
+       (RMC 53-2011). It is deducted once a month (the 1st cutoff), so the cap is per cutoff;
+     • "13th month pay and other benefits" (bonuses, productivity incentives) up to ₱90,000 a year
+       (TRAIN). Performance Bonus and Perfect Attendance are those benefits; Commission, Sales
+       Incentive, Referral and Other are pay for work done and are taxed. The year's earlier bonuses
+       come from the incentives ledger; when it cannot be read, the bonus is taxed (too much withheld
+       is refunded at the year-end adjustment, too little is the company's liability).
+   There is NO exemption for a fixed salary as such (A410 is undone): the table decides. Today that
+   means ₱9,000 and ₱10,000 a cutoff pay nothing and ₱12,000 a cutoff pays 15% of the excess. */
+const _PAGIBIG_MANDATORY = 200;
+const _TAX_FREE_BENEFITS = ['Performance Bonus', 'Perfect Attendance'];
+const _OTHER_BENEFITS_CAP = 90000;
+let _benefitsYtd = null;   // { "Employee": [{ period, amount }] } this year's tax-free-type bonuses; null = unknown
+
+/* The year's bonus-type incentives from the ledger, for the ₱90,000 cap. Never rejects. */
+async function _readBenefitsYtd(year) {
+  if (typeof apiGetPayrollIncentives !== 'function') return null;
+  try {
+    const res = await apiGetPayrollIncentives({});
+    if (!res || res.success === false || !Array.isArray(res.data)) return null;
+    const out = {};
+    res.data.forEach(r => {
+      if (String((r || {}).status || 'Active') === 'Voided') return;
+      if (_TAX_FREE_BENEFITS.indexOf(String(r.category || '').trim()) < 0) return;
+      const p = String(r.period || '');
+      if (p.slice(0, 4) !== String(year)) return;
+      (out[r.employee] = out[r.employee] || []).push({ period: p, amount: parseFloat(r.amount) || 0 });
+    });
+    return out;
+  } catch (e) { return null; }
+}
+
+/* This cutoff's bonus-type incentives, split into the part still under the year's ₱90,000 (tax-free)
+   and the part over it (taxed). `before` = the same kind of bonus in this year's EARLIER cutoffs. */
+function _taxFreeBenefits(empName, cutoff) {
+  const now = Math.round(_incentiveItemsFor(empName, cutoff)
+    .filter(it => _TAX_FREE_BENEFITS.indexOf(it.category) >= 0)
+    .reduce((s, it) => s + it.amount, 0) * 100) / 100;
+  if (!now) return { now: 0, free: 0, taxed: 0, known: !!_benefitsYtd };
+  if (!_benefitsYtd) return { now, free: 0, taxed: now, known: false };
+  const period = _currentYear + '-' + _currentMonth + '-' + cutoff;
+  const before = (_benefitsYtd[empName] || []).filter(x => x.period < period).reduce((s, x) => s + x.amount, 0);
+  const free = Math.round(Math.min(now, Math.max(0, _OTHER_BENEFITS_CAP - before)) * 100) / 100;
+  return { now, free, taxed: Math.round((now - free) * 100) / 100, known: true, before };
+}
+
 /* A260 — a fixed-salary employee is paid a set amount per cutoff whatever their hours, and takes no
    statutory contribution. Anything that is not exactly 'Fixed' is hourly, so a blank pay type on
    every row written before this feature keeps its original behaviour with no migration. */
@@ -180,6 +229,7 @@ async function loadPeriod() {
      that literal, and this read never fails the load (it answers 'unknown' instead). */
   _cutoffStateA = null; _cutoffStateB = null;   // the last period's answer is not this one's
   const statesP = _readCutoffStates(periodA, periodB);
+  const ytdP = _readBenefitsYtd(year);           // A411 — this year's bonuses, for the ₱90,000 cap
   try {
     /* A229 — the two incentive reads join THIS Promise.all rather than awaiting after it. Six
        round trips to Apps Script in parallel is already slow; two more in sequence would be felt. */
@@ -223,6 +273,7 @@ async function loadPeriod() {
   _applyIncentives('A', (iA && iA.data) || []);
   _applyIncentives('B', (iB && iB.data) || []);
 
+  _benefitsYtd = await ytdP;                   // A411
   const states = await statesP;                // A409 — before the pay grids draw their WTax
   _cutoffStateA = states.A;
   _cutoffStateB = states.B;
@@ -1147,7 +1198,7 @@ function renderPayGrid(cutoff) {
       <th class="num">PhilHealth</th>
       <th class="num">Advances</th>
       <th class="num" title="Set by the salary-deduction agreement — recalculated on save">Salary Ded.</th>
-      <th class="num" title="Worked out from the BIR semi-monthly table: gross pay less Pag-IBIG, SSS and PhilHealth. None on a fixed salary.">WTax</th>
+      <th class="num" title="Worked out from the BIR semi-monthly table on taxable pay: gross less mandatory Pag-IBIG (up to ₱200), SSS, PhilHealth and bonuses still under ₱90,000 for the year">WTax</th>
       <th class="num">Total Ded.</th>
       <th class="num highlight">Net Pay</th>
       <th>Slip</th>
@@ -1307,9 +1358,18 @@ function _wtaxTip(cutoff, d) {
   if (state === 'approved') return 'This cutoff is approved: the withholding tax as saved and paid.';
   if (!d.wtaxAuto) return 'The saved figure. Click Load to work the tax out.';
   const saveNote = d.wtaxProvisional ? ' Saved now as ' + peso(d.wtaxSaved) + '; Save Pay Register to apply it.' : '';
-  if (d.wtaxExempt) return 'Fixed salary: no withholding tax.' + saveNote;   // A410
-  return 'Taxable pay ' + peso(d.wtaxTaxable) + ' (gross less Pag-IBIG, SSS and PhilHealth). ' +
-    _wtaxRuleText(d.wtaxTaxable) + saveNote;
+  /* A411 — say what was left out of taxable pay, and why, so the figure can be checked by hand. */
+  const b = d.wtaxBenefits || { now: 0, free: 0, taxed: 0 };
+  const less = [];
+  if (d.pagibig || d.sss || d.philhealth) less.push('Pag-IBIG, SSS and PhilHealth');
+  if (b.free) less.push(peso(b.free) + ' of bonus');
+  const notes = [];
+  if (b.free) notes.push('Bonuses are tax-free up to ₱90,000 a year with the 13th month.');
+  if (d.wtaxPagibigExcess) notes.push('Pag-IBIG above ₱200 is voluntary and stays taxable.');
+  if (b.taxed && b.known) notes.push(peso(b.taxed) + ' of bonus is over this year\'s ₱90,000 and is taxed.');
+  if (b.taxed && !b.known) notes.push('The bonus is taxed for now: this year\'s earlier bonuses could not be read.');
+  return 'Taxable pay ' + peso(d.wtaxTaxable) + (less.length ? ' = gross less ' + less.join(', less ') : ' = the whole gross') + '. ' +
+    _wtaxRuleText(d.wtaxTaxable) + (notes.length ? ' ' + notes.join(' ') : '') + saveNote;
 }
 /* A409 — said once above the grid when the approvals could not be read: the tax then stays at the
    saved figures, and nobody should mistake that for "no tax due". */
@@ -1959,9 +2019,9 @@ function _payEarnings(emp, cutoff) {
  * A stored register override for those three is deliberately IGNORED rather than trusted — a figure
  * saved while the employee was still hourly would otherwise keep being deducted after the switch.
  * Cash advances are read exactly as before: an advance is a loan being repaid, which a pay type does
- * not change. A410 — withholding tax is NOT taken from a fixed salary either (Neil, 27 Nov 2026: "tax
- * are exempted by the fixed one salary for Steve, Neil and Daisy"): on an open cutoff it is 0; an
- * approved cutoff keeps whatever was saved and paid.
+ * not change. Withholding tax on a fixed salary follows the same BIR table as everyone else (A411:
+ * the A410 blanket exemption had no basis in law; a salary of ₱10,417 a cutoff or less pays nothing
+ * anyway). An approved cutoff keeps whatever was saved and paid.
  *
  * A309 — THE STATUTORY SCHEDULE IS A RULE, NOT A TABLE. The company deducts Pag-IBIG on the 1st
  * cutoff only and SSS + PhilHealth on the 2nd only, at per-employee amounts kept on the employee
@@ -2001,13 +2061,14 @@ function _payDeductions(emp, cutoff) {
     /* A260 — no statutory contribution, but a fixed-salary manager still repays what they bought:
        a deduction is a loan being repaid, which a pay type does not change. */
     const eF = _payEarnings(emp, cutoff);
-    const tF = _wtaxFor(cutoff, saved, eF.grossPay, 0, true);            // A410 — a fixed salary is exempt
+    const bF = _taxFreeBenefits(empName, cutoff);                        // A411 — bonuses up to ₱90,000 a year
+    const tF = _wtaxFor(cutoff, saved, eF.grossPay, bF.free);           // A411 — no contributions, the table decides
     const wtax = tF.wtax;
     const sdF = isStored ? stored
       : _sdPreview((due && due.amount) || 0, eF.grossPay || 0, advances + wtax);
     return { pagibig: 0, sss: 0, philhealth: 0, advances, wtax,
              wtaxTaxable: tF.taxable, wtaxAuto: tF.auto, wtaxProvisional: tF.provisional, wtaxSaved: tF.saved,
-             wtaxExempt: tF.exempt,
+             wtaxBenefits: bF, wtaxPagibigExcess: 0,
              salaryDeduction: sdF, salaryDeductionLines: _sdLinesFor(saved, due, isStored),
              salaryDeductionProvisional: !isStored && sdF > 0,
              totalDed: advances + wtax + sdF };
@@ -2017,13 +2078,18 @@ function _payDeductions(emp, cutoff) {
   const pagibig    = +(saved.pagibig    !== undefined ? saved.pagibig    : ((cutoff === 'A' && elig) ? (emp.hdmfAmount || 200) : 0));
   const sss        = +(saved.sss        !== undefined ? saved.sss        : ((cutoff === 'B' && elig) ? (emp.sssAmount || 600) : 0));
   const philhealth = +(saved.philhealth !== undefined ? saved.philhealth : ((cutoff === 'B' && elig) ? (emp.philhealthAmount || 200) : 0));
-  const t = _wtaxFor(cutoff, saved, e.grossPay, pagibig + sss + philhealth);   // A409 — after the three benefits
+  /* A409/A411 — taxable pay: gross less the MANDATORY contributions (Pag-IBIG only up to ₱200) and
+     the bonuses still under the year's ₱90,000. */
+  const b = _taxFreeBenefits(empName, cutoff);
+  const pagibigExcess = Math.max(0, pagibig - _PAGIBIG_MANDATORY);
+  const t = _wtaxFor(cutoff, saved, e.grossPay, (pagibig - pagibigExcess) + sss + philhealth + b.free);
   const wtax = t.wtax;
   const salaryDeduction = isStored ? stored
     : _sdPreview((due && due.amount) || 0, e.grossPay || 0,
                  pagibig + sss + philhealth + advances + wtax);
   return { pagibig, sss, philhealth, advances, wtax,
            wtaxTaxable: t.taxable, wtaxAuto: t.auto, wtaxProvisional: t.provisional, wtaxSaved: t.saved,
+           wtaxBenefits: b, wtaxPagibigExcess: pagibigExcess,
            salaryDeduction,
            salaryDeductionLines: _sdLinesFor(saved, due, isStored),
            salaryDeductionProvisional: !isStored && salaryDeduction > 0,
@@ -2031,20 +2097,19 @@ function _payDeductions(emp, cutoff) {
 }
 
 /* A409 — one employee's withholding tax for one cutoff.
-     open cutoff     → the BIR table on (gross − Pag-IBIG − SSS − PhilHealth), whatever was saved;
+     open cutoff     → the BIR table on (gross − what the law does not tax), whatever was saved;
                        `provisional` when a saved row holds a different figure (Save applies it);
      anything else   → the saved figure, untouched (approved = paid; unknown / not loaded = can't tell).
-   `taxable` is reported either way, for the tooltip.
-   A410 — `exempt` (a fixed salary) makes an open cutoff's tax 0; approved cutoffs still keep what was
-   saved and paid. */
-function _wtaxFor(cutoff, saved, grossPay, contributions, exempt) {
+   `taxable` is reported either way, for the tooltip. `nonTaxable` = the mandatory contributions plus
+   the tax-free bonuses (A411). */
+function _wtaxFor(cutoff, saved, grossPay, nonTaxable) {
   const state = cutoff === 'A' ? _cutoffStateA : _cutoffStateB;
   const savedTax = +(saved && saved.wtax !== undefined ? saved.wtax : 0) || 0;
-  const taxable = Math.max(0, Math.round(((Number(grossPay) || 0) - (Number(contributions) || 0)) * 100) / 100);
-  if (state !== 'open') return { wtax: savedTax, taxable, auto: false, provisional: false, saved: savedTax, exempt: !!exempt };
-  const wtax = exempt ? 0 : _wtaxSemiMonthly(taxable);
+  const taxable = Math.max(0, Math.round(((Number(grossPay) || 0) - (Number(nonTaxable) || 0)) * 100) / 100);
+  if (state !== 'open') return { wtax: savedTax, taxable, auto: false, provisional: false, saved: savedTax };
+  const wtax = _wtaxSemiMonthly(taxable);
   const isSavedRow = !!(saved && saved.period);                      // a row the server returned
-  return { wtax, taxable, auto: true, provisional: isSavedRow && Math.abs(savedTax - wtax) >= 0.005, saved: savedTax, exempt: !!exempt };
+  return { wtax, taxable, auto: true, provisional: isSavedRow && Math.abs(savedTax - wtax) >= 0.005, saved: savedTax };
 }
 
 /* What to SHOW for a cutoff that has not been saved yet.
