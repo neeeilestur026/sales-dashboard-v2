@@ -218,6 +218,12 @@ html[data-skin="ledger"][data-look="apple"] body.flow-screen .step.cur { backgro
 /* A347 — the standard dialogs sit above the sidebar (1010) and the toolbar, so the scrim covers the whole window and a
    wide dialog is never clipped under the sidebar. Pages that stack a dialog higher (#flowDocsModal) keep their own level. */
 html[data-skin="ledger"][data-look="apple"] .modal-overlay, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay, html[data-skin="ledger"][data-look="apple"] .dh-overlay { z-index: 1020; }
+/* A414 — the page-own dialogs at 1000 were still drawn UNDER the sidebar: management's payroll approval view (Neil,
+   27 Nov: "the side is overlapping with the pdf approval view") and its review dialog, the billing detail, and the
+   Collect / scanner sheets. Same level as the standard ones. */
+html[data-skin="ledger"][data-look="apple"] .payappr-modal-overlay, html[data-skin="ledger"][data-look="apple"] .mg-review-overlay,
+html[data-skin="ledger"][data-look="apple"] .overlay-backdrop, html[data-skin="ledger"][data-look="apple"] .cl-sheet,
+html[data-skin="ledger"][data-look="apple"] .sc-sheet { z-index: 1020; }
 html[data-skin="ledger"][data-look="apple"] .modal-overlay, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay { background: var(--l-p-scrim); }
 html[data-skin="ledger"][data-look="apple"] .modal-overlay.open, html[data-skin="ledger"][data-look="apple"] .flow-modal-overlay.open { animation: a-fade 200ms ease-out both; }
 html[data-skin="ledger"][data-look="apple"] .modal, html[data-skin="ledger"][data-look="apple"] .flow-modal { border: 0; border-radius: 14px; box-shadow: var(--l-p-shadow-pop); }
