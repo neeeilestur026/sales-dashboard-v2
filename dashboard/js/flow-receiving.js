@@ -186,6 +186,44 @@ function collectItems() {
   return items;
 }
 
+/* A416 — a choice asked IN the page: a title, a sentence, an optional list, and named buttons. Resolves the
+   chosen id; Escape, a click outside and the phone sheet's swipe-down all mean "back". It reuses the
+   .flow-modal look (a bottom sheet on phones, above the sidebar under the Apple look), and nothing is ever
+   labelled OK or Cancel, so no button's meaning depends on the question above it. */
+function rcChoose(opts) {
+  return new Promise(resolve => {
+    const o = opts || {}, esc = (typeof flowEsc === 'function') ? flowEsc : (s => String(s == null ? '' : s));
+    const prev = document.activeElement;
+    const ov = document.createElement('div');
+    ov.className = 'flow-modal-overlay open rc-choice';
+    ov.innerHTML = `<div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="rcChoiceTitle" style="width:min(460px,100%);">
+        <h3 id="rcChoiceTitle">${esc(o.title || '')}</h3>
+        <div class="sub">${esc(o.message || '')}</div>
+        ${(o.items || []).length ? `<ul class="rc-choice-list">${o.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+        <div class="flow-modal-foot">${(o.choices || []).map(c =>
+          /* "rc-close" lets the phone sheet's swipe-down (apple.js closeControl) find the Go back button */
+          `<button type="button" class="btn ${c.primary ? 'btn-primary' : 'btn-secondary'}${c.id === 'back' ? ' rc-close' : ''}" data-choice="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>
+      </div>`;
+    let settled = false;
+    const done = (v) => {
+      if (settled) return; settled = true;
+      document.removeEventListener('keydown', onKey, true);
+      ov.remove();
+      if (prev && typeof prev.focus === 'function') { try { prev.focus(); } catch (e) {} }
+      resolve(v);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); done('back'); } };
+    ov.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('[data-choice]');
+      if (b) done(b.getAttribute('data-choice')); else if (e.target === ov) done('back');
+    });
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', onKey, true);
+    const first = ov.querySelector('.btn-primary') || ov.querySelector('button');
+    if (first) first.focus();
+  });
+}
+
 async function saveReceiving() {
   if (!rcCurrent) { flowMsg('formMsg', 'Select a purchase order first.', false); return; }
   const items = collectItems();
@@ -219,43 +257,57 @@ async function saveReceiving() {
          That is fine when the file exists. It is a hard freeze when it cannot: reclassifying an order
          to International newly demands six documents a supplier may be unable to produce, and there
          was no way past. Offer the documents window first — that is the right answer nearly always —
-         and let someone proceed on the record when it is not. */
-      flowMsg('formMsg', res.message, false);
-      const go = confirm(res.message + '\n\nAttach the missing document(s) now?\n\n' +
-        'OK — open the Documents window.\nCancel — receive anyway, on the record, without them.');
-      if (go) {
-        if (typeof flowOpenShipmentDocs === 'function') await flowOpenShipmentDocs(rcCurrent.poNo, res.missingDocs);
+         and let someone proceed on the record when it is not.
+         A416 — the choice is now three NAMED buttons in the page. Two OK/Cancel pop-ups where Cancel
+         meant "go ahead" ended, for Gayle on 2026-52 ABASCO (28 Nov), in a bare "Receiving cancelled."
+         with the missing document no longer on screen; window.confirm can also be blocked outright,
+         which answers Cancel without showing anything. Going back now leaves the reason in place. */
+      const docs = res.missingDocs, one = docs.length === 1;
+      const pick = await rcChoose({
+        title: one ? 'One document is missing' : docs.length + ' documents are missing',
+        message: 'Before ' + rcCurrent.poNo + ' goes into inventory, this order needs:',
+        items: docs,
+        choices: [
+          { id: 'attach', label: one ? 'Attach it now' : 'Attach them now', primary: true },
+          { id: 'without', label: one ? 'Receive without it' : 'Receive without them' },
+          { id: 'back', label: 'Go back' }]
+      });
+      if (pick === 'attach') {
+        flowMsg('formMsg', 'Attach ' + docs.join(', ') + ' in the Documents window, then click Receive & Update Inventory again.', false);
+        if (typeof flowOpenShipmentDocs === 'function') await flowOpenShipmentDocs(rcCurrent.poNo, docs);
         return;
       }
-      if (!confirm('Receive WITHOUT these documents?\n\n' + res.missingDocs.join('\n') +
-                   '\n\nThis is recorded against the order.')) {
-        flowMsg('formMsg', 'Receiving cancelled.', false); return;
+      if (pick !== 'without') {
+        flowMsg('formMsg', 'Not received yet. Missing: ' + docs.join(', ') + '. Attach ' + (one ? 'it' : 'them') +
+          ' under Docs, or click Receive again and choose "Receive without ' + (one ? 'it' : 'them') + '".', false);
+        return;
       }
       extra.confirmNoDocs = true;
       res = await postFlow('createReceiving', Object.assign({}, payload, extra));
     }
     // A158: the PO was already received — confirm only if this is a genuine additional delivery.
     if (!res.success && res.alreadyReceived) {
-      if (!confirm(res.message + '\n\nRecord this as an ADDITIONAL delivery?')) {
-        flowMsg('formMsg', 'Receiving cancelled.', false); return;
-      }
+      const pick = await rcChoose({ title: 'Already received', message: res.message,
+        choices: [{ id: 'go', label: 'Record an additional delivery', primary: true }, { id: 'back', label: 'Go back' }] });
+      if (pick !== 'go') { flowMsg('formMsg', 'Not received: ' + res.message, false); return; }
       extra.additional = true;
       res = await postFlow('createReceiving', Object.assign({}, payload, extra));
     }
     // A158: only part of the payable is paid, so every unit would be costed at that fraction.
     if (!res.success && res.partialPay) {
-      if (!confirm(res.message + '\n\nProceed with the reduced cost basis?')) {
-        flowMsg('formMsg', 'Receiving cancelled — record the balance in AP Aging first.', false); return;
-      }
+      const pick = await rcChoose({ title: 'Only part of this order is paid', message: res.message,
+        choices: [{ id: 'go', label: 'Receive at the reduced cost' }, { id: 'back', label: 'Go back', primary: true }] });
+      if (pick !== 'go') { flowMsg('formMsg', 'Not received — record the balance in AP Aging first.', false); return; }
       extra.confirmPartialPay = true;
       res = await postFlow('createReceiving', Object.assign({}, payload, extra));
     }
     // A145: the backend blocks receiving with no AP payment (a ₱0 cost basis). Offer an explicit override.
     if (!res.success && res.unpaid) {
-      if (confirm(res.message + '\n\nProceed anyway with a ₱0 landed cost?')) {
-        extra.confirmUnpaid = true;
-        res = await postFlow('createReceiving', Object.assign({}, payload, extra));
-      } else { flowMsg('formMsg', 'Receiving cancelled — record the AP payment first.', false); return; }
+      const pick = await rcChoose({ title: 'No payment recorded yet', message: res.message,
+        choices: [{ id: 'go', label: 'Receive at ₱0 cost' }, { id: 'back', label: 'Go back', primary: true }] });
+      if (pick !== 'go') { flowMsg('formMsg', 'Not received — record the AP payment first.', false); return; }
+      extra.confirmUnpaid = true;
+      res = await postFlow('createReceiving', Object.assign({}, payload, extra));
     }
     /* A387 — the server would not guess which stock row a line is, and saved nothing. Ask, then send the same
        receiving again (with every confirmation already given) and each line's pick: an item, or "new item". */
